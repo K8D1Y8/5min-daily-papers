@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · AIR: Activation- and Influence-Aware Ranks for SVD-Based LLM Compression</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · Low-rank · SVD</span><span class="t-ko">Model Compression · Low-rank · SVD</span></span>
+      <span>2026.09.13</span>
+    </div>
+    <h1>Activation- and Influence-Aware Ranks (AIR): Function-Preserving SVD Compression for LLMs<br>
+      <span class="glow t-en">— keep SVD-LLM's optimum, then spend one closed-form sweep moving error onto the weights the output doesn't care about</span>
+      <span class="glow t-ko">— SVD-LLM의 최적해에서 출발해, 닫힌 형태 스윕 한 번으로 오차를 출력에 덜 중요한 가중치 쪽으로 옮긴다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Nico Harder</b> <span class="t-en">(corresponding) · Daniel Becking · Karsten Mueller · Wojciech Samek</span><span class="t-ko">(교신저자) · Daniel Becking · Karsten Mueller · Wojciech Samek</span></span>
+      <span>🏛 Fraunhofer HHI, Berlin</span>
+      <span>🗓 2026-06-18</span>
+      <span>🏆 <span class="t-en">AdaptFM workshop @ ICML'26 (non-archival)</span><span class="t-ko">ICML'26 AdaptFM 워크숍 (비아카이브)</span></span>
+      <span>📄 <a href="https://arxiv.org/abs/2606.19993">arXiv:2606.19993</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Activation-aware SVD compression (SVD-LLM's whitening) tries to reproduce every output direction of a layer equally, whether or not that direction matters to the model's prediction. AIR adds a backward signal: an element-wise influence score for each weight (LRP by default), used to scale each squared reconstruction error by 1 + 2·influence. That weighted problem has no closed-form SVD, so AIR starts from SVD-LLM(W)'s optimum and runs one closed-form alternating-least-squares sweep over the ranks. Each step provably doesn't increase the weighted loss, and the whole model takes about 12 minutes on an A100. On LLaMA-7B at 60% parameter retention, WikiText-2 perplexity drops from 13.81 to 11.27. AIR reaches SVD-LLM(W)'s 256-sample quality with 30 calibration samples, and it stacks with LoRA (9.09) and 4-bit GPTQ (11.99). Two caveats. Most of the reported latency gain comes from a custom KV-cache path, not from compression. And the reported perplexities are rounded to a grid about 1.6% apart, which is too coarse to back the ablations claiming all backward signals are equivalent.</p>
+    <p class="t-ko">활성 인식 SVD 압축(SVD-LLM의 화이트닝)은 레이어 출력의 모든 방향을 똑같이 복원하려 한다. 그 방향이 모델의 예측에 중요한지는 따지지 않는다. AIR는 여기에 역방향 신호를 더한다. 가중치마다 원소 단위 영향도 점수(기본값은 LRP)를 매기고, 각 제곱 복원 오차에 1 + 2·영향도를 곱한다. 이렇게 가중된 문제에는 닫힌 형태의 SVD 해가 없다. 그래서 AIR는 SVD-LLM(W)의 최적해에서 출발해, 랭크 전체를 닫힌 형태 교대 최소제곱(ALS)으로 한 번 훑는다. 매 스텝이 가중 손실을 늘리지 않음이 증명되어 있고, 모델 전체에 A100으로 약 12분이 든다. LLaMA-7B를 파라미터 60%로 줄였을 때 WikiText-2 perplexity가 13.81에서 11.27로 떨어진다. 캘리브레이션 샘플 30개로 SVD-LLM(W)의 256개 품질에 도달하며, LoRA(9.09)나 4비트 GPTQ(11.99)와도 함께 쓸 수 있다. 주의할 점이 두 가지 있다. 보고된 지연 시간 개선은 대부분 압축이 아니라 자체 KV 캐시 경로에서 나온다. 그리고 논문의 perplexity 값은 약 1.6% 간격의 격자로 반올림되어 있어, '모든 역방향 신호가 동등하다'는 ablation을 뒷받침하기에는 너무 거칠다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Activation-aware SVD is cheap and works layer by layer, but it can't tell whether the activations it preserves actually matter for the output. The gradient-based methods that could tell have either done worse (FWSVD) or needed full end-to-end training (ACIP). AIR bets that the problem was never which signal to use. It was how to fold that signal in.</p>
+    <p class="lead t-ko">활성 인식 SVD는 싸고 레이어 단위로 끝나지만, 보존하는 활성이 실제로 출력에 중요한지는 알지 못한다. 그걸 알 수 있는 그래디언트 기반 방법은 오히려 성능이 떨어졌거나(FWSVD) 전체 end-to-end 학습이 필요했다(ACIP). AIR는 문제가 어떤 신호를 쓰느냐가 아니라, 그 신호를 어떻게 녹여 넣느냐에 있었다고 본다.</p>
+    <p class="t-en">The SVD-LLM family leads training-free low-rank compression because whitening makes truncation provably optimal for reproducing a layer's outputs on calibration data. But reproducing every output direction equally is the wrong goal when some directions barely reach the loss. A backward signal can tell which ones do. The trouble is that weighting each weight element separately turns the low-rank fit into a weighted problem that SVD cannot solve. FWSVD got around this by collapsing its Fisher scores to one weight per row. In this paper's own runs it ends up worse than plain SVD (perplexity 22026 vs 19438 at 80%). ACIP got around it with end-to-end gradient descent on rank masks. AIR takes a third route. It keeps SVD-LLM(W)'s solution as the starting point, then runs a single alternating-least-squares pass in which every update is closed-form and provably doesn't increase the influence-weighted error. For LLaMA-7B that costs about 12 minutes on one A100 with no fine-tuning, and LoRA, quantization and rank allocation can still be added on top. The appendix also has something worth reading on its own: an audit showing that earlier SVD papers' speed numbers fall apart once tokens are counted correctly.</p>
+    <p class="t-ko">SVD-LLM 계열이 무학습 저랭크 압축을 이끄는 이유는, 화이트닝을 하면 truncation이 캘리브레이션 데이터에서 레이어 출력을 재현하는 데 증명 가능하게 최적이 되기 때문이다. 하지만 어떤 방향은 손실에 거의 닿지도 않는데 모든 출력 방향을 똑같이 재현하는 것은 잘못된 목표다. 역방향 신호는 어느 방향이 중요한지 알려준다. 문제는 가중치 원소마다 따로 가중하면 저랭크 근사가 SVD로 풀 수 없는 가중 문제가 된다는 점이다. FWSVD는 Fisher 점수를 행마다 하나로 뭉쳐 이를 피했다. 이 논문의 재실험에서는 오히려 일반 SVD보다 나빠진다(80%에서 perplexity 22026 vs 19438). ACIP는 랭크 마스크를 end-to-end 경사하강으로 학습해 피했다. AIR는 세 번째 길을 간다. SVD-LLM(W)의 해를 출발점으로 두고, 교대 최소제곱을 한 번 돌린다. 모든 갱신은 닫힌 형태이고, 영향도 가중 오차를 늘리지 않음이 증명되어 있다. LLaMA-7B 기준 A100 한 장으로 약 12분이면 되고 파인튜닝이 없으며, LoRA·양자화·랭크 배분을 그 위에 얹을 수도 있다. 부록에는 그 자체로 읽을 가치가 있는 내용도 있다. 토큰 수를 제대로 세면 기존 SVD 논문들의 속도 수치가 무너진다는 감사 결과다.</p>
+    <figure class="fig">
+      <img src="fig/2606.19993/air-overview.png" alt="AIR overview: an LLM and calibration data feed a forward-backward analysis that yields a profiling matrix S from the forward pass and an influence matrix I from the backward pass; other methods stop at the activation-aware solution SVD(W', k), while AIR runs an ALS optimization whose inset plots show L_act rising and L_act,infl falling as ranks are updated from index 1790 to 0; the result is applied as a rank-k factorization W ≈ U_k V_k^T with optional LoRA or quantization.">
+      <figcaption class="t-en"><b>Figure 1.</b> AIR in one picture. Calibration data drives two analyses. A forward pass gives SVD-LLM's profiling (whitening) matrix S, and a backward pass (LRP or a Taylor-expansion score) gives an element-wise influence matrix I. Other methods stop at the activation-aware solution SVD(W′, k). AIR starts there and updates each rank once. The inset tracks one layer at 60% retention as ranks are updated from index 1790 down to 0. The influence-weighted loss L<sub>act,infl</sub> (right) falls steadily from the SVD-LLM(W) value (blue dashed) while the plain activation loss L<sub>act</sub> (left) rises, so error is being moved onto low-influence weights on purpose. Both shifts are small, about 0.4 dB. The bottom row shows the rank-k factorization and the optional add-ons (LoRA, quantization). (The text describes this layer as having 1228 ranks, which fits a 4096×4096 attention matrix; the 1790 on the plot fits an 11008×4096 MLP matrix.)</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> AIR 한눈에 보기. 캘리브레이션 데이터로 두 가지 분석을 한다. 순방향 패스에서는 SVD-LLM의 프로파일링(화이트닝) 행렬 S를, 역방향 패스(LRP 또는 테일러 전개 점수)에서는 원소 단위 영향도 행렬 I를 얻는다. 다른 방법들은 활성 인식 해 SVD(W′, k)에서 멈추지만, AIR는 거기서 출발해 각 랭크를 한 번씩 갱신한다. 삽입 그래프는 보존율 60%의 한 레이어에서 랭크 인덱스 1790부터 0까지 갱신하는 과정을 보여준다. 영향도 가중 손실 L<sub>act,infl</sub>(오른쪽)은 SVD-LLM(W) 값(파란 점선)에서 꾸준히 내려가고, 일반 활성 손실 L<sub>act</sub>(왼쪽)은 올라간다. 오차를 영향도가 낮은 가중치로 일부러 옮긴다는 뜻이다. 두 변화 모두 약 0.4 dB로 작다. 아래 줄은 랭크 k 분해와 선택적 후처리(LoRA, 양자화)다. (본문은 이 레이어가 1228 랭크라고 하는데, 이는 4096×4096 어텐션 행렬에 맞는 값이다. 그림의 1790은 11008×4096 MLP 행렬에 맞는다.)</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2606.19993</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">11.27</div><div class="l"><span class="t-en">WikiText-2 perplexity of LLaMA-7B at 60% parameters (SVD-LLM(W) 13.81 · dense 5.68); C4 drops from 56.33 to 35.81</span><span class="t-ko">파라미터 60% LLaMA-7B의 WikiText-2 perplexity (SVD-LLM(W) 13.81 · 원본 5.68). C4는 56.33에서 35.81로</span></div></div>
+      <div class="stat"><div class="n">~12 min</div><div class="l"><span class="t-en">extra A100 time for all of LLaMA-7B, profiling and influence included; the ALS sweep alone is 1.5 s per layer</span><span class="t-ko">LLaMA-7B 전체에 드는 추가 A100 시간 (프로파일링·영향도 계산 포함). ALS 스윕만은 레이어당 1.5초</span></div></div>
+      <div class="stat"><div class="n">30 vs 256</div><div class="l"><span class="t-en">calibration samples: AIR with 30 (13.38) already beats SVD-LLM(W) with 256 (13.8), the basis for the "~90% less data" claim</span><span class="t-ko">캘리브레이션 샘플 수: 30개 AIR(13.38)가 이미 256개 SVD-LLM(W)(13.8)보다 낫다. "데이터 약 90% 절감" 주장의 근거</span></div></div>
+      <div class="stat"><div class="n">64%</div><div class="l"><span class="t-en">peak GPU memory of AIR(60%) vs the base model, nearly flat (63–65%) across batch size × length; BS=64 with 1,024 tokens fits on a 40 GB A100 where the base model runs out of memory</span><span class="t-ko">원본 대비 AIR(60%)의 피크 GPU 메모리. 배치 × 길이 전 구간에서 63~65%로 거의 일정하며, 원본이 메모리 부족에 걸리는 BS=64·1,024토큰도 40 GB A100에 들어간다</span></div></div>
+      <div class="stat"><div class="n">46.6%</div><div class="l"><span class="t-en">per-token latency vs base for a factorized model at 100% parameter rate (no compression at all) once AIR's cache optimizations are on; the 60% model gets 44.2% (Table 11)</span><span class="t-ko">AIR의 캐시 최적화를 켰을 때, 파라미터 비율 100%(압축 없음) 분해 모델의 원본 대비 토큰당 지연. 60% 모델은 44.2%다 (Table 11)</span></div></div>
+      <div class="stat"><div class="n">11.99</div><div class="l"><span class="t-en">WikiText-2 perplexity of AIR(60%) + 4-bit GPTQ, stored in 20.6% of the original 13.5 GB (unquantized: 11.27)</span><span class="t-ko">AIR(60%) + 4비트 GPTQ의 WikiText-2 perplexity. 원본 13.5 GB의 20.6% 크기다 (양자화 전 11.27)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">WikiText-2 perplexity by retention rate (LLaMA-7B)</span><span class="t-ko">보존율별 WikiText-2 perplexity (LLaMA-7B)</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Tables 2 &amp; 5 (excerpt).</b> WikiText-2 perplexity (↓) of LLaMA-7B at 80/60/40/20% parameter retention (dense: 5.68). The top two rows use no fine-tuning, and the bottom three include an end-to-end LoRA stage. AIR beats its own starting point, SVD-LLM(W), at every rate, and AIR+LoRA wins every column. But ACIP, which bundles its own LoRA, beats AIR alone at 40% (25 vs 42.52). At 40% and 20%, every model here is far from usable. Their average reasoning accuracy there, 33.6% and 31.7%, is about the same as vanilla SVD's 31.8% and 32.4%, and vanilla SVD's perplexity is above 100,000.</caption>
+        <caption class="t-ko"><b>Table 2 &amp; 5 (발췌).</b> LLaMA-7B의 파라미터 보존율 80/60/40/20%에서 WikiText-2 perplexity(↓). 원본은 5.68이다. 위 두 행은 파인튜닝이 없고, 아래 세 행은 end-to-end LoRA 단계를 포함한다. AIR는 모든 보존율에서 출발점인 SVD-LLM(W)를 이기고, AIR+LoRA는 모든 열에서 1위다. 하지만 자체 LoRA를 내장한 ACIP는 40%에서 AIR 단독을 이긴다(25 vs 42.52). 40%와 20%에서는 여기 있는 모델 모두 실용과 거리가 멀다. 그 구간의 평균 추론 정확도 33.6%, 31.7%는 일반 SVD의 31.8%, 32.4%와 비슷한데, 일반 SVD의 perplexity는 10만을 넘는다.</caption>
+        <thead><tr><th>Method</th><th>80%</th><th>60%</th><th>40%</th><th>20%</th></tr></thead>
+        <tbody>
+          <tr><td>SVD-LLM(W)</td><td>7.87</td><td>13.81</td><td>63.83</td><td>854</td></tr>
+          <tr><td><b>AIR</b></td><td><b>7.51</b></td><td><b>11.27</b></td><td><b>42.52</b></td><td><b>472</b></td></tr>
+          <tr><td>ACIP (LoRA inherent)</td><td>8.64</td><td>12.57</td><td>25</td><td>3378</td></tr>
+          <tr><td>SVD-LLM(W) + LoRA</td><td>7.31</td><td>9.41</td><td>16.82</td><td>114</td></tr>
+          <tr><td><b>AIR + LoRA</b></td><td class="up"><b>7.24</b></td><td class="up"><b>9.09</b></td><td class="up"><b>14.49</b></td><td class="up"><b>46.86</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The idea in four pieces</span><span class="t-ko">아이디어를 네 조각으로</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">forward</span>
+        <h3>Start at the activation-aware optimum</h3>
+        <p class="t-en">SVD-LLM's whitening turns the activation-aware objective ‖WX − ŴX‖ into a plain Frobenius problem on W′ = WS, where S is the Cholesky factor of the calibration covariance XX<sup>T</sup>. The truncated SVD of W′ is then the global optimum (Eckart–Young). AIR takes it as its starting point, so at δ = 0 it is exactly SVD-LLM(W).</p>
+        <p class="t-ko">SVD-LLM의 화이트닝은 활성 인식 목적함수 ‖WX − ŴX‖를 W′ = WS에 대한 일반 Frobenius 문제로 바꾼다. 여기서 S는 캘리브레이션 공분산 XX<sup>T</sup>의 Cholesky 인자다. 그러면 W′의 truncated SVD가 전역 최적해가 되고(Eckart–Young), AIR는 이를 출발점으로 삼는다. 따라서 δ = 0이면 정확히 SVD-LLM(W)와 같다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">backward</span>
+        <h3>An influence score for every weight</h3>
+        <p class="t-en">A backward pass scores each weight by how much it contributes to the output. The default is AttnLRP with ε = 10<sup>−6</sup>. Weight×Gradient and the diagonal empirical Fisher, both from the same Taylor expansion of the loss, can be swapped in. Absolute scores are summed over the calibration set and normalized to a mean of 1 per layer. The paper's Figure 2 shows that neither weight magnitude nor activation magnitude reliably predicts the score, especially for outliers (r = 0.12 and 0.11).</p>
+        <p class="t-ko">역방향 패스로 각 가중치가 출력에 얼마나 기여하는지 점수를 매긴다. 기본값은 ε = 10<sup>−6</sup>인 AttnLRP이다. 같은 손실 테일러 전개에서 나오는 Weight×Gradient나 대각 경험적 Fisher로 바꿔 끼울 수도 있다. 점수의 절댓값을 캘리브레이션 세트 전체에 대해 더한 뒤 레이어마다 평균 1로 정규화한다. 논문 Figure 2를 보면 가중치 크기도 활성 크기도 이 점수를 믿을 만하게 예측하지 못하며, 이상치에서는 특히 그렇다(r = 0.12, 0.11).</p>
+      </div>
+      <div class="m">
+        <span class="tag">objective</span>
+        <h3>Influence-penalized reconstruction</h3>
+        <p class="t-en">L<sub>act,infl</sub> = ‖√(1 + δ·I) ⊙ (W′ − U′Σ′V′<sup>T</sup>)‖²<sub>F</sub>. Each squared residual is multiplied by 1 + δ·i<sub>ij</sub>, which pushes error away from high-influence weights. The all-ones anchor keeps low-influence weights from being ignored outright; the default is δ = 2. Element-wise weighted low-rank approximation has no closed-form SVD solution (Srebro &amp; Jaakkola, 2003). That is why FWSVD had to collapse its Fisher scores to one weight per row.</p>
+        <p class="t-ko">L<sub>act,infl</sub> = ‖√(1 + δ·I) ⊙ (W′ − U′Σ′V′<sup>T</sup>)‖²<sub>F</sub>. 각 제곱 잔차에 1 + δ·i<sub>ij</sub>를 곱해, 영향도가 높은 가중치에서 오차를 밀어낸다. 1로 채운 앵커 항 덕분에 영향도가 낮은 가중치도 완전히 무시되지는 않는다. 기본값은 δ = 2다. 원소 단위 가중 저랭크 근사에는 닫힌 형태의 SVD 해가 없다(Srebro &amp; Jaakkola, 2003). FWSVD가 Fisher 점수를 행 단위로 뭉쳐야 했던 이유다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">solver</span>
+        <h3>One backward ALS sweep</h3>
+        <p class="t-en">Starting from the SVD, AIR updates each rank once, going from the smallest kept rank (r = k−1) to the largest (r = 0). For each rank it re-solves v′<sub>r</sub> in closed form against the weighted residual, then u′<sub>r</sub>, and normalizes to get σ′<sub>r</sub>. Each step provably doesn't increase L<sub>act,infl</sub> (Prop. 3.1). That guarantees steady descent, not a global optimum. The reverse order means the big early corrections land on minor ranks. A forward sweep gives 11.81 and extra sweeps give 11.44, both worse than 11.27 for one backward sweep.</p>
+        <p class="t-ko">SVD에서 출발해 각 랭크를 한 번씩 갱신한다. 순서는 가장 작은 유지 랭크(r = k−1)에서 가장 큰 랭크(r = 0) 쪽이다. 랭크마다 가중 잔차에 대해 v′<sub>r</sub>을 닫힌 형태로 다시 풀고, 이어서 u′<sub>r</sub>을 푼 뒤 정규화해 σ′<sub>r</sub>을 얻는다. 각 스텝은 L<sub>act,infl</sub>을 늘리지 않음이 증명되어 있다(Prop. 3.1). 보장되는 것은 꾸준한 감소이지 전역 최적이 아니다. 역순으로 도는 덕분에 초반의 큰 보정이 부차적인 랭크에 떨어진다. 정순 스윕은 11.81, 스윕을 더 돌리면 11.44로, 역순 한 번의 11.27보다 나쁘다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Profile (forward).</span><span class="t-ko">프로파일링(순방향).</span></b><span class="t-en"> Run 256 WikiText-2 samples of 2,048 tokens through LLaMA-7B and build each layer's whitening matrix S from its input covariance.</span><span class="t-ko"> WikiText-2의 2,048토큰 샘플 256개를 LLaMA-7B에 통과시키고, 각 레이어 입력 공분산으로 화이트닝 행렬 S를 만든다.</span></li>
+      <li><b><span class="t-en">Attribute (backward).</span><span class="t-ko">기여도 산출(역방향).</span></b><span class="t-en"> Propagate AttnLRP relevance from the model output back to every weight, accumulate |R| over the calibration set and normalize per layer. The result is the influence matrix I.</span><span class="t-ko"> 모델 출력에서 모든 가중치까지 AttnLRP 관련도를 거꾸로 전파하고, |R|을 캘리브레이션 세트 전체에 대해 누적한 뒤 레이어별로 정규화한다. 그 결과가 영향도 행렬 I다.</span></li>
+      <li><b><span class="t-en">Initialize.</span><span class="t-ko">초기화.</span></b><span class="t-en"> Compute SVD(WS, k), with k chosen so that every matrix keeps the same parameter rate k(m+n)/(mn). There is no per-layer rank allocation.</span><span class="t-ko"> SVD(WS, k)를 구한다. 랭크 k는 모든 행렬이 같은 파라미터 비율 k(m+n)/(mn)을 갖도록 정한다. 레이어별 랭크 배분은 없다.</span></li>
+      <li><b><span class="t-en">Sweep.</span><span class="t-ko">스윕.</span></b><span class="t-en"> Make one closed-form ALS pass over the ranks with weights 1 + 2·I. It takes 1.5 s per layer on an A100, or about 12 minutes end-to-end including profiling.</span><span class="t-ko"> 가중치 1 + 2·I로 랭크 전체를 닫힌 형태 ALS로 한 번 훑는다. A100에서 레이어당 1.5초, 프로파일링을 포함해 전체 약 12분이다.</span></li>
+      <li><b><span class="t-en">Deploy.</span><span class="t-ko">배포.</span></b><span class="t-en"> Map back to the native space: A = U′√Σ′, B = √Σ′V′<sup>T</sup>S<sup>−1</sup>, y = A(Bx). LoRA or GPTQ can be added on top. For decoding, AIR's own inference path caches values in rank-r<sub>v</sub> form and pre-allocates its buffers (O1–O3). Keys stay full-size because of RoPE.</span><span class="t-ko"> 원래 공간으로 되돌린다: A = U′√Σ′, B = √Σ′V′<sup>T</sup>S<sup>−1</sup>, y = A(Bx). 필요하면 LoRA나 GPTQ를 더한다. 디코딩에서는 AIR 자체 추론 경로가 값(value)을 랭크 r<sub>v</sub> 형태로 캐시하고 버퍼를 미리 할당한다(O1–O3). 키는 RoPE 때문에 원래 크기 그대로다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">Read the gains by compression level. At 80% retention the gain over SVD-LLM(W) is modest: perplexity goes from 7.87 to 7.51, and reasoning accuracy rises 1.1 points. At 60% it is substantial: 13.81 to 11.27, C4 56.33 to 35.81, and +1.6 points. The eye-catching −33% and −45% at 40% and 20% compare models with perplexities of 42 to 854. Their average reasoning accuracy (33.6%, 31.7%) is no better than vanilla SVD's already-broken models at 31.8% and 32.4%. AIR also wins on all six other models tested at 60%. Still, LLaMA-3-8B only gets to 67.95 against a dense 6.13, so more heavily trained models remain hard for SVD at a uniform rate.</p><p class="t-ko">개선 폭은 압축 수준별로 읽어야 한다. 보존율 80%에서는 SVD-LLM(W) 대비 개선이 작다. perplexity가 7.87에서 7.51로 내려가고 추론 정확도는 1.1점 오른다. 60%에서는 뚜렷하다. 13.81에서 11.27로, C4는 56.33에서 35.81로 내려가고 +1.6점이다. 눈에 띄는 40%·20%의 −33%, −45%는 perplexity 42~854짜리 모델끼리의 비교다. 이 모델들의 평균 추론 정확도(33.6%, 31.7%)는 이미 망가진 일반 SVD 모델의 31.8%, 32.4%와 다를 바 없다. 60%로 시험한 다른 여섯 모델에서도 AIR가 모두 이긴다. 그래도 LLaMA-3-8B는 67.95에 그쳐 원본 6.13과 거리가 멀다. 더 많이 학습된 모델은 균일 비율 SVD로 줄이기가 여전히 어렵다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">Where AIR sits in this archive's SVD thread: it is the element-wise, iterative relative of two earlier cards. OBD-LLM (2604.00821) brings the backward signal in through a closed-form Kronecker whitening of the output-gradient covariance. SVD-Surgeon (2606.23568) uses first-order gradients to re-fit the surviving singular values. AIR compares against neither. Its strongest weight-space baseline is SVD-LLM(W) from 2024, and it cites GFWSVD, a Kronecker-factored Fisher method, in the appendix but never runs it. Its rate is uniform across layers, so in principle it stacks with rank allocators like UniRank (2606.21847), but that is untested. And LowRankArena (2608.26389) showed that rankings among SVD methods shift with the backbone, while AIR's main tables use only LLaMA-1-7B.</p><p class="t-ko">이 아카이브의 SVD 흐름에서 AIR의 위치: 앞서 다룬 두 카드의 원소 단위·반복형 친척이다. OBD-LLM(2604.00821)은 출력 그래디언트 공분산의 닫힌 형태 Kronecker 화이트닝으로 역방향 신호를 들여온다. SVD-Surgeon(2606.23568)은 1차 그래디언트로 살아남은 특이값을 다시 맞춘다. AIR는 둘 중 어느 것과도 비교하지 않는다. 가장 강한 가중치 공간 베이스라인은 2024년의 SVD-LLM(W)이고, Kronecker 분해 Fisher 방법인 GFWSVD는 부록에서 인용만 하고 실행하지 않는다. 비율이 레이어마다 균일해서 원리상 UniRank(2606.21847) 같은 랭크 배분기와 함께 쓸 수 있지만, 검증되지 않았다. 또 LowRankArena(2608.26389)는 SVD 방법 간 순위가 백본에 따라 바뀐다는 것을 보였는데, AIR의 주요 표는 LLaMA-1-7B만 쓴다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">The efficiency section is worth reading twice, once for the audit and once for the fine print. The audit is valuable. SVD-LLM's throughput script counts tokens after an early end-of-sequence, and correcting that turns a reported 2.65× TinyLlama speedup into a 27% slowdown (229 vs 167 tok/s). But most of AIR's own 53% latency figure isn't compression either. It stays at 52–53% everywhere from 80% down to 20% retention (Table 9). Table 11 shows that the same cache path (O1–O3) brings a factorized model at 100% parameter rate down to 46.6% latency, against 44.2% at 60%. The pre-allocated buffers (O3) do most of the work, and the base model it is compared with runs on HuggingFace's default DynamicCache. The memory result does track compression: peak memory is about 64%, which lets the next larger batch-and-length setting fit. The latency result would only count as a compression win if the base model were measured on the same buffers.</p><p class="t-ko">효율 절은 두 번 읽을 만하다. 한 번은 감사 결과를, 한 번은 세부 조건을 보기 위해서다. 감사는 가치가 있다. SVD-LLM의 처리량 스크립트는 시퀀스가 일찍 끝난 뒤의 토큰까지 센다. 이를 바로잡으면 TinyLlama에서 보고된 2.65× 가속이 27% 감속(229 vs 167 tok/s)으로 뒤집힌다. 하지만 AIR 자신의 53% 지연 수치도 대부분 압축 덕이 아니다. 보존율 80%에서 20%까지 내내 52~53%로 평평하다(Table 9). Table 11을 보면 같은 캐시 경로(O1–O3)가 파라미터 비율 100%의 분해 모델도 지연 46.6%까지 낮추는데, 60% 모델은 44.2%다. 효과의 대부분은 미리 할당한 버퍼(O3)에서 나오고, 비교 대상인 원본 모델은 HuggingFace 기본 DynamicCache 위에서 돈다. 메모리 결과는 압축을 제대로 반영한다. 피크 메모리가 약 64%라 한 단계 더 큰 배치·길이 설정이 들어간다. 지연 시간 결과가 압축의 성과로 인정되려면 원본 모델도 같은 버퍼 위에서 재야 한다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the paper's second contribution is the claim that how the signal is folded in matters more than which signal is used, since LRP-ε, Weight×Gradient and Fisher all score 11.27 in Table 7. That claim rests on a measurement too coarse to see the difference. Take the 88 perplexities in Tables 2–4 and 6–8 plus the Figure 3 and 5 labels, leaving out values copied from the literature and the LoRA table. Of these, 83 are exactly e raised to a bfloat16 number: 11.27 = e<sup>155/64</sup>, 11.44 = e<sup>156/64</sup>, 13.80 = e<sup>168/64</sup>, 22026 = e<sup>10</sup>. So the mean loss was apparently rounded to bf16 before being exponentiated, and near the operating point perplexity can only move in steps of 1.57%. This also explains why unrelated cells repeat: 16.65 appears for SVD-LLM(W) on LLaMA-2-7B, for AIR on Vicuna, and for SVD-LLM(W) on C4 at 80%. "Identical" in Table 7 therefore means "within one step". The ablations of sweep direction, sweep count and δ (11.27 / 11.44 / 11.81) differ by one to three steps, the smallest gaps this pipeline can register, and no seeds or error bars are reported. The large gaps hold up (13.81 → 11.27 is 12 steps), but the fine-grained claims don't. Two smaller points. The abstract's "alone it exceeds ACIP" is false at 40% retention (42.52 vs 25). And Table 5 mixes evaluation setups: the ACIP row lies on the bf16 grid but the two LoRA rows don't, which suggests they came from different evaluation code, and the fine-tuning budgets are reported in different units (50k Alpaca samples vs ACIP's bundled 1k steps).</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 논문의 두 번째 기여는, LRP-ε, Weight×Gradient, Fisher가 Table 7에서 모두 11.27이므로 어떤 신호를 쓰느냐보다 어떻게 녹여 넣느냐가 중요하다는 주장이다. 그런데 이 주장은 그 차이를 볼 수 없을 만큼 거친 측정에 기대고 있다. Table 2–4, 6–8과 Figure 3·5 표기값의 perplexity 88개를 보자(문헌에서 옮긴 값과 LoRA 표는 제외). 이 중 83개가 정확히 e의 bfloat16 수 거듭제곱이다: 11.27 = e<sup>155/64</sup>, 11.44 = e<sup>156/64</sup>, 13.80 = e<sup>168/64</sup>, 22026 = e<sup>10</sup>. 평균 손실을 지수화하기 전에 bf16으로 반올림한 것으로 보이며, 그래서 운영 지점 근처에서 perplexity는 1.57% 간격으로만 움직일 수 있다. 서로 무관한 칸에서 같은 값이 반복되는 것도 이 때문이다. 16.65는 LLaMA-2-7B의 SVD-LLM(W), Vicuna의 AIR, 80% C4의 SVD-LLM(W)에 모두 나온다. 따라서 Table 7의 '동일'은 '한 칸 이내'라는 뜻이다. 스윕 방향·스윕 횟수·δ ablation(11.27 / 11.44 / 11.81)은 한 칸에서 세 칸 차이로, 이 파이프라인이 구분할 수 있는 가장 작은 차이이고 시드나 오차 막대도 보고되지 않는다. 큰 격차는 유효하지만(13.81 → 11.27은 12칸), 세밀한 주장은 그렇지 않다. 작은 문제도 두 가지 있다. 초록의 '단독으로도 ACIP를 넘는다'는 보존율 40%에서 틀리다(42.52 vs 25). 그리고 Table 5는 평가 방식이 섞여 있다. ACIP 행은 bf16 격자 위에 있지만 두 LoRA 행은 그렇지 않아 서로 다른 평가 코드에서 나온 것으로 보이고, 파인튜닝 예산도 서로 다른 단위로 보고된다(Alpaca 5만 샘플 vs ACIP에 내장된 1천 스텝).</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2606.19993">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2606.19993">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2606.19993">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2606.19993">🔎 alphaXiv</a>
+      <a href="https://github.com/NicodeHarder/air">💻 Code</a>
+    </div>
+    <span class="t-en">Why picked — <b>venue: AdaptFM workshop @ ICML'26, non-archival. It is written this way on purpose, so that the archive doesn't file a workshop paper under the main-conference ICML'26 tab. The wishlist queue is drained and the must-read queue is empty (no open mustread issues), so this came from the fallback search. None of the 7 unread candidates from the latent-communication and low-rank searches has a main-conference acceptance, and AIR is the only one accepted anywhere. The latent-communication axis was covered yesterday by HyLaT, and the low-rank axis hasn't had a card since SoLA on 09-10. AIR sits squarely on the Low-rank Decomposition axis. It is also the first card here that brings a backward signal into SVD through iterative updates, rather than through a closed-form whitening (OBD-LLM) or a re-fit of the singular values (SVD-Surgeon)</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-09-13.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>venue: ICML'26 AdaptFM 워크숍, 비아카이브. 워크숍 논문이 아카이브의 메인 학회 ICML'26 탭에 분류되지 않도록 일부러 이렇게 적었다. 위시리스트 큐는 소진됐고 머스트리드 큐도 비어 있어(열린 mustread 이슈 없음) 폴백 검색에서 골랐다. 잠재 통신과 저랭크 검색에서 나온 미열람 후보 7편 중 메인 학회 accept는 하나도 없고, 어디서든 accept된 것은 AIR뿐이다. 잠재 통신 축은 어제 HyLaT가 다뤘고, 저랭크 축은 09-10 SoLA 이후 카드가 없었다. AIR는 Low-rank Decomposition 축의 한가운데에 있다. 역방향 신호를 닫힌 형태 화이트닝(OBD-LLM)이나 특이값 재적합(SVD-Surgeon)이 아니라 반복 갱신으로 SVD에 넣는, 이 아카이브의 첫 카드이기도 하다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-09-13.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
