@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Out of Sight, Not Out of Mind: Unveiling Latent Attack in Latent-based Multi-Agent Systems</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Multi-Agent · Latent Communication · Security</span><span class="t-ko">Multi-Agent · Latent Communication · 보안</span></span>
+      <span>2026.09.15</span>
+    </div>
+    <h1>Out of Sight, Not Out of Mind: Unveiling Latent Attack in Latent-based Multi-Agent Systems<br>
+      <span class="glow t-en">— distil a text attack into one steering vector, add it to an agent-to-agent KV handoff, and a clean run fails with no malicious text anywhere in the transcript</span>
+      <span class="glow t-ko">— 텍스트 공격을 조향 벡터 하나로 증류해 에이전트 간 KV 핸드오프에 더하면, 대화록 어디에도 악성 텍스트가 없는 정상 실행이 무너진다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Chenxi Wang</b> <span class="t-en">· Ruiyang Huang (equal contribution) · Jiayan Sun · Lei Wei · Yifan Wu · corresponding: Yifan Wu</span><span class="t-ko">· Ruiyang Huang (공동 1저자) · Jiayan Sun · Lei Wei · Yifan Wu · 교신저자: Yifan Wu</span></span>
+      <span>🏛 Southeast University · Peking University</span>
+      <span>🏆 EMNLP 2026</span>
+      <span>🗓 2026-05-27 (v2 2026-08-27)</span>
+      <span>📄 <a href="https://arxiv.org/abs/2605.28214">arXiv:2605.28214</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">LatentMAS-style agents hand each other KV caches instead of text, so a filter that reads the transcript never sees what one agent actually passes to the next. This paper asks whether that hidden channel can carry an attack. The recipe has four steps. Run each question twice: once clean, and once under a text role-prompt attack that tells one agent to defend a wrong reference answer. Keep the pairs where the clean run was right and the attacked run was wrong. Subtract their latent states at the same site to get a displacement, and summarize the displacements into one direction with DiffMean, PCA or a preference-trained RePS vector. Finally, add α·direction to a clean run's hidden state or KV handoff, with no adversarial text anywhere. On a four-agent Qwen3-4B pipeline (Planner→Critic→Refiner→Judger), a training-free PCA direction on the Planner→Critic handoff drops GSM8K from 0.870 to 0.434, and RePS drives OpenBookQA from 0.910 to 0.000. Editing the KV handoffs hurts more than editing an agent's own hidden state. Editing K and V together hurts most, and V alone barely registers. The attack directions beat norm-matched random vectors in all 12 role–carrier cells (mean gap −0.188). But every main-table number is the lowest accuracy found in a layer × strength sweep on the same examples the directions were built from.</p>
+    <p class="t-ko">LatentMAS 계열 에이전트는 텍스트 대신 KV 캐시를 주고받는다. 그래서 대화록을 읽는 필터는 한 에이전트가 다음 에이전트에게 실제로 넘긴 것을 볼 수 없다. 이 논문은 그 숨은 채널로 공격을 실어 보낼 수 있는지 묻는다. 방법은 네 단계다. 각 질문을 두 번 돌린다. 한 번은 정상으로, 한 번은 한 에이전트에게 틀린 참조 답을 옹호하라고 지시하는 텍스트 역할 프롬프트 공격 아래에서. 정상 실행은 맞히고 공격 실행은 틀린 쌍만 남긴다. 같은 위치의 잠재 상태를 빼서 변위를 얻고, 이 변위들을 DiffMean, PCA, 또는 선호 학습한 RePS 벡터로 방향 하나로 요약한다. 마지막으로 정상 실행의 은닉 상태나 KV 핸드오프에 α·방향을 더한다. 적대적 텍스트는 어디에도 없다. Qwen3-4B 에이전트 4개로 된 파이프라인(Planner→Critic→Refiner→Judger)에서, 학습 없는 PCA 방향을 Planner→Critic 핸드오프에 더하면 GSM8K 정확도가 0.870에서 0.434로 떨어지고, RePS는 OpenBookQA를 0.910에서 0.000으로 만든다. 에이전트 자신의 은닉 상태보다 KV 핸드오프를 건드릴 때 더 크게 망가진다. K와 V를 함께 건드릴 때 가장 크게 망가지고, V만 건드리면 영향이 거의 없다. 공격 방향은 노름을 맞춘 무작위 벡터보다 12개 역할–운반체 조합 모두에서 더 해롭다(평균 격차 −0.188). 다만 본표의 모든 수치는 방향을 만든 바로 그 예제들에서 레이어 × 강도 스윕으로 찾은 최저 정확도다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Every latent-communication paper sells the same property: agents skip decoding and hand over internal state. This paper shows the flip side. If the message can be a KV cache, so can the attack, and text guardrails, which inspect prompts, messages and outputs, have nothing to read.</p>
+    <p class="lead t-ko">모든 잠재 통신 논문은 같은 장점을 내세운다. 에이전트가 디코딩을 건너뛰고 내부 상태를 그대로 넘긴다는 것이다. 이 논문은 그 이면을 보여 준다. 메시지가 KV 캐시일 수 있다면 공격도 KV 캐시일 수 있고, 프롬프트·메시지·출력을 검사하는 텍스트 가드레일은 읽을 것이 없다.</p>
+    <p class="t-en">The archive has covered the security side of latent channels twice before. LCGuard (2605.22786) treated a shared KV cache as a privacy leak and trained a sanitizer against it. When Latent Agents Lie (2606.28958) hid a randomized or rescaled cache behind a plausible sentence and zeroed out the coordinator. Those corruptions were arbitrary. This paper asks a narrower question: can the <i>semantic effect</i> of a known text attack be distilled into a latent direction and replayed later without the text? Its case rests on controls rather than raw drops. Attack-derived directions hurt more than random vectors of the same norm, and more than directions built from benign run-to-run variation. Most damaging configurations still produce well-formed answers. Edge-level carriers keep 92.0% of their damage on 113 held-out GSM8K questions. It also flips the usual map of where a MAS is weakest. In a text MAS the role prompt, a node, is the most dangerous injection point. In a latent MAS the most dangerous point is the KV handoff, an edge.</p>
+    <p class="t-ko">이 아카이브는 잠재 채널의 보안 문제를 이미 두 번 다뤘다. LCGuard(2605.22786)는 공유 KV 캐시를 프라이버시 유출 경로로 보고 이를 막는 정화기를 학습했다. When Latent Agents Lie(2606.28958)는 그럴듯한 문장 뒤에 무작위화하거나 크기를 키운 캐시를 숨겨 코디네이터의 정확도를 0으로 만들었다. 그 오염들은 임의적이었다. 이 논문의 질문은 더 좁다. 이미 알려진 텍스트 공격의 <i>의미적 효과</i>를 잠재 방향으로 증류해 두었다가, 텍스트 없이 나중에 재생할 수 있는가? 논증은 단순한 하락폭이 아니라 대조 실험에 기댄다. 공격에서 뽑은 방향은 노름이 같은 무작위 벡터보다, 그리고 정상 실행 간 자연스러운 차이로 만든 방향보다 더 해롭다. 가장 해로운 설정들도 대부분 형식이 멀쩡한 답을 낸다. 엣지 수준 운반체는 GSM8K 홀드아웃 113문제에서도 피해의 92.0%를 유지한다. 또 MAS의 약점 지도가 뒤집힌다. 텍스트 MAS에서 가장 위험한 주입 지점은 노드인 역할 프롬프트다. 잠재 MAS에서 가장 위험한 지점은 엣지인 KV 핸드오프다.</p>
+    <figure class="fig">
+      <img src="fig/2605.28214/latent_attack_pipeline.png" alt="Latent attack pipeline in three panels. A, Paired Latent Construction: an input x_i runs through a Planner, Critic, Refiner, Judger chain twice, once clean (correct) and once with a text-level attack phi on the Refiner (wrong); the latent vectors z plus and z minus at the same matched site are saved, and only clean-correct / attack-wrong pairs are kept. B, Attack Direction Extraction: the displacement delta equals z minus minus z plus for each pair; the displacements delta_1 to delta_n are summarized by DiffMean, PCA or RePS into an attack direction d. C, Latent Attack Injection: in a clean run, alpha times d is added either to a node hidden state h or to an edge KV cache (K, V or both); the intervention Gamma specifies site and layer, carrier, strength alpha and method m.">
+      <figcaption class="t-en"><b>Figure 2.</b> The whole attack on one page. <i>A:</i> each input runs through the four-agent LatentMAS twice, clean and under a text-level role attack on one agent (here the Refiner). Only clean-correct / attack-wrong pairs are kept, and from both runs the latent object z at the same site (ω, r) is saved. <i>B:</i> each pair gives a displacement δ = z⁻ − z⁺, and DiffMean, PCA or RePS summarizes the displacements into one attack direction d. <i>C:</i> in a fresh clean run, α·d is added either to an agent's hidden state (node) or to the K part, the V part or both parts of a KV-cache handoff (edge). The intervention Γ fixes the site and layer, the carrier, the strength α and the extraction method.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> 공격 전체를 한 장에 담은 그림. <i>A:</i> 각 입력을 에이전트 4개짜리 LatentMAS에 두 번 돌린다. 한 번은 정상으로, 한 번은 한 에이전트(그림에서는 Refiner)에 텍스트 역할 공격을 걸고. 정상은 맞히고 공격은 틀린 쌍만 남기며, 두 실행 모두에서 같은 위치 (ω, r)의 잠재 객체 z를 저장한다. <i>B:</i> 쌍마다 변위 δ = z⁻ − z⁺를 구하고, DiffMean, PCA, 또는 RePS로 변위들을 공격 방향 d 하나로 요약한다. <i>C:</i> 새 정상 실행에서 α·d를 에이전트의 은닉 상태(노드)나 KV 캐시 핸드오프의 K, V, 또는 둘 다(엣지)에 더한다. 개입 Γ는 위치와 레이어, 운반체, 강도 α, 추출 방법을 정한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2605.28214</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">0.870 → 0.434</div><div class="l"><span class="t-en">GSM8K accuracy after adding a training-free PCA direction to the Planner→Critic KV handoff (K+V), with no adversarial text in the run</span><span class="t-ko">학습 없는 PCA 방향을 Planner→Critic KV 핸드오프(K+V)에 더한 뒤의 GSM8K 정확도. 실행 중 적대적 텍스트는 없다</span></div></div>
+      <div class="stat"><div class="n">0.910 → 0.000</div><div class="l"><span class="t-en">OpenBookQA accuracy with a preference-trained RePS vector on the Planner→Critic handoff (best of the sweep, on the examples it was trained on)</span><span class="t-ko">선호 학습한 RePS 벡터를 Planner→Critic 핸드오프에 넣었을 때의 OpenBookQA 정확도 (스윕 최고치, 학습에 쓴 예제에서 측정)</span></div></div>
+      <div class="stat"><div class="n">−0.398</div><div class="l"><span class="t-en">mean GSM8K accuracy change for K+V edits across the three handoffs (K-only −0.215 · V-only +0.009)</span><span class="t-ko">핸드오프 세 곳에서 K+V를 편집할 때의 평균 GSM8K 정확도 변화 (K만 −0.215 · V만 +0.009)</span></div></div>
+      <div class="stat"><div class="n">−0.188</div><div class="l"><span class="t-en">mean accuracy gap, attack direction vs a norm-matched random vector; negative in all 12 role–carrier cells</span><span class="t-ko">공격 방향과 노름을 맞춘 무작위 벡터의 평균 정확도 격차. 역할–운반체 12칸 모두 음수</span></div></div>
+      <div class="stat"><div class="n">92.0%</div><div class="l"><span class="t-en">share of edge-level PCA degradation kept on a disjoint 113-question GSM8K split, with no re-tuning</span><span class="t-ko">겹치지 않는 GSM8K 113문제 분할에서, 재조정 없이 유지된 엣지 수준 PCA 피해의 비율</span></div></div>
+      <div class="stat"><div class="n">0.849 / 0.944</div><div class="l"><span class="t-en">true-positive rate of a direction-agnostic layer-norm-profile detector on PCA K+V attacks at α = 1 / 2, at ~5% FPR (node-level PCA: 0.047 / 0.051)</span><span class="t-ko">방향을 모르는 레이어별 노름 프로파일 탐지기의 PCA K+V 공격 탐지율, α = 1 / 2, 오탐률 약 5% (노드 수준 PCA: 0.047 / 0.051)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Node vs edge, method by method (GSM8K)</span><span class="t-ko">노드 vs 엣지, 방법별 비교 (GSM8K)</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 (GSM8K excerpt).</b> Qwen3-4B, four-agent LatentMAS, clean accuracy 0.870. Each cell is the accuracy under the most damaging "healthy" configuration of the layer × α sweep, with the change from clean in parentheses; lower means a stronger attack, and the strongest cell in each latent row is highlighted. The first row is the text role-prompt attack the directions are distilled from; it targets agents, so it has no edge cells. Edge carriers are K+V. Two things stand out. The training-free directions (PCA, DiffMean) barely touch the nodes, and DiffMean node edits even <i>raise</i> accuracy. RePS, which is trained to prefer these questions' wrong answers, is strong everywhere.</caption>
+        <caption class="t-ko"><b>Table 1 (GSM8K 발췌).</b> Qwen3-4B, 에이전트 4개 LatentMAS, 정상 정확도 0.870. 각 칸은 레이어 × α 스윕에서 가장 해로운 "정상 출력" 설정의 정확도이고, 괄호는 정상 대비 변화다. 낮을수록 강한 공격이며, 잠재 공격 행마다 가장 강한 칸을 강조했다. 첫 행은 방향을 증류해 온 원본 텍스트 역할 프롬프트 공격이다. 에이전트를 겨냥하므로 엣지 칸이 없다. 엣지 운반체는 K+V다. 눈에 띄는 점이 두 가지다. 학습 없는 방향(PCA, DiffMean)은 노드에 거의 영향을 주지 못하고, DiffMean 노드 편집은 오히려 정확도를 <i>올린다</i>. 이 문제들의 오답을 선호하도록 학습한 RePS는 어디서나 강하다.</caption>
+        <thead><tr><th>Method</th><th>Planner (node)</th><th>Critic (node)</th><th>Refiner (node)</th><th>P→C (edge)</th><th>C→R (edge)</th><th>R→J (edge)</th></tr></thead>
+        <tbody>
+          <tr><td>Direct text attack</td><td>0.213 (−0.657)</td><td>0.350 (−0.520)</td><td>0.267 (−0.603)</td><td>—</td><td>—</td><td>—</td></tr>
+          <tr><td>PCA</td><td>0.693 (−0.177)</td><td>0.867 (−0.003)</td><td>0.873 (+0.003)</td><td class="up">0.434 (−0.436)</td><td>0.487 (−0.383)</td><td>0.496 (−0.374)</td></tr>
+          <tr><td>DiffMean</td><td>0.903 (+0.033)</td><td>0.920 (+0.050)</td><td>0.912 (+0.042)</td><td>0.611 (−0.259)</td><td>0.885 (+0.015)</td><td class="up">0.372 (−0.498)</td></tr>
+          <tr><td>RePS †</td><td>0.292 (−0.578)</td><td>0.257 (−0.613)</td><td>0.195 (−0.675)</td><td>0.133 (−0.737)</td><td class="up">0.027 (−0.844)</td><td>0.195 (−0.675)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The idea in three pieces</span><span class="t-ko">아이디어를 세 조각으로</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">surface</span>
+        <h3>Nodes and edges</h3>
+        <p class="t-en">The system is a graph of agents. The node surface is the hidden states h<sub>i,ℓ</sub> inside one agent, and the edge surface is the layer-wise KV handoff M<sub>j→i,ℓ</sub> = (K, V) that an agent passes downstream as latent working memory. The attacker may write to either one before it is consumed. It may not touch visible prompts, messages, weights, the final Judger, its logits or the answer. The paper places this access in self-hosted open-weight MAS, compromised inference infrastructure, tracing tools that expose intermediate states, and KV-cache serving middleware.</p>
+        <p class="t-ko">시스템은 에이전트들로 된 그래프다. 노드 표면은 한 에이전트 내부의 은닉 상태 h<sub>i,ℓ</sub>이고, 엣지 표면은 에이전트가 잠재 작업 기억으로 다음 에이전트에 넘기는 레이어별 KV 핸드오프 M<sub>j→i,ℓ</sub> = (K, V)다. 공격자는 둘 중 어느 쪽이든 소비되기 전에 값을 쓸 수 있다. 보이는 프롬프트, 메시지, 가중치, 최종 Judger와 그 로짓, 답은 건드릴 수 없다. 논문은 이런 접근이 가능한 곳으로 자체 호스팅한 오픈 웨이트 MAS, 침해된 추론 인프라, 중간 상태를 노출하는 추적 도구, KV 캐시 서빙 미들웨어를 든다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">extract</span>
+        <h3>A text attack, distilled</h3>
+        <p class="t-en">The source attack is a role prompt. It tells one agent to adopt a wrong reference answer as its own view and to argue the other agents out of theirs. The paper keeps the pairs where it flipped a correct answer and computes δ = z⁻ − z⁺ at the same agent or edge, layer and object (h, K or V). DiffMean averages the δ's and PCA takes their top principal direction; both are training-free. RePS instead trains a vector with a reference-scaled, SimPO-style preference loss. Added to the clean context, the vector should make the attacked wrong answer more likely than the clean right one, and a bidirectional variant makes it an oriented axis.</p>
+        <p class="t-ko">원본 공격은 역할 프롬프트다. 한 에이전트에게 틀린 참조 답을 자기 견해로 삼고, 다른 에이전트들이 자기 답을 버리도록 설득하라고 지시한다. 논문은 이 공격이 정답을 뒤집은 쌍만 남기고, 같은 에이전트나 엣지, 같은 레이어, 같은 객체(h, K, V)에서 δ = z⁻ − z⁺를 계산한다. DiffMean은 δ들의 평균을, PCA는 첫 번째 주성분 방향을 취한다. 둘 다 학습이 필요 없다. RePS는 대신 참조 스케일 SimPO식 선호 손실로 벡터를 학습한다. 정상 문맥에 이 벡터를 더하면 공격받은 오답이 정상 정답보다 더 그럴듯해지도록 만들고, 양방향 변형으로 방향성 있는 축이 되게 한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">inject</span>
+        <h3>Replay without the text</h3>
+        <p class="t-en">An intervention is Γ = (ω, c, α, m): the site ω (agent or edge, plus layer), the carrier c ∈ {h, K, V, KV}, the strength α ∈ {1…8} and the method m. The rule is simply z ← z + α·d. For KV, K and V each get their own direction. Configurations are picked in two stages: sweep layers at α = 4, then sweep α at the chosen layer. The reported entry is the most damaging configuration whose outputs stay "healthy", meaning at most 2% of predictions come out empty and at most 2% of responses are degenerate on GSM8K and OpenBookQA.</p>
+        <p class="t-ko">개입은 Γ = (ω, c, α, m)이다. ω는 위치(에이전트나 엣지, 그리고 레이어), c ∈ {h, K, V, KV}는 운반체, α ∈ {1…8}은 강도, m은 방법이다. 규칙은 단순히 z ← z + α·d다. KV의 경우 K와 V가 각자의 방향을 받는다. 설정은 두 단계로 고른다. α = 4에서 레이어를 스윕한 뒤, 고른 레이어에서 α를 스윕한다. 보고되는 값은 출력이 "정상"으로 남는 설정 중 가장 해로운 것이다. GSM8K와 OpenBookQA에서 정상이란 빈 예측이 2% 이하, 퇴화한 응답이 2% 이하라는 뜻이다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Build the victim.</span><span class="t-ko">피해 시스템을 세운다.</span></b><span class="t-en"> The victim is LatentMAS (2511.20639) with four Qwen3-4B agents, Planner → Critic → Refiner → Judger. They reason in hidden states, pass layer-wise KV caches and decode greedily at temperature 0. The data is 300 GSM8K questions (plus 113 held out), the 500-question OpenBookQA test set and all 164 HumanEval+ problems.</span><span class="t-ko"> 피해 시스템은 Qwen3-4B 에이전트 4개(Planner → Critic → Refiner → Judger)로 된 LatentMAS(2511.20639)다. 에이전트들은 은닉 상태로 추론하고, 레이어별 KV 캐시를 넘기며, temperature 0으로 그리디 디코딩한다. 데이터는 GSM8K 300문제(별도 홀드아웃 113문제), OpenBookQA 테스트 500문제, HumanEval+ 전체 164문제다.</span></li>
+      <li><b><span class="t-en">Run clean and attacked.</span><span class="t-ko">정상 실행과 공격 실행을 돌린다.</span></b><span class="t-en"> Each question runs once clean and once with the role-prompt attack on one agent, and both latent trajectories are saved. The text attack alone takes GSM8K from 0.870 to 0.213–0.350, depending on which agent it targets.</span><span class="t-ko"> 각 문제를 한 번은 정상으로, 한 번은 한 에이전트에 역할 프롬프트 공격을 걸어 돌리고, 두 잠재 궤적을 모두 저장한다. 텍스트 공격만으로 GSM8K는 겨냥한 에이전트에 따라 0.870에서 0.213~0.350으로 떨어진다.</span></li>
+      <li><b><span class="t-en">Extract a direction per site.</span><span class="t-ko">위치마다 방향을 뽑는다.</span></b><span class="t-en"> For every agent or edge, layer and object (h, K, V), the retained pairs give displacements, which DiffMean, PCA or RePS summarizes. Each edge is paired with the attack on its sending agent: Tables 3 and 4 line up Planner with P→C, Critic with C→R and Refiner with R→J.</span><span class="t-ko"> 에이전트나 엣지, 레이어, 객체(h, K, V)마다 남긴 쌍에서 변위를 구하고, DiffMean, PCA, 또는 RePS로 요약한다. 각 엣지는 보내는 쪽 에이전트에 대한 공격과 짝지어진다. Table 3과 4에서 Planner는 P→C, Critic은 C→R, Refiner는 R→J와 대응한다.</span></li>
+      <li><b><span class="t-en">Inject into clean runs.</span><span class="t-ko">정상 실행에 주입한다.</span></b><span class="t-en"> α·d is added at one site in an otherwise clean run, leaving the Judger, the visible messages and the output untouched. The sweep covers layers first, then strength, and keeps the most damaging healthy configuration.</span><span class="t-ko"> 나머지는 정상인 실행의 한 위치에 α·d를 더한다. Judger, 보이는 메시지, 출력은 그대로 둔다. 레이어를 먼저, 그다음 강도를 스윕해서, 출력이 정상인 설정 중 가장 해로운 것을 남긴다.</span></li>
+      <li><b><span class="t-en">Control, then detect.</span><span class="t-ko">대조하고, 탐지한다.</span></b><span class="t-en"> The controls are norm-matched random vectors and "natural" PCA directions built from benign variation or from naturally failed runs, plus output-health checks and held-out and cross-dataset transfer. Two detectors are then calibrated on clean traces to about 5% FPR. One is an oracle that projects onto the known direction. The other is direction-agnostic: it scores the layer-wise norm profile with median/MAD statistics.</span><span class="t-ko"> 대조군은 노름을 맞춘 무작위 벡터와 "자연" PCA 방향이다. 자연 방향은 정상 실행 간 차이나 자연스럽게 실패한 실행에서 만든다. 여기에 출력 건전성 검사, 홀드아웃·교차 데이터셋 전이 실험을 더한다. 그다음 정상 실행 기록으로 탐지기 두 개를 오탐률 약 5%에 맞춰 보정한다. 하나는 알려진 방향으로 사영하는 오라클이다. 다른 하나는 방향을 모르는 탐지기로, 레이어별 노름 프로파일을 중앙값/MAD 통계로 점수화한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">For a system designer, the takeaway is to guard the KV handoff, and above all its keys. Across the three handoffs, K+V edits cost 0.398 accuracy on average, K-only 0.215 and V-only nothing (+0.009). The per-transition averages are nearly identical (0.667 / 0.676 / 0.664), so which part of the cache is edited matters more than which pair of agents it sits between. The paper's reading: K edits change which cached states get attended to, and V edits only change the returned content. The effect survives a change of backbone to Qwen3-8B and Llama-3.1-8B, a star topology and embedding-level messages (Appendix F), though it shrinks in places, e.g. to −0.053 on Llama-3.1-8B's P→C handoff. Where this archive has seen a defense that fully held, it was transport integrity, the HMAC manifest in When Latent Agents Lie, not content inspection.</p><p class="t-ko">시스템 설계자가 가져갈 교훈은 KV 핸드오프, 그중에서도 키를 지키라는 것이다. 핸드오프 세 곳에서 K+V 편집은 평균 정확도 0.398, K만은 0.215를 깎고, V만은 영향이 없다(+0.009). 전이별 평균은 거의 같다(0.667 / 0.676 / 0.664). 즉 어느 에이전트 쌍 사이인지보다 캐시의 어느 부분을 편집하느냐가 더 중요하다. 논문의 해석은 이렇다. K 편집은 어떤 캐시 상태에 주목할지를 바꾸고, V 편집은 돌려받는 내용만 바꾼다. 효과는 Qwen3-8B·Llama-3.1-8B로 백본을 바꿔도, 스타 토폴로지에서도, 임베딩 수준 메시지에서도 유지된다(Appendix F). 다만 곳에 따라 줄어서, 예컨대 Llama-3.1-8B의 P→C 핸드오프에서는 −0.053에 그친다. 이 아카이브에서 완전히 버틴 방어는 내용 검사가 아니라 전송 무결성, 즉 When Latent Agents Lie의 HMAC 매니페스트였다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">Table 6 undercuts "edge is the weak point" more than the text admits. The damaging PCA K+V edge attacks shift layer-wise norms enough that the direction-agnostic detector catches them at 0.849 (α = 1) and 0.944 (α = 2). Now take the RePS node column. These are the node edits that cut GSM8K accuracy to 0.195–0.292 in Table 1. The same detector flags them at 0.040–0.051 at every strength up to α = 8, which is chance against a 0.044 FPR. Only the oracle, which already knows the direction, catches them. So the edge-over-node ranking holds for geometric directions. With an optimized vector, the node surface is about as damaging and nearly invisible to norm monitoring. That is the more worrying finding, and the paper doesn't draw it out.</p><p class="t-ko">Table 6은 "엣지가 약점"이라는 주장을 본문이 인정하는 것보다 더 크게 흔든다. 해로운 PCA K+V 엣지 공격은 레이어별 노름을 충분히 흔들기 때문에, 방향을 모르는 탐지기가 0.849(α = 1), 0.944(α = 2)로 잡아낸다. 이제 RePS 노드 열을 보자. Table 1에서 GSM8K 정확도를 0.195~0.292로 떨어뜨린 바로 그 노드 편집이다. 같은 탐지기는 α = 8까지 모든 강도에서 이를 0.040~0.051로 잡는데, 오탐률 0.044와 비교하면 우연 수준이다. 방향을 이미 아는 오라클만 이를 잡는다. 따라서 엣지가 노드보다 위험하다는 순위는 기하학적 방향에서만 성립한다. 최적화된 벡터라면 노드 표면도 엣지만큼 해롭고, 노름 모니터링에는 거의 보이지 않는다. 더 걱정스러운 발견은 이쪽인데, 논문은 이 점을 짚지 않는다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">The evidence for "semantic transfer" is thinner than the prose suggests. The paper says PCA-induced failures "closely match" the text attack's failures, but against a random failure set of the same size the lift is only 1.19–1.25× (precision 0.635–0.826 vs 0.530–0.660, Table 14). The Critic and Refiner node carriers produce 1 and 0 overlapping failures, so they carry no alignment evidence at all. The calorie case study is vivid but anecdotal: the clean run allows fractional servings and gets 48 g, and both attacks invent a full-serving rule and answer 0 g. One backbone in the generalization table, Llama-3.2-3B, starts at 0.193 clean accuracy on GSM8K in this pipeline, so its fall to 0.000 says little.</p><p class="t-ko">"의미 전이"의 증거는 본문 서술보다 약하다. 논문은 PCA가 일으킨 실패가 텍스트 공격의 실패와 "밀접하게 일치한다"고 쓰지만, 같은 크기의 무작위 실패 집합과 비교한 향상 배율은 1.19~1.25배에 그친다(정밀도 0.635~0.826 vs 0.530~0.660, Table 14). Critic과 Refiner 노드 운반체는 겹치는 실패가 각각 1개와 0개여서 정렬 증거가 전혀 없다. 칼로리 사례는 생생하지만 일화 수준이다. 정상 실행은 분할 제공을 허용해 48 g을 얻고, 두 공격 모두 전량 제공 규칙을 지어내 0 g이라고 답한다. 일반화 표의 백본 하나인 Llama-3.2-3B는 이 파이프라인에서 GSM8K 정상 정확도가 0.193에서 시작하므로, 0.000으로의 하락은 별 의미가 없다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the headline drops are upper bounds from an in-sample, best-of-sweep protocol under a strong white-box threat model. The directions are extracted from paired runs on the same 300 GSM8K questions they are then scored on. Each main-table cell is the lowest accuracy among all "healthy" layer × α configurations on that set, and Appendix B itself calls these "best-found effects", not average-case ones. RePS is trained outright to prefer those questions' wrong answers, so 0.910 → 0.000 is closer to a fitted result than an estimate of attack success. The only held-out test covers PCA on GSM8K (113 questions, 92.0% retained), not RePS and not the other datasets. On HumanEval+ the health filter allows up to 55% of outputs to contain no extractable program, so part of RePS's 0.000 on the C→R handoff there may be broken output rather than wrong code. The attacker also needs write access to a KV cache in flight plus saved clean and attacked trajectories, and with that access it could simply overwrite the cache. The contribution to trust is the controlled comparison: attack directions against random and natural ones at equal norm, edge against node, K against V. The paper does not establish a realistic success rate for the attack.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 대표 하락폭은 강한 화이트박스 위협 모델 아래, 표본 내·스윕 최고치 프로토콜에서 나온 상한이다. 방향은 GSM8K 300문제의 쌍 실행에서 뽑고, 같은 300문제로 채점한다. 본표의 각 칸은 그 집합에서 "정상 출력"인 레이어 × α 설정 중 최저 정확도이고, Appendix B도 이를 평균적 효과가 아닌 "최선으로 찾은 효과"라고 스스로 밝힌다. RePS는 아예 그 문제들의 오답을 선호하도록 학습되므로, 0.910 → 0.000은 공격 성공률 추정이라기보다 적합 결과에 가깝다. 홀드아웃 검증은 GSM8K의 PCA 하나뿐이고(113문제, 92.0% 유지), RePS와 다른 데이터셋은 검증하지 않았다. HumanEval+에서는 건전성 필터가 출력의 최대 55%까지 추출 가능한 프로그램이 없어도 허용한다. 그래서 거기서 C→R 핸드오프에 대한 RePS의 0.000 중 일부는 틀린 코드가 아니라 깨진 출력일 수 있다. 공격자는 또 전송 중인 KV 캐시에 쓸 권한과, 저장된 정상·공격 궤적이 필요하다. 그만한 접근 권한이 있다면 캐시를 그냥 덮어쓸 수도 있다. 믿을 만한 기여는 통제된 비교다. 노름이 같은 공격 방향 대 무작위·자연 방향, 엣지 대 노드, K 대 V의 비교다. 현실적인 공격 성공률은 이 논문이 입증하지 못했다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2605.28214">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2605.28214">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2605.28214">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2605.28214">🔎 alphaXiv</a>
+      <a href="https://github.com/mnmn-f/Out-of-Sight-LatentAttack">💻 Code</a>
+    </div>
+    <span class="t-en">Why picked — <b>venue: EMNLP 2026 (main conference; the arXiv comment reads "Accepted to EMNLP 2026"). The 2026-08 wishlist queue is drained and the must-read queue is empty (no open mustread issues), so this came from the fallback search. Among the unread candidates from the latent-communication and low-rank searches, two had confirmed acceptances: this one, and a three-level low-rank optimization paper in the Findings track (2609.15838). Yesterday's card, AIR, was on the low-rank axis, so the main-conference latent-communication paper went first. It attacks LatentMAS (the must-read 2511.20639) directly. It is the third security card in this thread, after LCGuard (privacy) and When Latent Agents Lie (integrity), and the first to build its latent attack from the effect of a text attack rather than from arbitrary corruption</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-09-15.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>venue: EMNLP 2026 (메인 컨퍼런스. arXiv 코멘트에 "Accepted to EMNLP 2026"이라고 적혀 있다). 2026-08 위시리스트 큐가 소진되고 머스트리드 큐도 비어 있어(열린 mustread 이슈 없음) 폴백 검색에서 골랐다. 잠재 통신·저랭크 검색에서 나온 미열람 후보 중 accept가 확인된 것은 두 편이었다. 이 논문, 그리고 Findings 트랙의 3단계 저랭크 최적화 논문(2609.15838)이다. 어제 카드인 AIR가 저랭크 축이었으므로 메인 학회의 잠재 통신 논문을 먼저 골랐다. LatentMAS(머스트리드 2511.20639)를 직접 공격한다. 이 계열에서 LCGuard(프라이버시), When Latent Agents Lie(무결성)에 이은 세 번째 보안 카드이며, 임의의 오염이 아니라 텍스트 공격의 효과로부터 잠재 공격을 만든 첫 논문이다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-09-15.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
