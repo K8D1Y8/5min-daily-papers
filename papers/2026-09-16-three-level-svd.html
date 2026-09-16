@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Per-Matrix Optimality Is Not Enough</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · Low-rank · SVD</span><span class="t-ko">Model Compression · Low-rank · SVD</span></span>
+      <span>2026.09.16</span>
+    </div>
+    <h1>Per-Matrix Optimality Is Not Enough<br>
+      <span class="glow t-en">— the decomposition was never the bottleneck, the scope was</span>
+      <span class="glow t-ko">— 병목은 분해가 아니라 최적화의 범위였다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Huicheng Zhang, Xiyao Feng</b> <span class="t-en">(equal) +7, corr. Xiao Shi · Jinguo Liu · Xin Wang</span><span class="t-ko">(공동 1저자) 외 7명, 교신 Xiao Shi · Jinguo Liu · Xin Wang</span></span>
+      <span>🏛 HKUST (Guangzhou) · QudeLeap Research</span>
+      <span>🗓 2026-09-14</span>
+      <span>🏆 EMNLP 2026 Findings</span>
+      <span>📄 <a href="https://arxiv.org/abs/2609.15838">arXiv:2609.15838</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Whitened per-matrix SVD is already <b>Eckart–Young optimal</b> — and on LLaMA-7B at 60% compression it still gives perplexity 42.1 against the dense model's 5.68. This paper's claim is that the gap is not waiting for a better decomposition. Keep the same factors and the same 256 calibration sequences, then re-optimize those factors at wider scopes: jointly across the seven projections inside each Transformer block (42.1 → 19.1), then end-to-end against the language-modeling loss (→ <b>11.4</b>). That beats SVD-LLM + Sequential LoRA, which needs <b>50K external Alpaca samples</b> to reach 15.0. The honesty is the other half of the paper: zero-shot accuracy is still 35.6% against the dense 51.6%, GSM8K is flat 0%, and the block stage costs 13.76 hours that a bigger calibration pool can partly buy back instead.</p>
+    <p class="t-ko">화이트닝된 행렬별 SVD는 이미 <b>Eckart–Young 최적</b>이다. 그런데도 LLaMA-7B를 60% 압축하면 perplexity가 42.1이다. 원본 모델은 5.68이다. 이 논문의 주장은 그 격차가 더 좋은 분해를 기다리고 있는 게 아니라는 것이다. 같은 인수(factor)와 같은 256개 캘리브레이션 시퀀스를 그대로 두고, 그 인수를 더 넓은 범위에서 다시 최적화한다. 먼저 트랜스포머 블록 안의 일곱 개 projection을 함께 최적화하고(42.1 → 19.1), 그다음 언어모델 손실로 end-to-end 미세조정한다(→ <b>11.4</b>). 이는 <b>외부 Alpaca 5만 샘플</b>을 써서 15.0에 도달하는 SVD-LLM + Sequential LoRA를 앞선다. 논문의 나머지 절반은 그 솔직함이다. zero-shot 정확도는 여전히 35.6%로 원본의 51.6%에 못 미치고, GSM8K는 0%이며, 블록 단계는 13.76시간을 쓰는데 캘리브레이션 데이터를 늘리면 그 이득을 상당 부분 대신 살 수 있다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Almost every recent SVD compression paper improves the same thing: the objective for one weight matrix, or the rank budget handed to it. This one argues that the whole family has been optimizing the wrong unit.</p>
+    <p class="lead t-ko">최근의 SVD 압축 논문 대부분은 같은 것을 개선한다. 하나의 가중치 행렬에 대한 목적함수, 또는 그 행렬에 배정되는 rank 예산이다. 이 논문은 그 계열 전체가 잘못된 단위를 최적화해 왔다고 주장한다.</p>
+    <p class="t-en">The argument is structural. Activation-whitened SVD solves its own objective exactly — you cannot beat it at the per-matrix game. But truncation errors from the seven attention and MLP projections do not stay in their own matrices: they interact through the block's residual connections and nonlinearities, and then compound along the residual stream across blocks. Neither interaction is visible to a per-matrix loss, however cleverly that loss is whitened or however carefully ranks are allocated. So the authors keep the decomposition fixed and widen what the optimizer can see: matrix → block → whole model, warm-starting each level from the last. Worth noting for anyone working on rank allocation: this paper uses a <b>uniform rank</b> for every weight matrix and still beats the mixed-rank methods (DipSVD, Dobi-SVD) it compares against — which makes scope and allocation look like orthogonal axes that nobody has yet combined.</p>
+    <p class="t-ko">논지는 구조적이다. activation-whitened SVD는 자기 목적함수를 정확히 푼다. 행렬별 게임에서는 이길 수 없다. 그러나 attention과 MLP의 일곱 projection에서 생긴 절단 오차는 각자의 행렬 안에 머물지 않는다. 블록의 residual 연결과 비선형성을 통해 서로 상호작용하고, 그다음 블록을 넘어 residual stream을 따라 누적된다. 이 두 상호작용은 행렬별 손실에는 보이지 않는다. 손실을 아무리 영리하게 화이트닝해도, rank를 아무리 정교하게 배분해도 마찬가지다. 그래서 저자들은 분해 방식은 고정한 채, 옵티마이저가 볼 수 있는 범위를 넓힌다. 행렬 → 블록 → 모델 전체로 가면서 각 단계를 이전 단계에서 warm-start한다. rank allocation을 연구한다면 하나 짚어둘 점이 있다. 이 논문은 모든 가중치 행렬에 <b>균일한 rank</b>를 쓰면서도 비교 대상인 혼합 rank 방법들(DipSVD, Dobi-SVD)을 이긴다. 범위와 배분이 아직 아무도 결합하지 않은 서로 직교하는 축으로 보인다는 뜻이다.</p>
+    <figure class="fig">
+      <img src="fig/2609.15838/fig1.svg" alt="Three-level compression chain: sub-layer SVD, block joint optimization, end-to-end refinement">
+      <figcaption class="t-en"><b>Figure 1.</b> The three-level chain. Each level widens the optimization scope and warm-starts from the previous solution, on the same calibration budget. The numbers are LLaMA-7B WikiText-2 perplexity at ρ=0.6 — each level roughly halves it.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> 3단계 체인. 각 단계는 최적화 범위를 넓히면서 이전 해에서 warm-start하며, 캘리브레이션 예산은 동일하다. 숫자는 ρ=0.6에서 LLaMA-7B의 WikiText-2 perplexity다. 단계마다 대략 절반으로 줄어든다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2609.15838</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">42.1 → 11.4</div><div class="l"><span class="t-en">WikiText-2 PPL, LLaMA-7B at 60% compression (L1 → L3)</span><span class="t-ko">60% 압축 LLaMA-7B의 WikiText-2 PPL (L1 → L3)</span></div></div>
+      <div class="stat"><div class="n">256</div><div class="l"><span class="t-en">calibration sequences — all three levels, no external data</span><span class="t-ko">캘리브레이션 시퀀스. 세 단계 전부, 외부 데이터 없음</span></div></div>
+      <div class="stat"><div class="n">15.0</div><div class="l"><span class="t-en">what SVD-LLM + LoRA reaches using 50K Alpaca samples</span><span class="t-ko">SVD-LLM + LoRA가 Alpaca 5만 샘플로 도달하는 값</span></div></div>
+      <div class="stat"><div class="n">24 pts</div><div class="l"><span class="t-en">PTB perplexity lost by skipping the block stage</span><span class="t-ko">블록 단계를 건너뛰면 잃는 PTB perplexity</span></div></div>
+      <div class="stat"><div class="n">13.76 h</div><div class="l"><span class="t-en">offline cost of that block stage (vs 17.3 min for L1)</span><span class="t-ko">그 블록 단계의 오프라인 비용 (L1은 17.3분)</span></div></div>
+      <div class="stat"><div class="n">0.86–0.94×</div><div class="l"><span class="t-en">decode throughput after compression — it gets slower</span><span class="t-ko">압축 후 디코딩 처리량. 오히려 느려진다</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">LLaMA-7B at 60% compression</span><span class="t-ko">60% 압축 LLaMA-7B</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 2 + 3.</b> Perplexity (lower is better) on WikiText-2, PTB and C4 at ρ=0.6, all with 256 WikiText-2 calibration sequences. Baseline rows are from the unified protocol of SAES-SVD; the L1/L2/L3 rows are the same chain measured at each level. Zero-shot average over the paper's 7 tasks: dense <b>51.6%</b>, SAES-SVD 33.3%, Ours (L3) <b>35.6%</b> — the perplexity gap closes much faster than the accuracy gap.</caption>
+        <caption class="t-ko"><b>Table 2 + 3.</b> ρ=0.6에서 WikiText-2 · PTB · C4의 perplexity(낮을수록 좋음). 모두 256개 WikiText-2 캘리브레이션 시퀀스를 쓴다. 베이스라인 행은 SAES-SVD의 통합 프로토콜에서 가져왔고, L1/L2/L3 행은 같은 체인을 각 단계에서 측정한 값이다. 논문의 7개 과제 zero-shot 평균은 원본 <b>51.6%</b>, SAES-SVD 33.3%, 본 논문(L3) <b>35.6%</b>다. perplexity 격차가 정확도 격차보다 훨씬 빨리 좁혀진다.</caption>
+        <thead><tr><th>Method</th><th>WikiText-2 ↓</th><th>PTB ↓</th><th>C4 ↓</th></tr></thead>
+        <tbody>
+          <tr><td>Uncompressed</td><td>5.68</td><td>8.35</td><td>7.34</td></tr>
+          <tr><td>SVD-LLM</td><td>53.7</td><td>400</td><td>300</td></tr>
+          <tr><td>Dobi-SVD</td><td>46.2</td><td>200</td><td>200</td></tr>
+          <tr><td>SAES-SVD</td><td>22.0</td><td>117</td><td>94.0</td></tr>
+          <tr><td>Ours — L1 (per-matrix SVD)</td><td>42.1</td><td>182</td><td>201</td></tr>
+          <tr><td>Ours — L2 (+ block opt.)</td><td>19.1</td><td>95.8</td><td>91.8</td></tr>
+          <tr><td>Ours — L3 (+ end-to-end)</td><td class="up">11.4</td><td class="up">62.8</td><td class="up">57.2</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">L1 · one matrix at a time</span><span class="t-ko">L1 · 한 번에 행렬 하나</span></div>
+          <div class="sub"><span class="t-en">whitened SVD, provably optimal for its own objective — and still 7× the dense perplexity</span><span class="t-ko">화이트닝된 SVD. 자기 목적함수에 대해선 증명된 최적이지만, 그래도 원본 perplexity의 7배다</span></div>
+          <div class="latent">min ‖(W − AB)X‖²<sub>F</sub> · PPL 42.1</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">L2 · the whole block at once</span><span class="t-ko">L2 · 블록 전체를 한꺼번에</span></div>
+          <div class="sub"><span class="t-en">all 7 projections move together, so error can be redistributed between attention and MLP instead of piling up</span><span class="t-ko">일곱 projection이 함께 움직이므로, 오차가 쌓이는 대신 attention과 MLP 사이에서 재분배된다</span></div>
+          <div class="latent">block MSE + next-block KL · PPL 19.1</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">L3 · the whole model</span><span class="t-ko">L3 · 모델 전체</span></div>
+          <div class="sub"><span class="t-en">the same factors, now moved by the actual next-token loss — no new parameters, no new data</span><span class="t-ko">같은 인수를 이번엔 실제 다음 토큰 손실로 움직인다. 새 파라미터도, 새 데이터도 없다</span></div>
+          <div class="latent">LM cross-entropy · PPL 11.4</div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Nothing about the decomposition changes across these three boxes.</b> The factors A and B are the same objects with the same shapes and the same rank throughout; the calibration set is the same 256 sequences. The only thing that widens is how much of the network the optimizer is allowed to look at while it moves them — and that alone accounts for a 3.7× perplexity reduction.</div>
+      <div class="cap t-ko"><b>세 상자를 지나는 동안 분해에 관한 것은 아무것도 바뀌지 않는다.</b> 인수 A와 B는 처음부터 끝까지 같은 모양, 같은 rank의 같은 대상이고, 캘리브레이션 집합도 동일한 256개 시퀀스다. 넓어지는 것은 옵티마이저가 그것들을 움직이는 동안 네트워크를 얼마나 넓게 볼 수 있는가뿐이다. 그것만으로 perplexity가 3.7배 줄어든다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The idea in three pieces</span><span class="t-ko">아이디어를 세 조각으로</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">L2 · target</span>
+        <h3>Cross-frontier reconstruction</h3>
+        <p class="t-en">The naive block target is "match what the compressed block would have produced from the compressed input." The authors instead target the <b>original</b> next hidden state h<sub>ℓ+1</sub> while feeding the <b>already-degraded</b> input ĥ<sub>ℓ</sub>. The compressed block is therefore asked to undo drift it did not cause, absorbing upstream error rather than passing it on. On LLaMA-7B this beats the same-input target by 2.6 perplexity points.</p>
+        <p class="t-ko">순진한 블록 타깃은 "압축된 입력에서 압축된 블록이 내놓았을 값을 맞춰라"이다. 저자들은 대신 <b>이미 손상된</b> 입력 ĥ<sub>ℓ</sub>를 넣으면서 <b>원본</b> 다음 hidden state h<sub>ℓ+1</sub>를 타깃으로 삼는다. 따라서 압축된 블록은 자기가 만들지 않은 드리프트까지 되돌리도록 요구받고, 상류의 오차를 넘기는 대신 흡수한다. LLaMA-7B에서 이 방식은 same-input 타깃보다 perplexity 2.6점 앞선다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">L2 · signal</span>
+        <h3>Next-block vocabulary lookahead</h3>
+        <p class="t-en">Block MSE weights every hidden direction equally, but the eventual loss does not — it amplifies errors in directions with small hidden-state norms. So a small probe P<sub>ℓ+1</sub> is trained to project the <i>next</i> block's output into vocabulary space and imitate the full model's token distribution; the block loss then adds a KL term in that space. This is the single most impactful design choice in the paper, amplifying the perplexity reduction by <b>2–3×</b> over the target choice alone.</p>
+        <p class="t-ko">블록 MSE는 모든 hidden 방향에 같은 가중치를 주지만 최종 손실은 그렇지 않다. hidden state의 노름이 작은 방향의 오차를 증폭시킨다. 그래서 작은 probe P<sub>ℓ+1</sub>을 학습시켜 <i>다음</i> 블록의 출력을 어휘 공간으로 투영하고 전체 모델의 토큰 분포를 모방하게 한 뒤, 블록 손실에 그 공간에서의 KL 항을 더한다. 논문에서 가장 영향력이 큰 설계 선택이며, 타깃 선택만 했을 때보다 perplexity 감소폭을 <b>2~3배</b> 키운다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">L2 · side effect</span>
+        <h3>The block stage is a regularizer</h3>
+        <p class="t-en">L2 is not just a better warm start for L3. Skip it and in-distribution perplexity barely moves (11.90 vs 11.37) — but PTB degrades by <b>24 points</b>, and more end-to-end training never closed that gap under the tested schedules. Matching hidden states forces the compressed block to preserve directions the calibration-token LM loss has no reason to reward. The effect sharpens as data shrinks: the PTB gap grows from Δ=22 at 256 calibration samples to <b>Δ=72 at 32</b>.</p>
+        <p class="t-ko">L2는 L3를 위한 더 나은 출발점이기만 한 게 아니다. 건너뛰면 in-distribution perplexity는 거의 그대로지만(11.90 대 11.37) PTB는 <b>24점</b> 나빠지고, 시험한 스케줄에서는 end-to-end 학습을 더 해도 그 격차가 메워지지 않았다. hidden state를 맞추는 일이, 캘리브레이션 토큰의 LM 손실로는 보상할 이유가 없는 방향들까지 압축된 블록이 보존하도록 강제하기 때문이다. 데이터가 적을수록 효과는 뚜렷해진다. PTB 격차는 캘리브레이션 256샘플에서 Δ=22였다가 32샘플에서 <b>Δ=72</b>로 벌어진다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">L3 · contrast</span>
+        <h3>Refining factors, not adding them</h3>
+        <p class="t-en">The usual way to recover a broken compressed model is LoRA on external instruction data — which quietly changes the setting from self-contained post-training compression to data-dependent recovery. L3 instead treats the existing A and B as the trainable variables and descends the ordinary next-token loss on the calibration set already required for compression. No adapters, no inference-time parameters, no Alpaca.</p>
+        <p class="t-ko">망가진 압축 모델을 되살리는 통상적 방법은 외부 instruction 데이터로 LoRA를 돌리는 것이다. 그러면 자족적인 post-training 압축이라는 설정이 슬그머니 데이터 의존적 복구로 바뀐다. L3는 대신 이미 존재하는 A와 B 자체를 학습 변수로 삼아, 압축에 어차피 필요했던 캘리브레이션 집합 위에서 평범한 다음 토큰 손실을 내려간다. 어댑터도, 추론 시 추가 파라미터도, Alpaca도 없다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Whiten, then truncate. </span><span class="t-ko">화이트닝하고 절단한다. </span></b><span class="t-en">Run the dense model over 256 WikiText-2 sequences of 2048 tokens, cache every block-boundary hidden state, and take the whitened SVD of each of the seven projections at a uniform rank set by the removal ratio ρ. This is exactly SVD-LLM, used as a starting point rather than a contribution.</span><span class="t-ko">2048토큰짜리 WikiText-2 시퀀스 256개를 원본 모델에 통과시키고, 모든 블록 경계의 hidden state를 캐싱한 뒤, 일곱 projection 각각에 대해 제거 비율 ρ가 정하는 균일한 rank로 화이트닝된 SVD를 취한다. 이것은 정확히 SVD-LLM이며, 기여가 아니라 출발점으로 쓰인다.</span></li>
+      <li><b><span class="t-en">Fit a lookahead probe for the block. </span><span class="t-ko">블록마다 lookahead probe를 학습시킨다. </span></b><span class="t-en">For block ℓ, train P<sub>ℓ+1</sub> (200 Adam steps) so that its projection of block ℓ+1's output into vocabulary space matches the full model's final token distribution in KL. It is a training-only surrogate for "everything downstream," and it costs about 6 minutes in total.</span><span class="t-ko">블록 ℓ에 대해 P<sub>ℓ+1</sub>을 200 Adam 스텝으로 학습시켜, 블록 ℓ+1의 출력을 어휘 공간으로 투영한 것이 전체 모델의 최종 토큰 분포와 KL 기준으로 맞도록 한다. "그 아래 전부"에 대한 학습 전용 대리물이며, 총 6분 정도가 든다.</span></li>
+      <li><b><span class="t-en">Jointly optimize all seven factor pairs. </span><span class="t-ko">일곱 쌍의 인수를 함께 최적화한다. </span></b><span class="t-en">Minimize the block loss — cross-frontier MSE plus λ times the lookahead KL — over {A<sub>ℓ,j</sub>, B<sub>ℓ,j</sub>} for j ∈ {q,k,v,o,gate,up,down} with Adam and per-block early stopping.</span><span class="t-ko">블록 손실(cross-frontier MSE + λ × lookahead KL)을 j ∈ {q,k,v,o,gate,up,down}의 {A<sub>ℓ,j</sub>, B<sub>ℓ,j</sub>}에 대해 Adam과 블록별 early stopping으로 최소화한다.</span></li>
+      <li><b><span class="t-en">Sweep front to back, carrying the damage forward. </span><span class="t-ko">앞에서 뒤로 훑으면서 손상을 그대로 물려준다. </span></b><span class="t-en">Recompute ĥ<sub>ℓ+1</sub> from the just-compressed block and move on, so every block is optimized against the input it will actually receive at inference. The final block has no successor, so its lookahead term is dropped. This sequential loop is 98.8% of the stage's 13.76 hours.</span><span class="t-ko">방금 압축한 블록에서 ĥ<sub>ℓ+1</sub>을 다시 계산하고 다음으로 넘어간다. 그래서 모든 블록은 추론 시 실제로 받게 될 입력에 대해 최적화된다. 마지막 블록은 후속 블록이 없으므로 lookahead 항을 뺀다. 이 순차 루프가 해당 단계 13.76시간의 98.8%를 차지한다.</span></li>
+      <li><b><span class="t-en">Unfreeze everything and descend the LM loss. </span><span class="t-ko">전부 풀고 LM 손실을 내려간다. </span></b><span class="t-en">Warm-start from L2 and train all factors across all blocks end-to-end with AdamW at 2×10⁻⁵, early-stopped on the WikiText-2 validation split. Forty-two minutes, and the only place any held-out data enters the pipeline.</span><span class="t-ko">L2에서 warm-start해 모든 블록의 모든 인수를 AdamW(2×10⁻⁵)로 end-to-end 학습하고, WikiText-2 검증 split에서 early stopping한다. 42분이 걸리며, 파이프라인에서 held-out 데이터가 들어오는 유일한 지점이다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">The unit of post-training compression should be the computation graph over which truncation errors interact, not the weight matrix. Widening the scope bought a 3.7× perplexity reduction with no change to the decomposition, no extra parameters, and no external data.</p><p class="t-ko">post-training 압축의 단위는 절단 오차가 상호작용하는 계산 그래프여야지 가중치 행렬이 아니다. 범위를 넓힌 것만으로 분해 방식 변경도, 추가 파라미터도, 외부 데이터도 없이 perplexity가 3.7배 줄었다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">Offline compute and calibration data are partly interchangeable. The 13.76-hour block stage is worth it at 256 sequences, but at a 1024-sequence pool, simply skipping it beats the full chain on WikiText-2 and PTB. That trade-off is the real finding, and the authors say so themselves.</p><p class="t-ko">오프라인 연산과 캘리브레이션 데이터는 부분적으로 서로 대체 가능하다. 13.76시간짜리 블록 단계는 256 시퀀스에서는 값어치를 하지만, 1024 시퀀스 풀에서는 그냥 건너뛰는 편이 WikiText-2와 PTB에서 전체 체인을 이긴다. 이 교환관계가 진짜 발견이고, 저자들도 그렇게 말한다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">Perplexity is not capability. At 60% removal every variant scores 0% strict exact match on GSM8K and produces degenerate, repetitive summaries — while WikiText-2 perplexity looks almost respectable. Which capabilities survive appears to be set by the calibration distribution, not by the compression ratio.</p><p class="t-ko">perplexity는 능력이 아니다. 60% 제거에서 모든 변형이 GSM8K strict exact match 0%를 받고 반복적이고 퇴화된 요약을 내놓는다. 그동안 WikiText-2 perplexity는 제법 그럴듯해 보인다. 어떤 능력이 살아남는지는 압축률이 아니라 캘리브레이션 분포가 정하는 것으로 보인다.</p></div>
+      <div class="t"><span class="ic">⚙️</span><p class="t-en">Compressing 58% of the parameters made decoding 6–14% <i>slower</i>. Each projection now runs two unfused GEMMs, so the win is peak VRAM (down 49–56%), not latency, until someone writes a fused AB kernel.</p><p class="t-ko">파라미터의 58%를 압축했더니 디코딩이 6~14% <i>느려졌다</i>. 이제 각 projection이 융합되지 않은 GEMM 두 번을 돌기 때문이다. 누군가 융합된 AB 커널을 짜기 전까지 이득은 지연시간이 아니라 최대 VRAM(49~56% 감소)이다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> Table 6 quietly dismantles the headline. Enlarging the calibration pool from 256 to 1024 sequences and skipping the expensive block stage entirely reaches 10.71 WikiText-2 and 65.61 PTB, both <i>better</i> than the full chain's 11.41 and 67.64 — the full chain only holds on C4. So the 13.76-hour L2 stage is not an ingredient of a better method; it is one way to pay for calibration data you do not have. The paper deserves credit for running that control and reporting it plainly, but it also never ran the obvious follow-up — the full chain at pool 1024 — which is exactly the cell that would show whether scope and data compound or merely substitute. Add that most numbers come from a single seed (42), and that the five-architecture table was produced with architecture-specific configurations rather than one common protocol, and the safe reading is the one the authors themselves state: a finding about optimization scope under a strict 256-sequence budget, not a new state of the art.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> Table 6이 헤드라인을 조용히 해체한다. 캘리브레이션 풀을 256에서 1024 시퀀스로 늘리고 비싼 블록 단계를 통째로 건너뛰면 WikiText-2 10.71, PTB 65.61에 도달한다. 전체 체인의 11.41과 67.64보다 둘 다 <i>좋다</i>. 전체 체인이 앞서는 건 C4뿐이다. 즉 13.76시간짜리 L2는 더 나은 방법의 구성요소가 아니라, 갖고 있지 않은 캘리브레이션 데이터를 대신 지불하는 한 가지 방식이다. 그 대조군을 실제로 돌리고 솔직히 보고한 점은 높이 살 만하지만, 정작 명백한 후속 실험인 풀 1024에서의 전체 체인은 끝내 돌리지 않았다. 범위와 데이터가 서로 누적되는지 단지 대체 관계인지를 보여줄 칸이 바로 그것인데 말이다. 여기에 대부분의 수치가 단일 시드(42)에서 나왔다는 점, 5개 아키텍처 표가 공통 프로토콜이 아니라 아키텍처별 설정으로 만들어졌다는 점을 더하면, 안전한 독해는 저자들 스스로 밝힌 그것이다. 엄격한 256 시퀀스 예산 아래에서 최적화 범위에 관한 발견이지, 새로운 state of the art가 아니다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2609.15838">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2609.15838">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2609.15838">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2609.15838">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>venue: EMNLP 2026 Findings (the arXiv comment reads "to appear at EMNLP 2026 Findings"). The 2026-08 wishlist queue is drained and there are no open mustread issues, so this came from the fallback search. Yesterday's card flagged this paper as the other confirmed acceptance among the unread candidates and deferred it because the low-rank axis had just run; with the latent-communication paper published, it is this one's turn. It is the direct counterpart to AIR (2606.19993) from three days ago: AIR asks which rank each matrix should get, this one fixes rank uniformly and asks what the optimizer is allowed to see — orthogonal axes that nobody has combined yet</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-09-16.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>venue: EMNLP 2026 Findings (arXiv 코멘트에 "to appear at EMNLP 2026 Findings"라고 적혀 있다). 2026-08 위시리스트 큐가 소진되고 열린 mustread 이슈도 없어 폴백 검색에서 골랐다. 어제 카드가 미열람 후보 중 accept가 확인된 나머지 한 편으로 이 논문을 지목하면서, 저랭크 축이 막 지나갔다는 이유로 미뤄두었다. 잠재 통신 논문을 냈으니 이제 이 논문 차례다. 사흘 전 AIR(2606.19993)의 직접적인 짝이기도 하다. AIR는 각 행렬에 어떤 rank를 줄지 묻고, 이 논문은 rank를 균일하게 고정한 채 옵티마이저가 무엇을 볼 수 있어야 하는지를 묻는다. 아직 아무도 결합하지 않은 직교하는 두 축이다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-09-16.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
