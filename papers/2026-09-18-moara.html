@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · MoARa: Module-Aware Rank Allocation for Low-Rank LLM Pre-training</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Low-rank · Memory-efficient Pre-training · GaLore</span><span class="t-ko">Low-rank · 메모리 효율 사전학습 · GaLore</span></span>
+      <span>2026.09.18</span>
+    </div>
+    <h1>MoARa: Module-Aware Rank Allocation and Structure-Preserving Decomposition for Low-Rank LLM Pre-training<br>
+      <span class="glow t-en">— same rank budget, moved from Q/K to MLP-down, reaches GaLore's final loss 37% sooner</span>
+      <span class="glow t-ko">— 같은 rank 예산을 Q/K에서 MLP-down으로 옮겼더니 GaLore의 최종 손실에 37% 먼저 도달했다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Keunyoung Kim</b> <span class="t-en">and Nojun Kwak</span><span class="t-ko">· Nojun Kwak</span></span>
+      <span>🏛 Seoul National University</span>
+      <span>🗓 2026-09-14</span>
+      <span>🏆 EMNLP 2026 Main</span>
+      <span>📄 <a href="https://arxiv.org/abs/2609.15037">arXiv:2609.15037</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">GaLore-style pre-training saves memory by keeping Adam's optimizer state only inside a low-rank projection of each gradient, and every method in that family gives all seven Transformer projections the <b>same rank</b>. MoARa makes two changes. It takes half the rank away from attn.q/attn.k and gives it to mlp.down, which is the module whose gradient survives projection worst. It also pulls a per-block gradient norm out <i>before</i> projecting, so only the direction gets compressed. On Llama 2 7B, GaLore + MoARa reaches plain GaLore's final perplexity at <b>94k instead of 150k steps</b>, which saves 57.4 hours. The rank shift alone helps all six low-rank optimizers tested. The decomposition helps only some: it breaks the two methods whose subspace rotates every step.</p>
+    <p class="t-ko">GaLore 계열 사전학습은 각 gradient를 저랭크(low-rank) 부분공간으로 투영하고, Adam의 옵티마이저 상태(1·2차 모멘트)를 그 안에서만 유지해 메모리를 아낀다. 이 계열의 모든 방법은 트랜스포머의 일곱 projection에 <b>같은 rank</b>를 준다. MoARa는 두 가지를 바꾼다. 첫째, attn.q/attn.k의 rank 절반을 떼어 mlp.down에 준다. mlp.down은 투영을 거친 뒤 gradient가 가장 많이 망가지는 모듈이다. 둘째, 투영 <i>전에</i> 블록 단위 gradient 크기(norm)를 따로 빼내서 방향만 압축되게 한다. Llama 2 7B에서 GaLore + MoARa는 기본 GaLore의 최종 perplexity에 <b>150k가 아니라 94k 스텝</b>에 도달한다. 57.4시간이 절약된다. rank 재배분만으로도 시험한 저랭크 옵티마이저 6종 모두가 개선됐다. 반면 크기–방향 분해는 일부에서만 통한다. 부분공간이 매 스텝 회전하는 두 방법에서는 오히려 학습이 무너진다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Rank allocation is a well-worn idea in post-hoc compression and LoRA fine-tuning. This paper brings it to from-scratch pre-training, where memory-efficient optimizers had treated every module as equally compressible.</p>
+    <p class="lead t-ko">rank 배분은 사후(post-hoc) 압축과 LoRA 미세조정에서는 익숙한 아이디어다. 이 논문은 그것을 처음부터 하는 사전학습으로 가져온다. 이 영역의 메모리 효율 옵티마이저들은 지금까지 모든 모듈을 똑같이 압축 가능한 것으로 취급해 왔다.</p>
+    <p class="t-en">Under Adam, the two moment tensors can cost more memory than the weights themselves. GaLore and its successors (Fira, OSD, LDAdam, SubTrack++, Q-GaLore) fix this by projecting each gradient G into an r-dimensional subspace and running Adam there. They have closed most of the perplexity gap to full-rank training, and the remaining cost is steps: low-rank training converges more slowly. The authors trace part of that to a measurable asymmetry. Measure how well each module's gradient survives projection, as the cosine between G and its low-rank reconstruction. mlp.down sits far below everything else: about <b>0.73</b> in early training, against about <b>0.97</b> for attn.v. A uniform rank is therefore too much for some modules and too little for mlp.down. The fix is cheap: an 11-minute profiling run and a static rank table. No online search is needed, and the optimizer state is never resized.</p>
+    <p class="t-ko">Adam에서는 두 모멘트 텐서가 가중치보다 메모리를 더 쓸 수 있다. GaLore와 그 후속들(Fira, OSD, LDAdam, SubTrack++, Q-GaLore)은 각 gradient G를 r차원 부분공간으로 투영하고 그 안에서 Adam을 돌려 이 문제를 푼다. 이들은 full-rank 학습과의 perplexity 격차를 대부분 좁혔다. 남은 비용은 스텝 수다. 저랭크 학습은 수렴이 느리다. 저자들은 그 원인 일부를 측정 가능한 비대칭에서 찾는다. 각 모듈의 gradient가 투영을 얼마나 잘 버티는지를 G와 저랭크 복원본 사이의 코사인으로 재 보면, mlp.down만 유독 낮다. 학습 초반 약 <b>0.73</b>인데, attn.v는 약 <b>0.97</b>이다. 그러니 균일한 rank는 어떤 모듈에는 넉넉하고 mlp.down에는 모자라다. 해법은 싸다. 11분짜리 프로파일링 한 번과 고정된 rank 표 하나면 된다. 온라인 탐색도 없고, 옵티마이저 상태의 크기를 중간에 바꾸지도 않는다.</p>
+    <figure class="fig">
+      <img src="fig/2609.15037/fig1_7b_convergence.png" alt="Validation perplexity versus wall-clock hours for GaLore and GaLore with MoARa on Llama 2 7B, with a tail-zoom inset marking 57.4 hours and 56k fewer steps">
+      <figcaption class="t-en"><b>Figure 1.</b> Llama 2 7B pre-trained on C4, validation perplexity against wall-clock hours. The inset marks where MoARa (teal) reaches the dashed GaLore curve's final value: 56k fewer steps and 57.4 hours earlier (1.53× faster). If both runs go to the full 150k steps, MoARa finishes 2.8% lower in perplexity.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> C4로 사전학습한 Llama 2 7B의 검증 perplexity를 실제 경과 시간(시간 단위)에 대해 그린 것. 삽입 그림은 MoARa(청록)가 점선 GaLore 곡선의 최종값에 도달하는 지점을 표시한다. 56k 스텝 적고, 57.4시간 이르다(1.53배 빠름). 두 실행을 모두 150k 스텝 끝까지 돌리면 MoARa가 perplexity를 2.8% 더 낮게 끝낸다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2609.15037</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">150k → 94k</div><div class="l"><span class="t-en">steps to GaLore's final PPL on Llama 2 7B (−37%)</span><span class="t-ko">Llama 2 7B에서 GaLore 최종 PPL까지 걸린 스텝 (−37%)</span></div></div>
+      <div class="stat"><div class="n">57.4 h</div><div class="l"><span class="t-en">wall-clock saved at 7B (−34%), despite a 4.19% per-step overhead</span><span class="t-ko">7B에서 절약한 실제 시간(−34%). 스텝당 4.19% 오버헤드를 감안한 값</span></div></div>
+      <div class="stat"><div class="n">6 / 6</div><div class="l"><span class="t-en">low-rank optimizers sped up by the rank shift alone (8.3–28.3% fewer steps on the non-GaLore five)</span><span class="t-ko">rank 재배분만으로 빨라진 저랭크 옵티마이저 수 (GaLore 외 5종에서 스텝 8.3~28.3% 감소)</span></div></div>
+      <div class="stat"><div class="n">2 / 6</div><div class="l"><span class="t-en">hosts where the decomposition breaks training (SubTrack++, LDAdam)</span><span class="t-ko">크기–방향 분해가 학습을 무너뜨린 옵티마이저 수 (SubTrack++, LDAdam)</span></div></div>
+      <div class="stat"><div class="n">+0.2%</div><div class="l"><span class="t-en">peak reserved memory at 7B under torch.compile</span><span class="t-ko">torch.compile 적용 시 7B 최대 예약 메모리 증가</span></div></div>
+      <div class="stat"><div class="n">+17.4%</div><div class="l"><span class="t-en">optimizer-state memory at 7B (+1,250 MiB), the thing GaLore exists to save</span><span class="t-ko">7B 옵티마이저 상태 메모리 증가(+1,250 MiB). GaLore가 아끼려던 바로 그 메모리</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Which half transfers to other optimizers</span><span class="t-ko">어느 쪽이 다른 옵티마이저로 옮겨 가나</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 3.</b> Llama 2 350M on C4, 60k steps. Each cell gives the final perplexity and then the steps needed to hit that host's own vanilla final perplexity. "—" means the target was never reached within 60k steps. The rank column improves every row. The decomposition column fails outright on the two hosts whose projection basis moves every step; SubTrack++ goes from 16.19 to 28.29.</caption>
+        <caption class="t-ko"><b>Table 3.</b> C4로 60k 스텝 학습한 Llama 2 350M. 각 칸은 최종 perplexity, 그리고 그 옵티마이저 자신의 기본(vanilla) 최종 perplexity에 도달하기까지의 스텝 수다. "—"는 60k 스텝 안에 도달하지 못했다는 뜻이다. rank 열은 모든 행을 개선한다. 분해 열은 투영 기저가 매 스텝 움직이는 두 옵티마이저에서 완전히 실패한다. SubTrack++는 16.19에서 28.29로 나빠진다.</caption>
+        <thead><tr><th>Host</th><th>Vanilla PPL</th><th>+ Rank only</th><th>+ Decomp only</th><th>Full MoARa</th></tr></thead>
+        <tbody>
+          <tr><td>GaLore</td><td>19.48</td><td>19.27 · 47k (↓22.0%)</td><td>19.45 · 54k (↓9.6%)</td><td class="up">19.04 · 41k (↓31.7%)</td></tr>
+          <tr><td>Fira</td><td>16.85</td><td>16.79 · 55k (↓8.3%)</td><td>16.75 · 53k (↓11.7%)</td><td class="up">16.70 · 51k (↓15.0%)</td></tr>
+          <tr><td>OSD</td><td>21.66</td><td>21.27 · 44k (↓26.7%)</td><td>20.76 · 37k (↓38.3%)</td><td class="up">20.42 · 35k (↓41.7%)</td></tr>
+          <tr><td>Q-GaLore</td><td>20.64</td><td class="up">20.45 · 45k (↓25.0%)</td><td>20.81 · —</td><td>20.46 · 45k (↓25.0%)</td></tr>
+          <tr><td>SubTrack++</td><td>16.19</td><td class="up">15.57 · 43k (↓28.3%)</td><td>28.29 · —</td><td>19.17 · —</td></tr>
+          <tr><td>LDAdam</td><td>17.60</td><td class="up">17.19 · 44k (↓26.7%)</td><td>24.01 · —</td><td>20.24 · —</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">1 · profile once</span><span class="t-ko">1 · 한 번 프로파일링</span></div>
+          <div class="sub"><span class="t-en">1k steps of uniform GaLore on the 350M model (~11 min); log how well each module's gradient survives projection</span><span class="t-ko">350M 모델로 균일 rank GaLore를 1k 스텝(약 11분) 돌리고, 모듈별 gradient가 투영을 얼마나 잘 버티는지 기록</span></div>
+          <div class="latent">cos(G, G<sub>recon</sub>) · down ≈ 0.73, v ≈ 0.97</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">2 · move the rank</span><span class="t-ko">2 · rank를 옮긴다</span></div>
+          <div class="sub"><span class="t-en">Q and K donate half their rank; mlp.down receives it; the other four keep the base rank; the total stays 7·r</span><span class="t-ko">Q와 K가 rank 절반을 내놓고 mlp.down이 받는다. 나머지 넷은 기본 rank 유지. 합계는 7·r로 그대로</span></div>
+          <div class="latent">q,k: r/2 · v,o,up,gate: r · down: 2r</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">3 · project direction only</span><span class="t-ko">3 · 방향만 투영한다</span></div>
+          <div class="sub"><span class="t-en">split each gradient row into blocks of about one head dimension; keep block norms outside the projection with their own optimizer state</span><span class="t-ko">gradient의 각 행을 헤드 차원 크기 정도의 블록으로 나누고, 블록 norm은 투영 밖에서 별도의 옵티마이저 상태로 유지</span></div>
+          <div class="latent">G ≈ Rep<sub>B</sub>(M) ⊙ V · project V only</div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>The two halves act on different things.</b> Step 2 changes <i>where</i> a fixed rank budget is spent, and it helped every optimizer tested. Step 3 changes <i>what</i> is fed through the projection. It helps only when the subspace changes slowly or in jumps (GaLore refreshes its SVD every 200 steps). Ranks are fixed for the whole run, because enlarging a rank mid-training requires fresh Adam moments for the new directions, and in the authors' tests that derailed training.</div>
+      <div class="cap t-ko"><b>두 부분은 서로 다른 대상에 작용한다.</b> 2단계는 고정된 rank 예산을 <i>어디에</i> 쓸지를 바꾸며, 시험한 모든 옵티마이저에서 도움이 됐다. 3단계는 투영에 <i>무엇을</i> 넣을지를 바꾼다. 이것은 부분공간이 천천히 또는 간헐적으로 바뀔 때만 도움이 된다(GaLore는 200 스텝마다 SVD를 다시 계산한다). rank는 학습 내내 고정한다. 학습 중간에 rank를 늘리면 새 방향에 대한 Adam 모멘트를 새로 초기화해야 하는데, 저자들의 실험에서 그게 학습 궤적을 무너뜨렸다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The idea in four pieces</span><span class="t-ko">아이디어를 네 조각으로</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">part 1 · where</span>
+        <h3>Module-aware rank reallocation</h3>
+        <p class="t-en">Keep the total projection rank fixed and redistribute it by module type: attn.q and attn.k drop from r to r/2, and mlp.down rises to 2r. mlp.down is where the expanded MLP representation is squeezed back to model width, and its gradient loses the most to projection. The same donor/receiver map, found once at 350M, is reused unchanged at 1B and 7B and carried over by structural analogy to Llama 3.2, Qwen2.5/3 (GQA) and DeepSeek-V2 (MLA). Step savings there were about 43%, 33% and 28%.</p>
+        <p class="t-ko">투영 rank의 총합은 고정하고 모듈 종류별로 다시 나눈다. attn.q와 attn.k는 r에서 r/2로 줄고, mlp.down은 2r로 는다. mlp.down은 넓게 펼쳐진 MLP 표현을 모델 폭으로 다시 압축하는 곳이며, 투영으로 잃는 gradient 정보가 가장 많다. 350M에서 한 번 정한 기증자/수혜자(donor/receiver) 배정을 1B와 7B에 그대로 재사용하고, 구조적 대응에 따라 Llama 3.2, Qwen2.5/3(GQA, 그룹 쿼리 어텐션), DeepSeek-V2(MLA, 잠재 어텐션)에도 옮겼다. 거기서 스텝 절약은 각각 약 43%, 33%, 28%였다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">the twist</span>
+        <h3>High alignment ≠ safe to cut</h3>
+        <p class="t-en">By cosine alone, attn.v and attn.o (≈0.96–0.97) should have been the donors. A one-module-at-a-time rank-halving ablation said otherwise: cutting q or k barely moved final perplexity, but cutting v, o, up or gate hurt noticeably. The authors read v/o's high alignment as redundancy that projection preserves easily, not as spare capacity. The receiver came from the diagnostic; the donors came from the ablation. Against 20 random allocations with the same rank total, MoARa's table won every time (PPL 24.07 against 24.33–25.29 at 10k steps).</p>
+        <p class="t-ko">코사인만 보면 attn.v와 attn.o(약 0.96~0.97)가 기증자가 됐어야 한다. 그런데 모듈 하나씩 rank를 절반으로 줄이는 ablation(구성요소 제거 실험)은 다른 답을 냈다. q나 k를 줄이면 최종 perplexity가 거의 안 변했지만, v·o·up·gate를 줄이면 눈에 띄게 나빠졌다. 저자들은 v/o의 높은 정렬도를 여유 용량이 아니라 투영이 쉽게 보존하는 중복으로 해석한다. 수혜자는 진단 지표에서, 기증자는 ablation에서 나왔다. rank 합계가 같은 무작위 배분 20개와 비교해 MoARa의 배분이 모두 이겼다(10k 스텝 PPL 24.07 대 24.33~25.29).</p>
+      </div>
+      <div class="m">
+        <span class="tag">part 2 · what</span>
+        <h3>Block-wise magnitude–direction split</h3>
+        <p class="t-en">Projecting a raw gradient shrinks its size and bends its direction in one step, and small-but-informative coordinates get lost. MoARa zero-pads each row, cuts it into 1×B blocks, and stores each block's L2 norm in a matrix M. M gets its own fp32 optimizer state outside the projection. Only the unit-norm direction V is projected. B sits near the head dimension (32/64/128 at 350M/1B/7B), between two failure modes: at B=1 the direction degenerates to a sign, and a very large B lets a few big coordinates drown the rest. B ∈ {32, 64, 128} forms a flat plateau.</p>
+        <p class="t-ko">원래 gradient를 그대로 투영하면 크기와 방향이 한꺼번에 줄고 뒤틀려서, 작지만 유용한 좌표가 사라진다. MoARa는 각 행을 0으로 채워 길이를 맞춘 뒤 1×B 블록으로 자르고, 블록마다 L2 norm을 행렬 M에 저장한다. M은 투영 밖에서 자기만의 fp32 옵티마이저 상태를 가진다. 투영되는 것은 단위 길이 방향 V뿐이다. B는 헤드 차원 근처로 잡는다(350M/1B/7B에서 32/64/128). 두 가지 실패 사이의 중간값이다. B=1이면 방향이 부호(±)만 남고, B가 너무 크면 큰 좌표 몇 개가 나머지를 묻어 버린다. B ∈ {32, 64, 128} 구간에서는 성능이 거의 평평하다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">the catch</span>
+        <h3>Decomposition depends on the host</h3>
+        <p class="t-en">The split works on hosts whose projection basis is refreshed in jumps or drifts slowly (GaLore, Fira, OSD; OSD reaches −41.7% steps). It collapses on SubTrack++ (Grassmannian tracking) and LDAdam (per-step subspace correction), where the separately optimized magnitude apparently cannot stay in step with a direction whose basis keeps rotating. On Q-GaLore it adds nothing, even with the magnitude state promoted from 8-bit to fp32. The authors call these observed compatibility factors, not proven conditions.</p>
+        <p class="t-ko">이 분리는 투영 기저가 간헐적으로 갱신되거나 천천히 움직이는 옵티마이저(GaLore, Fira, OSD)에서 통한다. OSD는 스텝 −41.7%에 이른다. 반면 SubTrack++(그래스만 다양체 위에서 부분공간 추적)와 LDAdam(매 스텝 부분공간 보정)에서는 무너진다. 따로 최적화되는 크기가 계속 회전하는 기저 위의 방향과 보조를 맞추지 못하는 것으로 보인다. Q-GaLore에서는 크기 쪽 상태를 8비트에서 fp32로 올려도 아무 이득이 없다. 저자들은 이것을 증명된 조건이 아니라 관찰된 호환성 요인이라고 부른다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Profile. </span><span class="t-ko">프로파일링. </span></b><span class="t-en">Run uniform-rank GaLore for 1k steps and, at regular strides, log the cosine between each weight's full gradient and its low-rank reconstruction. Average per module type. The donor/receiver assignment was the same across strides of 50–400 steps and matched much longer profiles; mlp.down stayed last by a 0.10–0.15 margin.</span><span class="t-ko">균일 rank GaLore를 1k 스텝 돌리면서, 일정 간격마다 각 가중치의 전체 gradient와 저랭크 복원본 사이 코사인을 기록한다. 모듈 종류별로 평균 낸다. 기증자/수혜자 배정은 50~400 스텝 간격 어디서나 같았고, 훨씬 긴 프로파일과도 일치했다. mlp.down은 0.10~0.15 차이로 늘 꼴찌였다.</span></li>
+      <li><b><span class="t-en">Fix the rank table. </span><span class="t-ko">rank 표를 고정한다. </span></b><span class="t-en">Donors D = {q, k} and receiver R = {down}, with Δr = r<sub>base</sub>/2. With r<sub>base</sub> = 256/512/1024 at 350M/1B/7B, down gets 2·r<sub>base</sub>. The table never changes during training.</span><span class="t-ko">기증자 D = {q, k}, 수혜자 R = {down}, Δr = r<sub>base</sub>/2. 350M/1B/7B에서 r<sub>base</sub> = 256/512/1024이므로 down은 2·r<sub>base</sub>를 받는다. 이 표는 학습 중 바뀌지 않는다.</span></li>
+      <li><b><span class="t-en">Split every gradient. </span><span class="t-ko">모든 gradient를 쪼갠다. </span></b><span class="t-en">At each step, compute G, cut its rows into blocks of B, and separate block norms M from unit directions V. Refresh the projector P every 200 steps from a truncated SVD of V, using the module's allotted rank.</span><span class="t-ko">매 스텝 G를 구해 각 행을 B 크기 블록으로 자르고, 블록 norm M과 단위 방향 V를 분리한다. 투영 행렬 P는 200 스텝마다 V의 절단 SVD로 다시 구하며, 그 모듈에 배정된 rank를 쓴다.</span></li>
+      <li><b><span class="t-en">Two optimizers, one update. </span><span class="t-ko">옵티마이저 둘, 업데이트 하나. </span></b><span class="t-en">Adam runs on PᵀV inside the subspace and the result is projected back. M is updated by its own optimizer, with state kept in fp32. The weight update is Rep<sub>B</sub>(ΔM) ⊙ ΔV, cast to bf16.</span><span class="t-ko">Adam은 부분공간 안의 PᵀV에서 돌고, 결과를 원래 공간으로 되돌린다. M은 fp32로 유지되는 자기만의 옵티마이저 상태로 따로 갱신된다. 가중치 업데이트는 Rep<sub>B</sub>(ΔM) ⊙ ΔV이며 bf16으로 변환해 적용한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">In low-rank optimizers, how the rank is split across modules matters. Moving it from Q/K to MLP-down is the transferable half of this paper: every one of six hosts converged sooner, and it costs one short profile and a static config.</p><p class="t-ko">저랭크 옵티마이저에서 rank를 모듈 사이에 어떻게 나누는지는 중요하다. Q/K에서 MLP-down으로 옮기는 것이 이 논문에서 다른 방법으로 옮겨 가는 쪽이다. 6개 옵티마이저 모두 더 빨리 수렴했고, 비용은 짧은 프로파일 한 번과 고정 설정 하나다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">A fidelity signal is not an importance signal. Gradient-reconstruction cosine found the bottleneck correctly but pointed at the wrong donors, and only an ablation caught it. The same trap applies to rank allocation in SVD compression, where a module that is "easy to approximate" is not necessarily cheap to cut.</p><p class="t-ko">충실도 신호는 중요도 신호가 아니다. gradient 복원 코사인은 병목은 정확히 찾았지만 기증자는 잘못 가리켰고, ablation을 해야만 그걸 잡을 수 있었다. SVD 압축의 rank 배분에도 같은 함정이 있다. "근사하기 쉬운" 모듈이 반드시 잘라도 되는 모듈은 아니다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">The mlp.down asymmetry holds across five architectures and three scales, which suggests a structural property of the MLP down-projection rather than a quirk of GaLore. Post-hoc compression papers (LoRAP, A³) also report that attention and FFN sub-layers behave differently under low-rank approximation.</p><p class="t-ko">mlp.down 비대칭은 5개 아키텍처와 3개 규모에서 유지된다. GaLore의 특이한 성질이 아니라 MLP down-projection 자체의 구조적 성질로 보인다. 사후 압축 논문들(LoRAP, A³)도 저랭크 근사에서 attention과 FFN 부분층이 다르게 행동한다고 보고한다.</p></div>
+      <div class="t"><span class="ic">⚙️</span><p class="t-en">Do not bolt the magnitude–direction split onto an optimizer that rotates its subspace every step. On SubTrack++ it turned a 16.19-perplexity run into 28.29.</p><p class="t-ko">부분공간을 매 스텝 회전시키는 옵티마이저에 크기–방향 분해를 덧붙이지 말 것. SubTrack++에서는 perplexity 16.19였던 학습이 28.29가 됐다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> "budget-preserving" counts ranks, not bytes. Moving rank from attn.q/k to mlp.down, whose long side is 11008 at 7B, enlarges the projected optimizer state. At 7B the rank shift alone adds <b>+12.0%</b> optimizer-state memory, and the full method adds <b>+17.4% (+1,250 MiB)</b>, which is exactly the memory GaLore exists to save. The headline "+0.2% memory" is peak reserved memory under torch.compile, where activations dominate, so it hides this cost. The paper never runs the control that would separate allocation from extra capacity: a uniform-rank GaLore given the same optimizer-state bytes. The 20-random-allocation check does not settle it either, because those allocations also match rank counts rather than memory. Add that every result is measured against GaLore's own final perplexity, with no full-rank AdamW reference, that other memory-efficient optimizers such as APOLLO are set aside as a different design space, and that multi-seed runs exist only at 1B. What is shown is "faster than GaLore at a somewhat larger optimizer state." Whether that beats GaLore with a slightly higher uniform rank is still open.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> "예산 보존"은 바이트가 아니라 rank 개수를 센다. attn.q/k에서 긴 변이 11008(7B 기준)인 mlp.down으로 rank를 옮기면 투영된 옵티마이저 상태가 커진다. 7B에서 rank 재배분만으로 옵티마이저 상태 메모리가 <b>+12.0%</b>, 전체 방법은 <b>+17.4%(+1,250 MiB)</b> 늘어난다. GaLore가 아끼려던 바로 그 메모리다. 헤드라인의 "메모리 +0.2%"는 torch.compile 아래의 최대 예약 메모리이고, 여기서는 activation이 대부분을 차지하므로 이 비용이 가려진다. 배분 효과와 추가 용량 효과를 가를 대조 실험이 논문에 없다. 옵티마이저 상태 바이트를 똑같이 맞춘 균일 rank GaLore다. 무작위 배분 20개 비교도 이 문제를 해결하지 못한다. 그 배분들 역시 메모리가 아니라 rank 개수만 맞췄기 때문이다. 여기에 더해, 모든 결과는 GaLore 자신의 최종 perplexity를 기준으로 쟀고 full-rank AdamW 기준선은 없다. APOLLO 같은 다른 메모리 효율 옵티마이저는 설계 공간이 다르다며 비교에서 뺐다. 다중 시드 실험은 1B에만 있다. 입증된 것은 "옵티마이저 상태를 조금 더 쓰면서 GaLore보다 빠르다"이다. 그것이 균일 rank를 약간 올린 GaLore보다 나은지는 아직 열린 질문이다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2609.15037">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2609.15037">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2609.15037">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2609.15037">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>venue: EMNLP 2026 Main (the arXiv comment reads "Accepted to EMNLP 2026 Main Conference"). The 2026-08 wishlist queue is drained and there are no open mustread issues, so this came from the fallback search. It was the only confirmed acceptance among the unread low-rank and compression candidates. The low-rank axis was due after yesterday's latent-communication card. It is the training-side mirror of the rank-allocation question in AIR (2606.19993) and UniRank (2606.21847): those allocate rank for post-hoc SVD compression, this one allocates projection rank during pre-training. The strongest unread latent-communication candidate, Cache Merging as a Convergent Replicated State (2607.01308, preprint), is held for the next turn of that axis</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-09-18.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>venue: EMNLP 2026 Main (arXiv 코멘트에 "Accepted to EMNLP 2026 Main Conference"라고 적혀 있다). 2026-08 위시리스트 큐가 소진되고 열린 mustread 이슈도 없어 폴백 검색에서 골랐다. 아직 안 읽은 저랭크·압축 후보 중 학회 accept가 확인된 유일한 논문이다. 어제 잠재 통신 카드를 냈으니 저랭크 축 차례였다. AIR(2606.19993)와 UniRank(2606.21847)가 던진 rank 배분 질문을 학습 쪽에서 비춘 짝이기도 하다. 그 둘은 사후 SVD 압축에서 rank를 나누고, 이 논문은 사전학습 중 투영 rank를 나눈다. 아직 안 읽은 잠재 통신 후보 중 가장 유력한 Cache Merging as a Convergent Replicated State(2607.01308, 프리프린트)는 그 축의 다음 차례로 남겨 둔다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-09-18.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
