@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Cache Merging as a Convergent Replicated State for Multi-Agent Latent Reasoning</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Multi-Agent · Latent Communication · KV Cache Merging</span><span class="t-ko">Multi-Agent · 잠재 통신 · KV 캐시 병합</span></span>
+      <span>2026.09.19</span>
+    </div>
+    <h1>Cache Merging as a Convergent Replicated State for Multi-Agent Latent Reasoning<br>
+      <span class="glow t-en">— order two agents' KV caches by their content instead of by who called first, and the merge becomes byte-identical, duplicate-proof, and as accurate as the best fixed order</span>
+      <span class="glow t-ko">— 두 에이전트의 KV 캐시를 호출 순서가 아니라 내용으로 정렬하면, 병합 결과가 바이트 단위로 같아지고 중복에 강해지며, 가장 좋은 고정 순서만큼 정확하다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Carlos Baquero</b> <span class="t-en">and Luís Brito</span><span class="t-ko">· Luís Brito</span></span>
+      <span>🏛 FEUP, University of Porto · ESTG, Polytechnic Institute of Viana do Castelo</span>
+      <span>🗓 2026-07-01</span>
+      <span>📄 <a href="https://arxiv.org/abs/2607.01308">arXiv:2607.01308</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">When parallel agents hand their KV caches to a final "judger" agent, the standard move (from Agent Primitives) is to concatenate the caches and re-rotate the later ones' positions. The authors call this <b>BagMerge</b> and show it is order-sensitive: whichever cache sits first gets the privileged position-0 slot, the two orderings differ by about <b>7 points</b>, and which one wins flips with the setting and the model size. <b>CanonicalMerge</b> sorts the caches by their mean key norm at a middle layer, so the merged cache is byte-identical no matter what order they arrive in. Storing the caches as a hash-keyed set, merged by set union, makes this a CRDT (a data type whose replicas always converge, whatever the delivery order or duplication). On Qwen3-1.7B it ties the best fixed ordering (<b>0.95 vs 0.95</b>) without knowing which one that is. It stops working at three agents: merging colocates the caches but does not combine what they know.</p>
+    <p class="t-ko">병렬 에이전트들이 각자의 KV 캐시(어텐션이 다시 읽는 key/value 저장소)를 마지막 "판정(judger)" 에이전트에게 넘길 때, 표준 방법(Agent Primitives에서 나옴)은 캐시들을 이어 붙이고 뒤쪽 캐시의 위치를 다시 회전시키는 것이다. 저자들은 이것을 <b>BagMerge</b>라 부르고, 순서에 민감하다는 것을 보인다. 먼저 놓인 캐시가 특별한 0번 위치를 차지하고, 두 순서의 정확도 차이는 약 <b>7점</b>이며, 어느 쪽이 이기는지는 설정과 모델 크기에 따라 뒤집힌다. <b>CanonicalMerge</b>는 중간 층의 평균 key 크기(norm)로 캐시를 정렬한다. 그래서 어떤 순서로 도착하든 병합된 캐시가 바이트 단위로 같다. 캐시를 해시로 식별되는 집합에 담고 합집합으로 병합하면, 이것은 CRDT(전달 순서나 중복과 상관없이 복제본이 항상 같은 상태로 수렴하는 자료구조)가 된다. Qwen3-1.7B에서 가장 좋은 고정 순서와 동률이다(<b>0.95 대 0.95</b>). 그게 어느 순서인지 몰라도 된다. 에이전트가 셋이 되면 통하지 않는다. 병합은 캐시를 한곳에 모을 뿐, 각자가 아는 것을 합치지는 못한다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Latent multi-agent papers have argued about what to send between agents. This one looks at the step everyone skips: how several received caches are glued into one, and what guarantees that glue should give.</p>
+    <p class="lead t-ko">잠재 통신 멀티에이전트 논문들은 에이전트 사이에 무엇을 보낼지를 두고 논쟁해 왔다. 이 논문은 모두가 건너뛴 단계를 본다. 받은 캐시 여러 개를 어떻게 하나로 붙이는가, 그리고 그 접합이 어떤 보장을 줘야 하는가.</p>
+    <p class="t-en">LatentMAS chains caches in a fixed order, so the question never comes up. Once agents run in parallel on separate pieces of a problem, someone must pick an order. RoPE (rotary position encoding, which bakes each token's position into its key vector) makes that order matter. The first cache keeps its keys exactly as the model computed them. Later caches are rotated to new positions. The authors' setting of interest is federated, "query-blind" inference, where independent data holders encode their fragment without seeing the question and without a coordinator. There, the merge has to give the same result regardless of arrival order and has to tolerate the same fragment arriving twice (gossip, retries). That is exactly what CRDTs guarantee, and Baquero is a co-author of the original CRDT paper (Shapiro et al., 2011). To test the merge in isolation, the paper builds a benchmark where each of two agents sees only half a problem. One half alone scores 2–5%; both halves together score 100%. The merge is therefore on the critical path.</p>
+    <p class="t-ko">LatentMAS는 캐시를 고정된 순서로 이어 붙이므로 이 문제가 생기지 않는다. 그런데 에이전트들이 문제의 서로 다른 조각을 병렬로 처리하면, 누군가는 순서를 정해야 한다. RoPE(각 토큰의 위치를 key 벡터에 회전으로 새겨 넣는 위치 인코딩) 때문에 그 순서가 결과를 바꾼다. 첫 번째 캐시는 모델이 계산한 key를 그대로 유지한다. 뒤의 캐시들은 새 위치로 회전된다. 저자들이 겨냥하는 상황은 연합(federated)·"질문 비공개(query-blind)" 추론이다. 독립된 데이터 보유자들이 질문을 보지 못한 채, 조정자 없이 자기 조각을 인코딩한다. 이때 병합은 도착 순서와 상관없이 같은 결과를 내야 하고, 같은 조각이 두 번 도착해도(가십 전파, 재전송) 버텨야 한다. 이것이 바로 CRDT가 보장하는 성질이며, Baquero는 CRDT 원 논문(Shapiro et al., 2011)의 공저자다. 병합 자체만 시험하려고, 논문은 두 에이전트가 각각 문제의 절반만 보는 벤치마크를 만든다. 한쪽 절반만으로는 2~5%, 두 절반을 함께 보면 100%다. 그러니 병합이 정답으로 가는 길 한가운데에 놓인다.</p>
+    <figure class="fig">
+      <img src="fig/2607.01308/fig1_regimes.png" alt="Two evaluation regimes: two thinkers receive fragments t_a and t_b, their caches go to Merge, then to the Judger, which outputs the answer; in (a) query-known the query Q reaches both thinkers and the judger, in (b) query-blind only the judger">
+      <figcaption class="t-en"><b>Figure 1.</b> The two regimes. Solid arrows are the KV-cache path: thinkers → Merge → Judger → answer. Dashed arrows show where the question Q goes. In (a) query-known, both thinkers read Q while encoding their fragment. In (b) query-blind (the federated case), only the judger sees Q. The best BagMerge ordering flips between these two regimes on Qwen3-1.7B.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> 두 가지 평가 상황. 실선은 KV 캐시의 경로다: thinker → Merge → Judger → 답. 점선은 질문 Q가 가는 곳이다. (a) query-known에서는 두 thinker가 자기 조각을 인코딩할 때 Q도 함께 읽는다. (b) query-blind(연합 상황)에서는 judger만 Q를 본다. Qwen3-1.7B에서 BagMerge의 최적 순서는 이 두 상황 사이에서 뒤집힌다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure (cropped from the PDF)</span><span class="t-ko">출처: 논문 원본 그림 (PDF에서 잘라냄)</span> · arXiv:2607.01308</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">0.95 vs 0.95</div><div class="l"><span class="t-en">CanonicalMerge vs the best fixed order, query-known (3 draws, n = 300; gap −0.007, CI [−0.040, +0.027])</span><span class="t-ko">query-known에서 CanonicalMerge 대 최적 고정 순서 (3회 추출, n = 300; 차이 −0.007, 신뢰구간 [−0.040, +0.027])</span></div></div>
+      <div class="stat"><div class="n">±7 pp</div><div class="l"><span class="t-en">BagMerge order effect, with its sign flipping between regimes (−0.070 known, +0.067 blind; both survive Holm correction)</span><span class="t-ko">BagMerge 순서 효과. 상황에 따라 부호가 뒤집힌다 (known −0.070, blind +0.067; 둘 다 Holm 다중비교 보정 후에도 유의)</span></div></div>
+      <div class="stat"><div class="n">152 / 152</div><div class="l"><span class="t-en">input permutations (N = 2–5, synthetic) that render byte-identical; also all 28 layers (1.7B) and 36 layers (4B) on real caches</span><span class="t-ko">바이트 단위로 같게 렌더된 입력 순열 수 (N = 2~5, 합성 텐서). 실제 캐시에서도 28층(1.7B)·36층(4B) 전부 일치</span></div></div>
+      <div class="stat"><div class="n">0.93 → 0.45</div><div class="l"><span class="t-en">naive re-concatenation when each fragment arrives 4 times (cache grows 308 → 1232 tokens); the set-based state stays at 0.93 and 308</span><span class="t-ko">조각이 4번씩 도착할 때 단순 재연결의 정확도 (캐시 308 → 1232 토큰). 집합 기반 상태는 0.93, 308 토큰 그대로</span></div></div>
+      <div class="stat"><div class="n">+45 pp</div><div class="l"><span class="t-en">over PackLLM logit-level fusion at a matched 2048-token budget (0.947 vs 0.50)</span><span class="t-ko">같은 2048토큰 예산에서 PackLLM(출력 logit 단계 융합) 대비 (0.947 대 0.50)</span></div></div>
+      <div class="stat"><div class="n">0.07</div><div class="l"><span class="t-en">3-agent flat merge on chain-structured problems, where full text scores 1.00; merging does not compose</span><span class="t-ko">사슬 구조 문제에서 3-에이전트 평면 병합 정확도. 전체 텍스트는 1.00. 병합은 지식을 합성하지 못한다</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">No need to know the best order</span><span class="t-ko">최적 순서를 몰라도 된다</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 3.</b> Accuracy on the partitioned two-agent benchmark (Qwen3-1.7B, 100 problems per cell, sampled decoding, one seed), across two regimes and two latent-step budgets (20 or 40). The best BagMerge ordering changes from column to column. CanonicalMerge never needs to pick one and stays within 4 points of the best cell everywhere; no single-draw gap here survives multiple-comparison correction. The last row is the reference the paper sets out in Table 2: one agent reading both fragments as plain text.</caption>
+        <caption class="t-ko"><b>Table 3.</b> 두 에이전트 분할 벤치마크의 정확도 (Qwen3-1.7B, 칸마다 100문제, 샘플링 디코딩, 시드 1개). 두 상황 × 잠재 스텝 예산 2가지(20 또는 40). BagMerge의 최적 순서는 열마다 바뀐다. CanonicalMerge는 순서를 고를 필요가 없고, 모든 칸에서 최고치와 4점 이내다. 이 단일 추출 결과의 차이는 다중비교 보정을 통과하지 못한다. 마지막 행은 논문 Table 2의 기준선이다. 에이전트 하나가 두 조각을 일반 텍스트로 모두 읽는 경우다.</caption>
+        <thead><tr><th>Method</th><th>q-known @20</th><th>q-known @40</th><th>q-blind @20</th><th>q-blind @40</th></tr></thead>
+        <tbody>
+          <tr><td>BagMerge default</td><td>0.89</td><td>0.85</td><td class="up">0.90</td><td class="up">0.85</td></tr>
+          <tr><td>BagMerge swap</td><td>0.90</td><td>0.91</td><td>0.83</td><td>0.77</td></tr>
+          <tr><td>CanonicalMerge</td><td class="up">0.93</td><td class="up">0.94</td><td>0.86</td><td class="up">0.85</td></tr>
+          <tr><td>Δ (CM − best BagMerge)</td><td>+0.03</td><td>+0.03</td><td>−0.04</td><td>0.00</td></tr>
+          <tr><td>Single agent, both fragments as text</td><td colspan="4">1.00 (Table 2)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">1 · think in parallel</span><span class="t-ko">1 · 병렬로 생각한다</span></div>
+          <div class="sub"><span class="t-en">each thinker reads one fragment, runs 20 or 40 latent steps, and emits only its KV cache</span><span class="t-ko">각 thinker가 조각 하나를 읽고 잠재 스텝을 20 또는 40번 돈 뒤, 텍스트 없이 KV 캐시만 내놓는다</span></div>
+          <div class="latent">fragment id = hash(all K, V bytes)</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">2 · keep a set</span><span class="t-ko">2 · 집합으로 보관한다</span></div>
+          <div class="sub"><span class="t-en">unrotated caches go into a set keyed by their hash; merging two sets is union, so duplicates collapse</span><span class="t-ko">회전하지 않은 원래 캐시를 해시를 키로 집합에 넣는다. 두 집합의 병합은 합집합이라 중복은 하나로 합쳐진다</span></div>
+          <div class="latent">S₁ ⊔ S₂ = S₁ ∪ S₂ · a CvRDT</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">3 · render, then judge</span><span class="t-ko">3 · 렌더한 뒤 판정한다</span></div>
+          <div class="sub"><span class="t-en">only at decode time: sort by mean key norm at a middle layer, concatenate, re-rotate the tail, and let the judger decode</span><span class="t-ko">디코딩 직전에만: 중간 층 평균 key norm으로 정렬하고, 이어 붙이고, 뒤쪽을 재회전한 다음 judger가 답을 생성한다</span></div>
+          <div class="latent">sort by ρ = mean ‖K<sup>(15)</sup>‖ ↓ · tie → hash</div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>The guarantees live on the set; the accuracy lives on the sort.</b> Convergence and duplicate absorption come from step 2 alone, because set union has those properties by definition. Step 3's key-norm score only decides which cache gets the privileged first slot, and that is where accuracy is won or lost. The split is needed because the rendered cache is not itself idempotent (merging the same fragment again leaves the result unchanged): once a fragment's keys have been rotated into a tail slot, its hash no longer matches, so a second merge would add it again.</div>
+      <div class="cap t-ko"><b>보장은 집합에서, 정확도는 정렬에서 나온다.</b> 수렴과 중복 흡수는 2단계만으로 성립한다. 합집합이 원래 그런 성질을 갖기 때문이다. 3단계의 key-norm 점수는 어느 캐시가 특별한 첫 자리를 차지할지만 정하며, 정확도는 바로 거기서 갈린다. 둘을 분리해야 하는 이유는 렌더된 캐시 자체가 멱등(같은 조각을 다시 병합해도 결과가 그대로)하지 않기 때문이다. 한 조각의 key가 뒤쪽 자리로 회전되면 해시가 달라지므로, 다시 병합하면 또 추가된다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The idea in four pieces</span><span class="t-ko">아이디어를 네 조각으로</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">the flaw</span>
+        <h3>BagMerge has a privileged slot</h3>
+        <p class="t-en">Concatenating caches with RoPE re-encoding treats the first cache differently from the rest. Its keys keep the rotation the model was trained on; every later cache is shifted by the length of what precedes it. On the partitioned benchmark, the two orderings of two thinkers differ by about 7 points, and the winner is unstable: swap, default, swap, swap across the four model × regime cells (1.7B and 4B, query-known and query-blind). A deployer could not fix a safe order without testing each setting. Neither Agent Primitives nor LatentMAS measures this.</p>
+        <p class="t-ko">RoPE 재인코딩으로 캐시를 이어 붙이면 첫 캐시와 나머지를 다르게 다룬다. 첫 캐시의 key는 모델이 학습한 그대로의 회전을 유지하고, 뒤의 캐시는 앞선 길이만큼 위치가 밀린다. 분할 벤치마크에서 두 thinker의 두 순서는 약 7점 차이가 나고, 승자도 불안정하다. 모델 × 상황 네 칸(1.7B·4B, query-known·query-blind)에서 swap, default, swap, swap 순이다. 배포하는 쪽은 설정마다 시험해 보지 않고는 안전한 순서를 정할 수 없다. Agent Primitives도 LatentMAS도 이 효과를 측정하지 않았다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">the fix</span>
+        <h3>Let the content pick the slot</h3>
+        <p class="t-en">For each cache, take the mean key norm over its last positions at one middle layer (layer 15 of 28 on Qwen3-1.7B), sort from high to low, and break ties by hash. The score depends only on the cache itself, so the output cannot depend on input order. The authors read a high norm as "this fragment carries more question-relevant information", so the densest fragment gets the slot the judger reads most reliably, chosen per problem. The layer choice is a broad band, not a knife-edge: layers 12, 15 and 22 give 0.89–0.94 (layer 18 dips to 0.86), while layer 5 gives 0.59 and layer 27 gives 0.84. On the 4B model it had to be re-picked (layer 24).</p>
+        <p class="t-ko">각 캐시에 대해 중간 층 하나(Qwen3-1.7B의 28층 중 15층)에서 마지막 위치들의 평균 key norm을 구하고, 큰 것부터 정렬하며, 동점이면 해시로 가른다. 점수가 캐시 자신에만 의존하므로 입력 순서가 출력에 영향을 줄 수 없다. 저자들은 norm이 크면 "이 조각이 질문 관련 정보를 더 많이 담았다"고 해석한다. 그래서 정보가 가장 밀집된 조각이 judger가 가장 잘 읽는 자리를 문제마다 차지한다. 층 선택은 뾰족한 최적점이 아니라 넓은 구간이다. 12·15·22층은 0.89~0.94(18층은 0.86으로 잠깐 떨어짐), 5층은 0.59, 27층은 0.84다. 4B 모델에서는 층을 다시 골라야 했다(24층).</p>
+      </div>
+      <div class="m">
+        <span class="tag">the state</span>
+        <h3>A set, rendered late</h3>
+        <p class="t-en">The durable object is a set of unrotated caches keyed by a hash of all their K and V bytes. Merging two sets is union, which is commutative, associative, and idempotent by definition, making the state a CvRDT (a state-based CRDT whose merge is a least upper bound). Layout happens only at decode time. This is what makes re-delivery safe. The absorption is purely syntactic, though: two caches that say the same thing in different bytes are two elements, and byte equality across parties assumes identical weights and deterministic kernels on the same hardware.</p>
+        <p class="t-ko">오래 유지되는 객체는 회전하지 않은 캐시들의 집합이며, 각 캐시는 K·V 전체 바이트의 해시로 식별된다. 두 집합의 병합은 합집합이고, 합집합은 정의상 교환·결합·멱등 법칙을 만족한다. 그래서 이 상태는 CvRDT(병합이 최소 상한인 상태 기반 CRDT)다. 배치는 디코딩 시점에만 한다. 재전송이 안전한 이유가 이것이다. 다만 흡수는 순전히 문법적이다. 같은 내용을 다른 바이트로 담은 두 캐시는 별개 원소다. 또한 참여자 간 바이트 일치는 같은 가중치와 같은 하드웨어의 결정적 커널을 전제한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">the boundary</span>
+        <h3>Transport is not composition</h3>
+        <p class="t-en">With three jointly necessary fragments, every cache-only merge collapses. A flat 3-way merge scores 0.07 on chain problems and 0.03 on symmetric-constraint problems. A pairwise merge tree is no better (0.06 / 0.01), and on one family it is worse. Accuracy comes back only when the model reprocesses a seam, meaning one thinker runs on top of another's cache (0.73 with one seam, 0.97 as a full chain on chain problems). The symmetric family stays near the floor even as a full chain (0.17). Logit fusion collapses too, so this is a composition limit, not a cache artifact.</p>
+        <p class="t-ko">함께 있어야만 풀리는 조각이 셋이 되면, 캐시만으로 하는 병합은 모두 무너진다. 3-방향 평면 병합은 사슬 문제에서 0.07, 대칭 제약 문제에서 0.03이다. 쌍별 병합 트리도 나을 게 없고(0.06 / 0.01), 한 문제군에서는 오히려 더 나쁘다. 정확도는 모델이 이음매를 다시 처리할 때, 즉 한 thinker가 다른 thinker의 캐시 위에서 돌 때만 돌아온다(사슬 문제에서 이음매 1개면 0.73, 완전한 사슬이면 0.97). 대칭 문제군은 완전한 사슬이어도 바닥 근처에 머문다(0.17). logit 융합도 함께 무너지므로, 이것은 캐시 특유의 문제가 아니라 합성 자체의 한계다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Split and think. </span><span class="t-ko">나누고 생각한다. </span></b><span class="t-en">Each of two thinkers (same Qwen3 model) gets one fragment, plus the question in the query-known regime. It runs 20 or 40 latent steps, feeding its last hidden state back as input the way Coconut does, and produces no text. Nothing is trained.</span><span class="t-ko">두 thinker(같은 Qwen3 모델)가 각각 조각 하나를 받는다. query-known 상황이면 질문도 함께 받는다. 마지막 은닉 상태를 다시 입력으로 넣는 Coconut 방식으로 잠재 스텝을 20 또는 40번 돌며, 텍스트는 만들지 않는다. 학습은 전혀 없다.</span></li>
+      <li><b><span class="t-en">Address and ingest. </span><span class="t-ko">식별하고 넣는다. </span></b><span class="t-en">Hash every layer's K and V bytes to get the fragment's id, and insert the unrotated cache into the set under that id. A second delivery of the same bytes is absorbed.</span><span class="t-ko">모든 층의 K·V 바이트를 해시해 조각의 id를 얻고, 회전하지 않은 캐시를 그 id로 집합에 넣는다. 같은 바이트가 다시 오면 흡수된다.</span></li>
+      <li><b><span class="t-en">Render. </span><span class="t-ko">렌더한다. </span></b><span class="t-en">Sort the fragments by mean key norm at the routing layer, highest first. Concatenate along the sequence axis. Rotate each later block's keys so its positions continue after the prefix; values pass through unchanged. The cost is O(T·d) per thinker per layer.</span><span class="t-ko">라우팅 층의 평균 key norm으로 조각을 큰 순서대로 정렬한다. 시퀀스 축으로 이어 붙인다. 뒤쪽 블록의 key를 회전시켜 위치가 앞부분 뒤로 이어지게 하고, value는 그대로 둔다. 비용은 thinker·층마다 O(T·d)다.</span></li>
+      <li><b><span class="t-en">Judge. </span><span class="t-ko">판정한다. </span></b><span class="t-en">The judger, the same model with no latent steps of its own, decodes the answer with the merged cache as its prefix.</span><span class="t-ko">judger는 같은 모델이며 자기 잠재 스텝 없이, 병합된 캐시를 앞부분(prefix)으로 삼아 답을 생성한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">If you merge parallel agents' caches by concatenation with RoPE re-encoding, the order is a hidden hyperparameter worth about 7 points, and its best value is not predictable. A content-determined sort removes it at no measured cost. It is a few lines of code.</p><p class="t-ko">병렬 에이전트의 캐시를 RoPE 재인코딩과 함께 이어 붙여 병합한다면, 순서는 약 7점짜리 숨은 하이퍼파라미터이고 그 최적값은 미리 알 수 없다. 내용 기반 정렬은 측정된 손실 없이 이 변수를 없앤다. 코드 몇 줄이면 된다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">When the pieces of information are jointly necessary, fusing at the cache level beats fusing at the logits by a wide margin (0.947 vs 0.50). A weighted average of two next-token distributions cannot rebuild a constraint that neither agent could state alone.</p><p class="t-ko">정보 조각들이 함께 있어야만 의미가 있을 때, 캐시 단계 융합이 logit 단계 융합보다 크게 앞선다(0.947 대 0.50). 두 다음-토큰 분포의 가중 평균으로는, 어느 에이전트도 혼자서는 말할 수 없는 제약을 다시 만들 수 없다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">Putting caches side by side is not the same as integrating them. At three fragments, merging fails until the model reprocesses one cache on top of another. This fits the causal audits already in this archive (2607.26773, 2608.04893), which question how much reasoning latent channels actually carry.</p><p class="t-ko">캐시를 나란히 놓는 것과 통합하는 것은 다르다. 조각이 셋이면, 모델이 한 캐시를 다른 캐시 위에서 다시 처리하기 전까지 병합은 실패한다. 이 아카이브에 이미 있는 인과 감사 논문들(2607.26773, 2608.04893)과 맞아떨어진다. 그 논문들은 잠재 채널이 실제로 얼마나 추론을 실어 나르는지 의심한다.</p></div>
+      <div class="t"><span class="ic">⚙️</span><p class="t-en">Deduplicate before you concatenate. Re-delivering each fragment 4 times cut accuracy from 0.93 to 0.45 and quadrupled the cache.</p><p class="t-ko">이어 붙이기 전에 중복부터 제거할 것. 조각마다 4번씩 다시 전달하자 정확도는 0.93에서 0.45로 떨어지고 캐시는 4배가 됐다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the structural guarantee is cheaper than it sounds, and the part that needs evidence is not isolated. Any deterministic, content-based order gives the same byte-identity and the same CRDT. Sorting by the hash alone would do it. The key-norm score earns its place only through accuracy, yet the paper never compares it with a hash-only (arbitrary but fixed) order, and never reports how often it picks each ordering. In the query-known regime its per-draw scores (0.96/0.95/0.93) sit almost exactly on BagMerge swap (0.96/0.97/0.93). That fits "the score mostly reproduces swap" at least as well as "it routes per problem". Second, the obvious baseline is missing, as the authors admit in their limitations: one agent reading both fragments as text scores 1.00 on this benchmark, against 0.95 for the best latent merge, and no text relay at matched compute is reported. The real-data check is 50 HotpotQA questions, where plain BagMerge had the higher F1 (0.632 vs 0.605). Everything runs on Qwen3-1.7B and 4B on a laptop GPU (Apple MPS), and the method stops composing at three fragments. What is shown is a deterministic, duplicate-safe way to join two caches from the same model at no accuracy cost against the best order. It is not shown to be a better way for agents to communicate.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 구조적 보장은 들리는 것보다 값싸고, 정작 근거가 필요한 부분은 따로 검증되지 않았다. 결정적이고 내용에 기반한 순서라면 무엇이든 같은 바이트 일치와 같은 CRDT를 준다. 해시만으로 정렬해도 된다. key-norm 점수가 존재 이유를 가지려면 정확도에서 이겨야 하는데, 논문은 해시만 쓴(임의지만 고정된) 순서와 비교하지 않고, 어느 순서를 얼마나 자주 고르는지도 보고하지 않는다. query-known에서 추출별 점수(0.96/0.95/0.93)는 BagMerge swap(0.96/0.97/0.93)과 거의 정확히 겹친다. 이는 "문제마다 골라 준다"만큼이나 "대체로 swap을 재현한다"로도 잘 설명된다. 둘째, 가장 당연한 기준선이 빠졌다. 저자들도 한계 절에서 인정한다. 이 벤치마크에서 에이전트 하나가 두 조각을 텍스트로 읽으면 1.00이고, 최선의 잠재 병합은 0.95다. 같은 연산량의 텍스트 전달 비교는 없다. 실제 데이터 검증은 HotpotQA 50문제뿐이며, 거기서는 평범한 BagMerge의 F1이 더 높았다(0.632 대 0.605). 모든 실험은 노트북 GPU(Apple MPS)에서 Qwen3-1.7B·4B로만 돌렸고, 조각이 셋이면 합성이 멈춘다. 입증된 것은 "같은 모델의 두 캐시를 결정적이고 중복에 안전하게 잇는 방법, 최적 순서 대비 정확도 손실 없음"이다. 에이전트 간 소통을 더 잘하는 방법이라는 것은 입증되지 않았다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2607.01308">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2607.01308">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2607.01308">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2607.01308">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>preprint, no venue: arXiv lists no comment or journal reference, and the PDF has no venue line. The 2026-08 wishlist queue is drained and there are no open mustread issues, so this came from the fallback search, which turned up no confirmed acceptance among the unread latent-communication and compression candidates. Yesterday's MoARa card held this paper for the next latent-communication turn, and today is that turn. It is the first card here on the parallel merge step itself, the operator that Agent Primitives (2602.03695) introduced, and it comes from a co-author of the original CRDT paper. Its three-fragment "transport is not composition" result lines up with the causal audits 2607.26773 and 2608.04893. The next latent-communication candidate held for that axis is Mixture-of-Translators (2607.28979, preprint), which translates KV caches between different models (Qwen2.5, GPT-2, OPT)</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-09-19.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>프리프린트, 학회 없음: arXiv에 코멘트나 저널 정보가 없고 PDF에도 학회 표기가 없다. 2026-08 위시리스트 큐가 소진되고 열린 mustread 이슈도 없어 폴백 검색에서 골랐다. 아직 안 읽은 잠재 통신·압축 후보 중 학회 accept가 확인된 논문은 없었다. 어제 MoARa 카드가 이 논문을 다음 잠재 통신 차례로 남겨 두었고, 오늘이 그 차례다. 병렬 병합 단계 자체, 즉 Agent Primitives(2602.03695)가 도입한 연산을 다루는 이 아카이브의 첫 카드이며, CRDT 원 논문 공저자의 작업이다. 조각 셋에서 나온 "운반은 합성이 아니다" 결과는 인과 감사 논문 2607.26773, 2608.04893과 맞아떨어진다. 이 축의 다음 후보로는 서로 다른 모델(Qwen2.5, GPT-2, OPT) 사이에서 KV 캐시를 번역하는 Mixture-of-Translators(2607.28979, 프리프린트)를 남겨 둔다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-09-19.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
