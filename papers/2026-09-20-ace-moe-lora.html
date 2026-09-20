@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · ACE: Adapter Consolidation across Experts for Parameter-Efficient Fine-Tuning of MoE LLMs</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · Low-rank · MoE PEFT</span><span class="t-ko">Model Compression · 저랭크 · MoE PEFT</span></span>
+      <span>2026.09.20</span>
+    </div>
+    <h1>ACE: Adapter Consolidation across Experts for Parameter-Efficient Fine-Tuning of MoE LLMs<br>
+      <span class="glow t-en">— one LoRA per expert is mostly waste; group the redundant ones and give the group a fatter rank</span>
+      <span class="glow t-ko">— 전문가마다 LoRA 하나씩 붙이는 건 대부분 낭비다. 겹치는 것끼리 묶어 그 그룹에 더 큰 rank를 주자</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Ahin Lee</b> <span class="t-en">et al. (senior author Taesik Gong)</span><span class="t-ko">외 (교신/책임저자 Taesik Gong)</span></span>
+      <span>🏛 UNIST</span>
+      <span>🗓 2026-09-05 · EMNLP 2026</span>
+      <span>📄 <a href="https://arxiv.org/abs/2609.06072">arXiv:2609.06072</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">When you fine-tune a Mixture-of-Experts model with LoRA, the standard move is one small adapter per expert — and that splits a fixed budget into many narrow, rarely-updated, inefficiently-executed pieces. ACE measures which expert adapters have become functionally interchangeable (linear CKA on a shared probe set), merges each cluster into a single shared adapter whose rank is the sum of the ranks it replaces, and computes it once per group. Same trainable parameters, same peak memory: +1.50 accuracy points on OLMoE's commonsense average and 1.31×–1.48× faster training.</p>
+    <p class="t-ko">MoE(전문가 혼합) 모델을 LoRA로 미세조정할 때 표준 방식은 전문가마다 작은 어댑터를 하나씩 붙이는 것이다. 그런데 이러면 고정된 예산이 좁고, 거의 업데이트되지 않고, 비효율적으로 실행되는 조각들로 쪼개진다. ACE는 어떤 전문가 어댑터들이 기능적으로 서로 바꿔 써도 되는 상태가 됐는지를 측정하고(공통 프로브 집합 위에서 선형 CKA), 각 군집을 대체하는 rank의 합만큼 rank를 가진 공유 어댑터 하나로 합친 뒤, 그룹당 한 번만 계산한다. 학습 파라미터도 최대 메모리도 그대로인데, OLMoE 상식추론 평균 +1.50점, 학습 속도 1.31~1.48배.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">LoRA was designed for dense layers, where every adapter sees every token. Drop that same design into a sparsely-routed MoE layer and three things quietly break at once.</p>
+    <p class="lead t-ko">LoRA는 모든 어댑터가 모든 토큰을 보는 dense 층을 위해 설계됐다. 그 설계를 희소 라우팅이 걸린 MoE 층에 그대로 가져다 놓으면, 세 가지가 동시에 조용히 망가진다.</p>
+    <p class="t-en">The paper names them precisely. <b>Capacity</b>: a layer budget split uniformly across <i>E</i> experts gives each one rank <i>B</i>/(<i>E</i>·(d<sub>in</sub>+d<sub>out</sub>)), so more experts mechanically means a thinner correction per expert. <b>Supervision</b>: an expert's adapter only receives gradient from tokens the router sent it, so with top-<i>k</i> routing each adapter sees roughly <i>k</i>/<i>E</i> of a batch — less, when routing is imbalanced, which it usually is. <b>Execution</b>: every active adapter is two small GEMMs (matrix multiplications), so a modest LoRA budget turns into a swarm of tiny kernel launches that GPUs handle badly. These are not independent bugs; they are three faces of the same decision to keep one adapter per expert.</p>
+    <p class="t-ko">논문은 이 셋의 이름을 정확히 붙인다. <b>용량</b>: 층 예산을 <i>E</i>개 전문가에 균일 분배하면 각자 rank가 <i>B</i>/(<i>E</i>·(d<sub>in</sub>+d<sub>out</sub>))이 되므로, 전문가가 많아질수록 전문가별 보정은 기계적으로 얇아진다. <b>지도 신호</b>: 어댑터는 라우터가 자기 전문가로 보낸 토큰에서만 gradient를 받는다. top-<i>k</i> 라우팅이면 배치의 대략 <i>k</i>/<i>E</i>만 보고, 라우팅이 불균형하면(보통 불균형하다) 그보다도 적다. <b>실행</b>: 활성 어댑터마다 작은 GEMM(행렬곱)이 두 번씩 필요하니, 크지 않은 LoRA 예산도 GPU가 잘 처리하지 못하는 자잘한 커널 호출 떼로 변한다. 이건 서로 독립된 버그 셋이 아니라, 전문가마다 어댑터 하나라는 같은 결정의 세 얼굴이다.</p>
+    <figure class="fig">
+      <img src="fig/2609.06072/moe_details.png" alt="Left: vanilla LoRA for MoE with one rank-r adapter per expert, showing fragmented adaptation capacity, zero gradients on unrouted experts, and fragmented execution. Right: ACE groups experts and gives each group a shared higher-rank adapter (3r, 2r) with grouped adapter execution.">
+      <figcaption class="t-en"><b>Figure 1.</b> Left, the baseline: each expert W<sub>1</sub>…W<sub>E</sub> carries its own rank-<i>r</i> adapter, several of them receiving a zero gradient because the router skipped that expert. Right, ACE: experts with similar adapter-induced representations are boxed together and share one adapter whose rank is the pooled sum (3<i>r</i> for a three-expert group, 2<i>r</i> for a two-expert group), evaluated once per active group.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> 왼쪽은 기준선이다. 전문가 W<sub>1</sub>…W<sub>E</sub>가 각자 rank-<i>r</i> 어댑터를 들고 있고, 그중 몇은 라우터가 그 전문가를 건너뛰어 gradient가 0이다. 오른쪽이 ACE다. 어댑터가 만들어내는 표현이 비슷한 전문가들을 한 상자로 묶고, 묶인 rank를 합친 크기(3개짜리 그룹이면 3<i>r</i>, 2개짜리면 2<i>r</i>)의 어댑터 하나를 공유하며, 활성 그룹당 한 번만 계산한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2609.06072</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">+1.50</div><div class="l"><span class="t-en">accuracy points on OLMoE's 8-benchmark commonsense average, over expert-wise LoRA (74.11 → 75.61)</span><span class="t-ko">OLMoE 상식추론 8개 벤치마크 평균에서 전문가별 LoRA 대비 정확도 점수 상승 (74.11 → 75.61)</span></div></div>
+      <div class="stat"><div class="n">1.31–1.48×</div><div class="l"><span class="t-en">wall-clock training speedup over expert-wise LoRA, across four MoE backbones</span><span class="t-ko">MoE 백본 4종에서 전문가별 LoRA 대비 실제 학습 시간 단축 배수</span></div></div>
+      <div class="stat"><div class="n">−41.3%</div><div class="l"><span class="t-en">matrix-multiplication calls in profiled Qwen prefill (106.0K → 62.2K); CUDA matmul time −33.4%</span><span class="t-ko">Qwen prefill 프로파일링에서 행렬곱 호출 수 감소 (106.0K → 62.2K), CUDA 행렬곱 시간은 −33.4%</span></div></div>
+      <div class="stat"><div class="n">0.531</div><div class="l"><span class="t-en">gradient-norm coefficient of variation across experts, down from 1.449 under LoRA (OLMoE up_proj)</span><span class="t-ko">전문가 간 gradient norm 변동계수. LoRA의 1.449에서 내려온 값 (OLMoE up_proj)</span></div></div>
+      <div class="stat"><div class="n">0.27%</div><div class="l"><span class="t-en">trainable parameters on OLMoE — the identical budget the LoRA baseline gets</span><span class="t-ko">OLMoE에서의 학습 파라미터 비율. LoRA 기준선과 완전히 같은 예산이다</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Same budget, three backbones</span><span class="t-ko">같은 예산, 백본 3종</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 (condensed).</b> Mean accuracy over eight commonsense benchmarks (HellaSwag, WinoGrande, ARC-c, ARC-e, BoolQ, OpenBookQA, PIQA, SIQA), averaged over three runs. All methods in a column share the same trainable-parameter budget. EPnG and PERFT-R are the MoE-aware baselines; PiSSA is the strongest dense-PEFT baseline. A fourth backbone, Kimi-Linear-48B-A3B, is reported in the appendix with the same trend.</caption>
+        <caption class="t-ko"><b>Table 1 (요약).</b> 상식추론 8개 벤치마크(HellaSwag, WinoGrande, ARC-c, ARC-e, BoolQ, OpenBookQA, PIQA, SIQA) 평균 정확도, 3회 실행 평균. 같은 열의 모든 방법은 학습 파라미터 예산이 동일하다. EPnG와 PERFT-R이 MoE 특화 기준선이고, PiSSA가 가장 강한 dense PEFT 기준선이다. 네 번째 백본 Kimi-Linear-48B-A3B는 부록에 같은 경향으로 보고된다.</caption>
+        <thead><tr><th>Method</th><th>OLMoE (1B/7B)</th><th>Qwen1.5-MoE (3B/14B)</th><th>Moonlight (3B/16B)</th></tr></thead>
+        <tbody>
+          <tr><td>LoRA</td><td>74.11 <span style="opacity:.6">±0.39</span></td><td>79.75 <span style="opacity:.6">±0.03</span></td><td>79.29 <span style="opacity:.6">±0.32</span></td></tr>
+          <tr><td>PiSSA</td><td>74.75 <span style="opacity:.6">±0.16</span></td><td>79.98 <span style="opacity:.6">±0.11</span></td><td>78.11 <span style="opacity:.6">±0.23</span></td></tr>
+          <tr><td>EPnG <span style="opacity:.6">(MoE-aware)</span></td><td>73.90 <span style="opacity:.6">±0.33</span></td><td>79.54 <span style="opacity:.6">±0.09</span></td><td>80.13 <span style="opacity:.6">±0.24</span></td></tr>
+          <tr><td><b>ACE</b></td><td class="up">75.61 <span style="opacity:.6">±0.28</span></td><td class="up">80.27 <span style="opacity:.6">±0.18</span></td><td class="up">81.17 <span style="opacity:.6">±0.19</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">1 · probe, ignoring the router</span><span class="t-ko">1 · 라우터를 무시하고 프로브</span></div>
+          <div class="sub"><span class="t-en">After a 150-step warm-up, feed the same 10,000 hidden states to every expert adapter in the layer — even experts the router would never send them to</span><span class="t-ko">150스텝 워밍업 후, 같은 hidden state 10,000개를 그 층의 모든 전문가 어댑터에 넣는다. 라우터라면 절대 보내지 않을 전문가에게도 넣는다</span></div>
+          <div class="latent">Z<sub>e</sub> = [ΔW<sub>e</sub>x<sub>1</sub> … ΔW<sub>e</sub>x<sub>N</sub>]<sup>⊤</sup> · N = 10,000</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">2 · cluster by behavior</span><span class="t-ko">2 · 행동으로 군집화</span></div>
+          <div class="sub"><span class="t-en">Mean-center, score every expert pair with linear CKA, then run Louvain community detection per layer — no hand-picked similarity threshold</span><span class="t-ko">평균 중심화 후 전문가 쌍마다 선형 CKA로 점수를 내고, 층별로 Louvain 커뮤니티 탐지를 돌린다. 유사도 임계값을 손으로 고를 필요가 없다</span></div>
+          <div class="latent">s<sub>ij</sub> = ‖Z̄<sub>i</sub><sup>⊤</sup>Z̄<sub>j</sub>‖²<sub>F</sub> / (‖Z̄<sub>i</sub><sup>⊤</sup>Z̄<sub>i</sub>‖<sub>F</sub>‖Z̄<sub>j</sub><sup>⊤</sup>Z̄<sub>j</sub>‖<sub>F</sub>) · γ = 0.8</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">3 · pool the rank, compute once</span><span class="t-ko">3 · rank를 모으고, 한 번만 계산</span></div>
+          <div class="sub"><span class="t-en">Each group's adapters collapse into one adapter of rank r<sub>g</sub> = Σr<sub>e</sub>, updated whenever any member is routed, and evaluated once per active group</span><span class="t-ko">각 그룹의 어댑터들이 rank r<sub>g</sub> = Σr<sub>e</sub>인 어댑터 하나로 합쳐진다. 구성원 중 누구라도 라우팅되면 업데이트되고, 활성 그룹당 한 번만 계산된다</span></div>
+          <div class="latent">Σ<sub>g</sub>(d<sub>in</sub>+d<sub>out</sub>)r<sub>g</sub> = Σ<sub>e</sub>(d<sub>in</sub>+d<sub>out</sub>)r<sub>e</sub></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>The probe step is the load-bearing trick.</b> If you measured adapter similarity on each expert's own routed tokens, you would be comparing behavior on different inputs, and the score would partly reflect routing frequency rather than function. Feeding one shared probe set to everyone makes the comparison about what the adapter <i>does</i>. The consolidation is exactly parameter-neutral because experts in a layer share d<sub>in</sub> and d<sub>out</sub> — nothing is added, the same rank is just spent in fewer, wider pieces. Grouped execution only works where routed experts read the same input activation, which is true of the gate and up projections and not of the down projection.</div>
+      <div class="cap t-ko"><b>프로브 단계가 하중을 받는 핵심이다.</b> 어댑터 유사도를 각 전문가가 실제로 받은 토큰에서 쟀다면 서로 다른 입력에서의 행동을 비교하는 셈이고, 점수에 기능이 아니라 라우팅 빈도가 섞여 들어간다. 공통 프로브 집합 하나를 모두에게 먹이면 비교 대상이 어댑터가 <i>하는 일</i>로 좁혀진다. 합치는 과정이 파라미터 중립인 이유는 한 층의 전문가들이 d<sub>in</sub>, d<sub>out</sub>을 공유하기 때문이다. 더하는 건 없고, 같은 rank를 더 적고 더 넓은 조각에 쓸 뿐이다. 그룹 실행은 라우팅된 전문가들이 같은 입력 활성값을 읽는 곳에서만 가능한데, gate와 up 투영이 그렇고 down 투영은 그렇지 않다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The idea in four pieces</span><span class="t-ko">아이디어를 넷으로 쪼개면</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">the diagnosis</span>
+        <h3>Three fragmentations, one cause</h3>
+        <p class="t-en">Capacity, supervision and execution all fragment for the same reason: one adapter per expert. The paper measures each. Effective rank (entropy of normalized singular values) shows LoRA-<i>r</i>=2 adapters average 1.77 — they barely use the rank they have. Gradient CV of 1.449 and a 3.18% zero-gradient row rate show the supervision is sparse and lopsided. CUDA profiling shows 106.0K matmul calls where 62.2K would do.</p>
+        <p class="t-ko">용량·지도 신호·실행이 모두 같은 이유로 조각난다. 전문가마다 어댑터 하나라는 것. 논문은 셋을 각각 측정한다. 유효 rank(정규화된 특이값의 엔트로피)로 보면 LoRA-<i>r</i>=2 어댑터는 평균 1.77이다. 가진 rank조차 거의 못 쓴다. gradient 변동계수 1.449와 3.18%의 gradient가 0인 행 비율은 지도 신호가 희소하고 한쪽으로 쏠렸음을 보여준다. CUDA 프로파일링은 62.2K면 될 행렬곱을 106.0K번 부르고 있다고 말한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">step 1</span>
+        <h3>CKA grouping, on a shared probe set</h3>
+        <p class="t-en">Linear CKA (centered kernel alignment) on adapter outputs, not on adapter weights — ACE cares whether two adapters <i>act</i> alike, and CKA's scale invariance matters when routing makes output magnitudes wildly uneven. Louvain community detection picks the groups per layer, so no global similarity threshold has to be tuned across layers whose similarity scales differ.</p>
+        <p class="t-ko">어댑터 가중치가 아니라 어댑터 출력에 선형 CKA(중심화 커널 정렬)를 적용한다. ACE가 궁금한 건 두 어댑터가 비슷하게 <i>작동</i>하느냐이고, 라우팅 때문에 출력 크기가 제각각인 상황에서는 CKA의 스케일 불변성이 중요하다. 그룹은 층별로 Louvain 커뮤니티 탐지가 고르므로, 유사도 스케일이 층마다 다른 상황에서 전역 임계값을 맞출 필요가 없다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">step 2</span>
+        <h3>Rank consolidation + shared updates</h3>
+        <p class="t-en">A group's adapters are replaced by one adapter of rank r<sub>g</sub> = Σr<sub>e</sub>, initialized from the group's similarity-central member so the swap is not a cold restart. Two effects follow for free: the pooled rank lifts mean effective rank toward what LoRA-<i>r</i>=64 achieves with ~32× more parameters, and the shared adapter now collects gradient whenever <i>any</i> group member is routed.</p>
+        <p class="t-ko">그룹의 어댑터들이 rank r<sub>g</sub> = Σr<sub>e</sub>인 어댑터 하나로 대체된다. 초기화는 그룹에서 유사도상 가장 중심인 구성원에서 가져와, 교체가 차가운 재시작이 되지 않게 한다. 여기서 두 효과가 덤으로 따라온다. 모인 rank가 평균 유효 rank를 파라미터를 약 32배 쓰는 LoRA-<i>r</i>=64 수준으로 끌어올리고, 공유 어댑터는 그룹 구성원 중 <i>누구라도</i> 라우팅되면 gradient를 받는다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">step 3</span>
+        <h3>Grouped adapter execution</h3>
+        <p class="t-en">Sharing parameters does not by itself save compute — a naive implementation would still evaluate the same shared adapter once per routed expert. ACE instead computes c<sub>g</sub>(x) = ΔW<sub>g</sub><sup>share</sup>x once per active group and reuses it. This is where the wall-clock win comes from: the ablation that keeps consolidated adapters but disables grouped execution scores the same 75.61 while training time goes back up from 1.89 to 2.83 hours.</p>
+        <p class="t-ko">파라미터를 공유한다고 계산이 저절로 줄지는 않는다. 순진하게 구현하면 같은 공유 어댑터를 라우팅된 전문가마다 한 번씩 계산하게 된다. 대신 ACE는 c<sub>g</sub>(x) = ΔW<sub>g</sub><sup>share</sup>x를 활성 그룹당 한 번 계산하고 재사용한다. 실제 시간 이득은 여기서 나온다. 합친 어댑터는 그대로 두고 그룹 실행만 끈 ablation은 점수가 똑같이 75.61인데 학습 시간이 1.89시간에서 2.83시간으로 되돌아간다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Warm up normally. </span><span class="t-ko">평범하게 워밍업한다. </span></b><span class="t-en">Train T<sub>init</sub> = 150 steps of ordinary expert-wise LoRA, so each adapter has learned something task-specific to be compared on.</span><span class="t-ko">보통의 전문가별 LoRA로 T<sub>init</sub> = 150 스텝을 학습한다. 그래야 각 어댑터가 비교할 만한 과제 특화 내용을 익힌 상태가 된다.</span></li>
+      <li><b><span class="t-en">Collect a shared probe set. </span><span class="t-ko">공통 프로브 집합을 모은다. </span></b><span class="t-en">Take N = 10,000 hidden states and push them through every expert adapter in the layer regardless of routing, forming each expert's representation matrix Z<sub>e</sub>.</span><span class="t-ko">hidden state N = 10,000개를 모아 라우팅과 무관하게 그 층의 모든 전문가 어댑터에 통과시켜, 전문가별 표현 행렬 Z<sub>e</sub>를 만든다.</span></li>
+      <li><b><span class="t-en">Score and group. </span><span class="t-ko">점수를 내고 묶는다. </span></b><span class="t-en">Mean-center, compute pairwise linear CKA, build a weighted expert-similarity graph, and cut it with Louvain at resolution γ = 0.8 to get per-layer groups.</span><span class="t-ko">평균 중심화 후 쌍별 선형 CKA를 계산하고, 가중 전문가 유사도 그래프를 만들어 resolution γ = 0.8의 Louvain으로 나눠 층별 그룹을 얻는다.</span></li>
+      <li><b><span class="t-en">Consolidate in place. </span><span class="t-ko">제자리에서 합친다. </span></b><span class="t-en">Swap each group's separate adapters for one rank-Σr<sub>e</sub> adapter, seeded from the similarity-central anchor with standard LoRA init for the extra rank directions. Backbone weights and the router are left untouched.</span><span class="t-ko">각 그룹의 개별 어댑터를 rank가 Σr<sub>e</sub>인 어댑터 하나로 교체한다. 초기값은 유사도 중심 앵커에서 가져오고, 늘어난 rank 방향은 표준 LoRA 초기화를 쓴다. 백본 가중치와 라우터는 건드리지 않는다.</span></li>
+      <li><b><span class="t-en">Train with grouped execution. </span><span class="t-ko">그룹 실행으로 학습한다. </span></b><span class="t-en">For gate and up projections, evaluate each active group's adapter once and reuse the result across every routed expert in that group; the down projection keeps the expert-wise path.</span><span class="t-ko">gate와 up 투영에서는 활성 그룹마다 어댑터를 한 번 계산하고 그 그룹의 라우팅된 모든 전문가가 결과를 재사용한다. down 투영은 전문가별 경로를 유지한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">This is an unusually cheap win to adopt: no extra parameters, no extra peak memory (98.21 → 98.18 GB on OLMoE), no change to the backbone or router, and training gets ~1.4× faster rather than slower. Code is at <a href="https://github.com/UbiquitousAILab/ACE">UbiquitousAILab/ACE</a>.</p><p class="t-ko">도입 비용이 유난히 싸다. 추가 파라미터 없음, 최대 메모리 증가 없음(OLMoE에서 98.21 → 98.18 GB), 백본과 라우터 변경 없음, 그리고 학습이 느려지는 게 아니라 약 1.4배 빨라진다. 코드는 <a href="https://github.com/UbiquitousAILab/ACE">UbiquitousAILab/ACE</a>에 있다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">The framing is worth stealing even if the method isn't: "where should a fixed low-rank budget be spent?" is a different and often better question than "how do we allocate rank per module?". Here the answer is that the natural unit of adaptation is a cluster of experts, not an expert — expert-level separation is inherited from the architecture, not demanded by the task.</p><p class="t-ko">방법을 안 쓰더라도 문제 설정은 훔칠 만하다. "고정된 저랭크 예산을 어디에 쓸 것인가"는 "모듈별로 rank를 어떻게 배분할 것인가"와 다른, 그리고 대개 더 나은 질문이다. 여기서의 답은 적응의 자연스러운 단위가 전문가 하나가 아니라 전문가 군집이라는 것이다. 전문가 단위 분리는 과제가 요구한 게 아니라 아키텍처에서 물려받은 것이다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">The effective-rank measurement is the most transferable diagnostic here. LoRA-<i>r</i>=2 adapters averaging 1.77 effective rank while LoRA-<i>r</i>=64 reaches 46.8 says the bottleneck in fragmented settings is real and measurable — a cheap check to run before assuming your own rank budget is being used.</p><p class="t-ko">여기서 가장 널리 써먹을 수 있는 진단 도구는 유효 rank 측정이다. LoRA-<i>r</i>=2 어댑터가 평균 유효 rank 1.77인데 LoRA-<i>r</i>=64는 46.8에 닿는다는 건, 조각난 설정에서의 병목이 실재하고 측정 가능하다는 뜻이다. 내 rank 예산이 실제로 쓰이고 있다고 가정하기 전에 돌려볼 만한 싼 점검이다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the ablation undercuts the paper's headline mechanism more than the text admits. Grouping experts <i>at random</i> — no CKA, no Louvain — already scores 74.72 on OLMoE, against LoRA's 74.11 and ACE's 75.61. So roughly 40% of the gain comes from pooling rank and densifying updates at all, and CKA-guided grouping earns the remaining 0.89 points. That is a real contribution, but the similarity analysis (Figures 2 and 5, the swap test, the CKA gaps across four backbones) is doing most of the paper's persuasive work for a minority of its measured benefit. The margin is thinner still on Qwen, where ACE's 80.27 ±0.18 sits 0.29 above PiSSA's 79.98 ±0.11 — and the abstract's careful hedge, "the highest observed mean accuracy among the parameter-matched PEFT methods on the three backbones with complete baseline coverage," is doing visible work.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> ablation이 논문의 간판 메커니즘을 본문이 인정하는 것보다 더 깎아낸다. 전문가를 <i>무작위로</i> 묶어도 — CKA도 Louvain도 없이 — OLMoE에서 74.72가 나온다. LoRA가 74.11, ACE가 75.61인데 말이다. 즉 이득의 약 40%는 rank를 모으고 업데이트를 촘촘하게 만든 것 자체에서 나오고, CKA 기반 그룹화가 나머지 0.89점을 번다. 이것도 실질적 기여이긴 하지만, 유사도 분석(Figure 2와 5, 교체 실험, 백본 4종의 CKA 격차)이 논문 설득력의 대부분을 떠받치면서 정작 측정된 이득에서는 소수 지분만 차지한다. Qwen에서는 격차가 더 얇다. ACE의 80.27 ±0.18이 PiSSA의 79.98 ±0.11보다 0.29 높을 뿐이다. 초록의 조심스러운 표현 — "기준선이 완전히 갖춰진 세 백본에서 파라미터를 맞춘 PEFT 방법 중 관측된 최고 평균 정확도" — 가 눈에 띄게 일을 하고 있다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2609.06072">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2609.06072">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2609.06072">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2609.06072">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>venue: EMNLP 2026 (accepted; stated in the arXiv comment field). The 2026-08 wishlist queue is drained and there are no open mustread issues, so this came from the fallback search — and unlike yesterday's pick, this one has a confirmed acceptance, which the fallback policy ranks first. It also fills a gap on the low-rank axis: the archive's recent rank-allocation cards, MoARa (2609.15037) and the three-level SVD paper (2609.15838), both allocate rank across <i>modules</i> of a dense model, whereas ACE reallocates it across <i>experts</i> of a sparse one, where routing — not just curvature — decides who gets trained. Adjacent unread candidate held for this axis: Grouped Value Attention (2609.13285, preprint), which reconstructs keys on demand instead of caching them</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-09-20.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>venue: EMNLP 2026 (accept. arXiv 코멘트 필드에 명시). 2026-08 위시리스트 큐가 소진되고 열린 mustread 이슈도 없어 폴백 검색에서 골랐다. 다만 어제 선정과 달리 이번에는 학회 accept가 확인됐고, 폴백 정책은 그걸 1순위로 둔다. 저랭크 축의 빈칸도 메운다. 최근의 rank 배분 카드인 MoARa(2609.15037)와 3단계 SVD 논문(2609.15838)은 둘 다 dense 모델의 <i>모듈</i> 사이에 rank를 배분하는데, ACE는 희소 모델의 <i>전문가</i> 사이에 재배분한다. 여기서는 곡률만이 아니라 라우팅이 누가 학습될지를 정한다. 이 축의 다음 후보로는 키를 캐싱하는 대신 필요할 때 복원하는 Grouped Value Attention(2609.13285, 프리프린트)을 남겨 둔다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-09-20.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
