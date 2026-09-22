@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · DeepSeek-V4.1-Flash: Pushing the Limits of KV Cache Compression</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · KV Cache · Sparse Attention</span><span class="t-ko">Model Compression · KV 캐시 · 희소 어텐션</span></span>
+      <span>2026.09.22</span>
+    </div>
+    <h1>DeepSeek-V4.1-Flash: Pushing the Limits of KV Cache Compression<br>
+      <span class="glow t-en">— stop asking which tokens to drop; make every layer share one cache, store it in 4 bits, and rebuild the rest on demand</span>
+      <span class="glow t-ko">— 어떤 토큰을 버릴지 묻기를 그만두고, 모든 층이 캐시 하나를 공유하게 한 뒤 4비트로 저장하고 나머지는 필요할 때 복원한다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>DeepSeek-AI</b> <span class="t-en">(collective authorship; no individual first/corresponding author listed)</span><span class="t-ko">(단체 저자. 1저자·교신저자 개별 표기 없음)</span></span>
+      <span>🏛 DeepSeek</span>
+      <span>🗓 2026-09-17</span>
+      <span>📄 <a href="https://arxiv.org/abs/2609.19969">arXiv:2609.19969</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Almost every KV-cache paper in this archive compresses along one axis — which tokens to keep, or how few bits per value. DeepSeek-V4.1-Flash compresses along three at once: <b>how many layers keep their own cache</b> (CSA2 lets most layers reuse an earlier layer's KV and even its sparse selection), <b>how many bits per value</b> (FP4 main KV, trained that way rather than quantized afterward), and <b>how many layers are even executed during prefill</b> (a Causal Encoder-Decoder projects all decoder global KV from the final encoder hidden state, so prefill activates 8B parameters instead of 16B). The result is 890 bytes of global KV per token — a quarter of DeepSeek-V4-Flash, and 437× below DeepSeek-V1 — with single-token decode FLOPs rising only 1/4 as context grows 256× from 4K to 1M.</p>
+    <p class="t-ko">이 아카이브의 KV 캐시 논문은 대부분 한 축으로 압축한다. 어떤 토큰을 남길지, 혹은 값 하나에 몇 비트를 쓸지. DeepSeek-V4.1-Flash는 세 축을 동시에 누른다. <b>몇 개 층이 자기 캐시를 갖는가</b>(CSA2는 대부분의 층이 앞선 층의 KV는 물론 희소 선택 결과까지 재사용하게 한다), <b>값 하나에 몇 비트인가</b>(FP4 main KV를, 사후 양자화가 아니라 처음부터 그 형식으로 학습), 그리고 <b>prefill에서 아예 몇 개 층을 실행하는가</b>(Causal Encoder-Decoder가 디코더의 global KV 전부를 인코더 마지막 hidden state에서 투영하므로, prefill은 16B가 아니라 8B 파라미터만 활성화한다). 결과는 토큰당 global KV 890바이트다. DeepSeek-V4-Flash의 1/4이고 DeepSeek-V1보다 437배 작다. 그러면서 컨텍스트가 4K에서 1M으로 256배 늘어도 토큰당 decode FLOPs는 1/4만 증가한다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">The bottleneck moved. For long-horizon agents, the expensive part is no longer generating tokens — it is swallowing them.</p>
+    <p class="lead t-ko">병목이 옮겨갔다. 오래 도는 에이전트에서 비싼 쪽은 더 이상 토큰을 만들어내는 일이 아니라, 토큰을 삼키는 일이다.</p>
+    <p class="t-en">An agent that calls tools re-submits a large, mostly-new context on every turn, so <b>prefill</b>, not decoding, dominates latency and cost. Meanwhile the KV cache presses on three different resources with three different deadlines: the <b>global KV</b> must sit in HBM for the whole request and caps batch size; the <b>persistent KV</b> kept for prefix reuse lives on SSD or in host memory and caps how many conversations you can cheaply resume; and both must cross an interconnect when a cache migrates between machines. A method that shrinks one of these can easily inflate another — evicting tokens saves HBM but forces recomputation, and persisting sliding-window states to avoid that recomputation blows up SSD. This paper's framing is that the three have to be solved together, at the architecture level, which is why its interventions reach all the way down into how layers are wired rather than sitting on top of a finished model as a compression pass.</p>
+    <p class="t-ko">도구를 호출하는 에이전트는 매 턴마다 크고 대부분 새로운 컨텍스트를 다시 밀어 넣는다. 그래서 지연과 비용을 지배하는 건 디코딩이 아니라 <b>prefill</b>이다. 한편 KV 캐시는 마감이 서로 다른 세 자원을 동시에 누른다. <b>global KV</b>는 요청이 끝날 때까지 HBM에 있어야 해서 배치 크기의 상한을 정하고, 접두사 재사용을 위해 남기는 <b>persistent KV</b>는 SSD나 호스트 메모리에 살면서 대화를 싸게 재개할 수 있는 개수의 상한을 정하며, 캐시가 기계 사이를 옮겨 다닐 때는 둘 다 인터커넥트를 건너야 한다. 하나를 줄이는 방법이 다른 하나를 부풀리기 쉽다. 토큰을 버리면 HBM은 아끼지만 재계산이 강제되고, 그 재계산을 피하려고 sliding-window 상태를 저장하면 SSD가 터진다. 이 논문의 프레이밍은 셋을 함께, 아키텍처 층위에서 풀어야 한다는 것이다. 그래서 개입이 완성된 모델 위에 압축 패스로 얹히는 대신 층을 어떻게 배선하는가까지 내려간다.</p>
+    <figure class="fig">
+      <img src="fig/2609.19969/teaser_b.png" alt="Horizontal bar chart of global KV cache per token in bytes across DeepSeek generations: DeepSeek-V1 389,120 bytes in 2023.11, DeepSeek-V3.2 48,068 bytes in 2025.12 labelled 8.1x smaller, DeepSeek-V4-Flash 3,514 bytes in 2026.04 labelled 13.7x smaller, and DeepSeek-V4.1-Flash 890 bytes in 2026.09 labelled 3.9x smaller.">
+      <figcaption class="t-en"><b>Figure 1(b).</b> Global KV cache per token across four DeepSeek generations, with the step-to-step shrink factor annotated. Two things are worth reading off this chart beyond the headline. First, the big structural win was the previous generation — V3.2 → V4-Flash cut 13.7×, larger than this paper's 3.9× — so V4.1-Flash is tightening an already-tight design rather than opening a new order of magnitude. Second, the compounding is what matters: 389,120 → 890 bytes is a 437× reduction over roughly three years, which is what turns a million-token context from a storage problem into a routine one.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1(b).</b> DeepSeek 4세대에 걸친 토큰당 global KV 캐시와 단계별 축소 배수. 헤드라인 말고도 이 그림에서 읽어야 할 게 둘 있다. 첫째, 구조적으로 가장 큰 승리는 직전 세대였다. V3.2 → V4-Flash가 13.7배를 줄였고 이건 이번 논문의 3.9배보다 크다. 즉 V4.1-Flash는 새로운 자릿수를 여는 게 아니라 이미 조여진 설계를 더 조이는 중이다. 둘째, 중요한 건 누적이다. 389,120 → 890바이트는 약 3년에 걸친 437배 감소이고, 백만 토큰 컨텍스트를 저장 문제에서 일상적인 것으로 바꾸는 건 바로 이 누적이다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2609.19969</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">890 B</div><div class="l"><span class="t-en">global KV cache per token (always in HBM) — roughly 1/4 of DeepSeek-V4-Flash's 3,514 B, and 437× below DeepSeek-V1's 389,120 B</span><span class="t-ko">토큰당 global KV 캐시(항상 HBM에 상주). DeepSeek-V4-Flash의 3,514 B 대비 약 1/4이고, DeepSeek-V1의 389,120 B보다 437배 작다</span></div></div>
+      <div class="stat"><div class="n">~1/8</div><div class="l"><span class="t-en">persistent KV footprint (SSD / host memory) vs DeepSeek-V4-Flash, from not storing SWA states at all and replaying them instead</span><span class="t-ko">DeepSeek-V4-Flash 대비 persistent KV 용량(SSD·호스트 메모리). SWA 상태를 아예 저장하지 않고 재생해서 얻은 값이다</span></div></div>
+      <div class="stat"><div class="n">+1/4</div><div class="l"><span class="t-en">increase in single-token decode FLOPs when context grows 256× (4K → 1M), counting BF16/FP8/FP4 ops at weight 1 / 0.5 / 0.25</span><span class="t-ko">컨텍스트가 256배(4K → 1M) 늘 때 토큰당 decode FLOPs 증가분. BF16·FP8·FP4 연산을 각각 1·0.5·0.25로 가중한 값이다</span></div></div>
+      <div class="stat"><div class="n">8B / 16B</div><div class="l"><span class="t-en">activated parameters per token during prefill vs decode — the CED split, on a 552B backbone plus 196B Engram parameters</span><span class="t-ko">prefill과 decode의 토큰당 활성 파라미터. CED가 만든 비대칭이며, 백본 552B에 Engram 파라미터 196B가 더 붙는다</span></div></div>
+      <div class="stat"><div class="n">2.5×</div><div class="l"><span class="t-en">extra output tokens to raise reasoning effort 25 → 100, buying +9.2 points of average Pass@1 on eight reasoning benchmarks (67.1% → 76.3%)</span><span class="t-ko">reasoning effort를 25에서 100으로 올릴 때 드는 추가 출력 토큰. 추론 벤치마크 8종 평균 Pass@1을 9.2점 올려준다 (67.1% → 76.3%)</span></div></div>
+      <div class="stat"><div class="n">45T</div><div class="l"><span class="t-en">multimodal pre-training tokens, with sparse attention trained from scratch at 64K and the context extended to 1M at the 34T mark — no dense-attention warmup</span><span class="t-ko">멀티모달 사전학습 토큰 수. 희소 어텐션을 64K에서 처음부터 학습하고 34T 지점에서 컨텍스트를 1M으로 확장했다. dense 어텐션 워밍업 단계는 없다</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Smaller cache, bigger backbone</span><span class="t-ko">캐시는 작아지고, 백본은 커졌다</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 (condensed).</b> Base-model comparison in DeepSeek's internal evaluation framework. Read the two parameter rows first — they are the context for everything below. V4.1-Flash activates fewer parameters than V4-Flash but carries roughly twice the backbone, so the quality gains are not obtained at a matched model size; the KV-cache reduction is the clean claim, the accuracy gain is confounded. Note also the two rows that do not go the paper's way: LongBench-V2 barely moves over V4-Flash despite this being the long-context model, and multilingual MGSM drops 5.5 points.</caption>
+        <caption class="t-ko"><b>Table 1 (요약).</b> DeepSeek 내부 평가 프레임워크에서의 base 모델 비교. 파라미터 두 행을 먼저 읽어야 한다. 그게 아래 전부의 전제다. V4.1-Flash는 V4-Flash보다 적은 파라미터를 활성화하지만 백본은 대략 두 배를 들고 있다. 즉 품질 향상이 같은 모델 크기에서 얻어진 게 아니다. 깨끗한 주장은 KV 캐시 감소 쪽이고, 정확도 향상은 교란되어 있다. 논문에 유리하지 않은 두 행도 보라. 이게 장문 컨텍스트 모델인데도 LongBench-V2는 V4-Flash 대비 거의 움직이지 않았고, 다국어 MGSM은 5.5점 떨어졌다.</caption>
+        <thead><tr><th>Benchmark (Metric)</th><th>DeepSeek-V4-Flash-Base</th><th>DeepSeek-V4-Pro-Base</th><th>DeepSeek-V4.1-Flash-Base</th></tr></thead>
+        <tbody>
+          <tr><td># Activated params</td><td>13B</td><td>49B</td><td>8B / 16B</td></tr>
+          <tr><td># Backbone params</td><td>284B</td><td>1.6T</td><td>552B</td></tr>
+          <tr><td>MMLU-Pro (EM, 5-shot)</td><td>68.3</td><td>73.5</td><td class="up">74.1</td></tr>
+          <tr><td>HumanEval (Pass@1)</td><td>69.5</td><td>76.8</td><td class="up">79.4</td></tr>
+          <tr><td>BigCodeBench (Pass@1)</td><td>56.8</td><td>59.2</td><td class="up">60.6</td></tr>
+          <tr><td>GSM8K (EM, 8-shot)</td><td>90.8</td><td>92.6</td><td class="up">93.0</td></tr>
+          <tr><td>MATH (EM, 4-shot)</td><td>57.4</td><td>64.5</td><td>61.1</td></tr>
+          <tr><td>LongBench-V2 (EM)</td><td>44.7</td><td>51.5</td><td>45.2</td></tr>
+          <tr><td>MGSM (EM, 8-shot)</td><td>85.7</td><td>84.4</td><td>80.2</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">1 · halve the prefill</span><span class="t-ko">1 · prefill을 절반으로</span></div>
+          <div class="sub"><span class="t-en">Causal Encoder-Decoder: 20 encoder layers run normally, then every decoder layer's global K and V are projected from the <i>final encoder hidden state</i> instead of from its own hidden states</span><span class="t-ko">Causal Encoder-Decoder. 인코더 20개 층은 정상 실행되고, 디코더 각 층의 global K·V는 자기 hidden state가 아니라 <i>인코더 마지막 hidden state</i>에서 투영된다</span></div>
+          <div class="latent">O(NL) → O(NL/2) · 8B activated in prefill vs 16B in decode</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">2 · make layers share</span><span class="t-ko">2 · 층끼리 공유시키기</span></div>
+          <div class="sub"><span class="t-en">CSA2 assigns each layer one of three static modes. Full computes its own KV, indexer keys and Top-512. Reindex borrows the KV but picks fresh indices. Reuse borrows both — so most layers store no global KV at all</span><span class="t-ko">CSA2는 각 층에 세 정적 모드 중 하나를 준다. Full은 자기 KV·인덱서 키·Top-512를 직접 계산한다. Reindex는 KV는 빌리되 인덱스는 새로 고른다. Reuse는 둘 다 빌린다. 그래서 대부분의 층은 global KV를 아예 저장하지 않는다</span></div>
+          <div class="latent">encoder: 18 layers, ratio m=2, 3 groups of 6 · decoder: 20 layers, m=1, 5 groups of 4</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">3 · shrink and forget</span><span class="t-ko">3 · 줄이고, 잊기</span></div>
+          <div class="sub"><span class="t-en">What survives is stored in FP4 (E2M1, one E4M3 scale per 16 channels). Sliding-window states are never persisted at all — on resume they are approximately rebuilt by replaying only the last n<sub>win</sub> tokens</span><span class="t-ko">살아남은 것은 FP4로 저장된다(E2M1, 16채널당 E4M3 스케일 하나). sliding-window 상태는 아예 저장하지 않고, 재개 시 마지막 n<sub>win</sub> 토큰만 재생해 근사 복원한다</span></div>
+          <div class="latent">global KV → 890 B/token · persistent KV → ~1/8 · SWA KV stays FP8</div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>The three stages attack three different resources, which is the whole point.</b> CED buys <i>prefill compute</i>, CSA2 buys <i>HBM</i>, and Bounded Replay buys <i>SSD</i> — and each is paid for in a different currency. CED pays by making decoder global KV a function of one shared encoder state, which is a real representational constraint, not a free lunch. CSA2 pays by letting many layers attend through another layer's choice of tokens, so a mistake in the Full-mode layer's Top-512 propagates to every Reuse layer beneath it; the Hierarchical Sparse Indexer deepens this coupling on purpose, having the decoder's first Full-mode layer build a candidate pool that later Reindex layers must select within. Bounded Replay pays most explicitly of all: exact reconstruction needs the last <i>L</i>×n<sub>win</sub> tokens replayed, and the system replays only n<sub>win</sub>, so the restored states are <i>approximate by construction</i>.</div>
+      <div class="cap t-ko"><b>세 단계가 서로 다른 자원을 공격한다는 점이 핵심이다.</b> CED는 <i>prefill 연산</i>을, CSA2는 <i>HBM</i>을, Bounded Replay는 <i>SSD</i>를 사들이는데, 값은 각각 다른 화폐로 치른다. CED는 디코더 global KV를 공유된 인코더 상태 하나의 함수로 만들어 값을 치른다. 이건 공짜가 아니라 실제 표현력 제약이다. CSA2는 많은 층이 다른 층이 고른 토큰을 통해 어텐션하게 해서 값을 치른다. 그래서 Full 모드 층의 Top-512 선택이 틀리면 그 아래 모든 Reuse 층으로 전파된다. Hierarchical Sparse Indexer는 이 결합을 의도적으로 더 깊게 만든다. 디코더의 첫 Full 모드 층이 후보 풀을 만들고 이후 Reindex 층들은 그 안에서만 골라야 한다. 값을 가장 노골적으로 치르는 건 Bounded Replay다. 정확한 복원에는 마지막 <i>L</i>×n<sub>win</sub> 토큰을 재생해야 하는데 시스템은 n<sub>win</sub>만 재생한다. 복원된 상태는 <i>설계상 근사</i>다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The idea in four pieces</span><span class="t-ko">아이디어를 넷으로 쪼개면</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">CED</span>
+        <h3>Causal Encoder-Decoder</h3>
+        <p class="t-en">The 40-layer backbone splits into a 20-layer causal encoder and a 20-layer decoder. During prefill the decoder's global KV is not produced by running the upper half over every position — it is projected from the encoder's final hidden states, cutting global-attention prefill from roughly <i>O(NL)</i> to <i>O(NL/2)</i> plus a bounded SWA replay cost. The decoder still keeps its own layer-local sliding-window states. This is what produces the unusual 8B-prefill / 16B-decode asymmetry, and it is aimed squarely at agents, whose workload is input-heavy.</p>
+        <p class="t-ko">40개 층 백본이 20층 causal 인코더와 20층 디코더로 갈린다. prefill 동안 디코더의 global KV는 상위 절반을 모든 위치에 대해 돌려서 만들지 않는다. 인코더의 마지막 hidden state에서 투영되고, 그래서 global attention prefill이 대략 <i>O(NL)</i>에서 <i>O(NL/2)</i>에 유계의 SWA 재생 비용을 더한 수준으로 줄어든다. 디코더는 층별 sliding-window 상태는 여전히 자기가 들고 있다. 이것이 8B prefill / 16B decode라는 특이한 비대칭을 만들고, 입력이 무거운 에이전트를 정확히 겨냥한다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">CSA2</span>
+        <h3><span class="t-en">Cross-layer KV <i>and</i> index reuse</span><span class="t-ko">층 간 KV <i>그리고</i> 인덱스 재사용</span></h3>
+        <p class="t-en">Each CSA2 layer is statically assigned Full, Reindex, or Reuse mode. The novelty over ordinary cross-layer KV sharing is that the <i>sparse selection</i> is shared too: a Reuse layer inherits not just the keys and values but the Top-512 positions the earlier layer chose, so it skips indexer evaluation entirely. The encoder runs 18 CSA2 layers at compression ratio 2 in three groups of six (first Full, the other five Reuse); the decoder runs 20 layers at ratio 1 in five groups of four. A Reuse-mode layer is cheap enough to execute in 15 fused kernels at prefill and 11 at decode.</p>
+        <p class="t-ko">CSA2의 각 층은 Full, Reindex, Reuse 중 하나를 정적으로 배정받는다. 일반적인 층 간 KV 공유와 다른 점은 <i>희소 선택</i>까지 공유한다는 것이다. Reuse 층은 키와 값만이 아니라 앞선 층이 고른 Top-512 위치까지 물려받아, 인덱서 계산을 통째로 건너뛴다. 인코더는 압축비 2로 CSA2 층 18개를 6개씩 세 그룹으로 돌리고(첫 층 Full, 나머지 다섯 Reuse), 디코더는 압축비 1로 20개 층을 4개씩 다섯 그룹으로 돌린다. Reuse 모드 층은 prefill에서 15개, decode에서 11개의 융합 커널로 실행될 만큼 가볍다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">FP4</span>
+        <h3><span class="t-en">Four-bit main KV, trained not bolted on</span><span class="t-ko">사후가 아니라 학습된 4비트 main KV</span></h3>
+        <p class="t-en">The main global KV is stored as E2M1 with one E4M3 scale per 16 channels — NVFP4 minus its second-level global scale, dropped for simplicity once the authors verified the remaining dynamic range (up to 448×6 = 2688) comfortably covers the cache's magnitudes. Values are dequantized before attention rather than multiplied natively, which keeps the format portable across hardware. Crucially FP4 is used during training and reinforced with quantization-aware post-training, so the model is never asked to tolerate a precision it has not seen. SWA KV deliberately stays FP8: the local branch proved more quantization-sensitive.</p>
+        <p class="t-ko">main global KV는 E2M1에 16채널당 E4M3 스케일 하나로 저장된다. NVFP4에서 2단계 global scale을 뺀 형태인데, 남은 동적 범위(최대 448×6 = 2688)가 캐시의 크기를 충분히 덮는다는 걸 확인한 뒤 단순화를 위해 뺐다. 값은 네이티브로 곱하지 않고 어텐션 전에 역양자화하며, 덕분에 형식이 하드웨어를 가리지 않는다. 결정적으로 FP4는 학습 중에 쓰이고 양자화 인지 사후학습으로 보강된다. 모델이 본 적 없는 정밀도를 견디라고 요구받지 않는다는 뜻이다. SWA KV는 의도적으로 FP8에 남는다. 로컬 분기가 양자화에 더 민감했다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">Replay</span>
+        <h3>SWA Bounded Replay</h3>
+        <p class="t-en">The deployment-side trick, and the one with the clearest accuracy cost. Sliding-window states are bounded per layer, but persisting them for every layer of a resumable prefix is expensive on SSD. Exact reconstruction would require replaying the last <i>L</i>×n<sub>win</sub> tokens. Bounded Replay replays only the last n<sub>win</sub>, accepting approximate states in exchange for dropping SWA entirely out of long-lived storage — which, combined with the already-compressed global cache, is what takes persistent KV to about 1/8 of the previous generation. The same bounded-replay idea is reused to shorten decoder prefill.</p>
+        <p class="t-ko">배포 쪽 트릭이자, 정확도 비용이 가장 분명한 부분이다. sliding-window 상태는 층마다 크기가 유계지만, 재개 가능한 접두사의 모든 층에 대해 저장하려면 SSD가 비싸다. 정확한 복원에는 마지막 <i>L</i>×n<sub>win</sub> 토큰 재생이 필요하다. Bounded Replay는 마지막 n<sub>win</sub>만 재생하고, 근사 상태를 받아들이는 대신 SWA를 장기 저장에서 완전히 빼버린다. 이미 압축된 global 캐시와 합쳐져 persistent KV를 직전 세대의 약 1/8로 내리는 것이 바로 이것이다. 같은 bounded replay 아이디어가 디코더 prefill을 줄이는 데도 재사용된다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Encode once, at 8B active. </span><span class="t-ko">8B 활성으로, 한 번만 인코딩. </span></b><span class="t-en">A multimodal context (images pass through DeepSeek-ViT, get 3×3 pixel-unshuffled, projected, and interleaved with text) runs through the 20 encoder layers. The first two use pure sliding-window attention; the remaining 18 use CSA2 at compression ratio 2, where only the first layer of each six-layer group computes its own KV and indices.</span><span class="t-ko">멀티모달 컨텍스트(이미지는 DeepSeek-ViT를 지나 3×3 pixel-unshuffle되고 투영된 뒤 텍스트와 섞인다)가 인코더 20개 층을 통과한다. 첫 두 층은 순수 sliding-window 어텐션을 쓰고, 나머지 18개 층은 압축비 2의 CSA2를 쓰는데, 6개 층 그룹마다 첫 층만 자기 KV와 인덱스를 계산한다.</span></li>
+      <li><b><span class="t-en">Project the whole decoder cache from one state. </span><span class="t-ko">디코더 캐시 전체를 상태 하나에서 투영. </span></b><span class="t-en">Rather than running the decoder over every prefill position, the decoder's global keys and values are projected from the encoder's final hidden states. This is the step that halves prefill and creates the 8B/16B split — the decoder's own layer-local SWA states are still maintained.</span><span class="t-ko">디코더를 모든 prefill 위치에 대해 돌리는 대신, 디코더의 global key·value를 인코더 마지막 hidden state에서 투영한다. prefill을 절반으로 줄이고 8B/16B 분할을 만드는 단계가 이것이다. 디코더의 층별 SWA 상태는 여전히 유지된다.</span></li>
+      <li><b><span class="t-en">Index hierarchically, then reuse. </span><span class="t-ko">계층적으로 인덱싱한 뒤 재사용. </span></b><span class="t-en">The decoder's first Full-mode CSA2 layer scans the whole visible context, selects its Top-512, and promotes the surrounding blocks into a shared candidate pool. Later Reindex layers choose their own Top-512 <i>within that pool</i>, so only the first indexer's cost grows with context length; every later one is bounded. Reuse layers skip indexing altogether.</span><span class="t-ko">디코더의 첫 Full 모드 CSA2 층이 보이는 컨텍스트 전체를 훑어 Top-512를 고르고, 그 주변 블록을 공유 후보 풀로 올린다. 이후 Reindex 층들은 <i>그 풀 안에서</i> 자기 Top-512를 고르므로, 컨텍스트 길이에 따라 비용이 커지는 건 첫 인덱서뿐이고 이후는 유계다. Reuse 층은 인덱싱을 아예 건너뛴다.</span></li>
+      <li><b><span class="t-en">Store global KV in FP4, throw SWA away. </span><span class="t-ko">global KV는 FP4로 저장하고, SWA는 버린다. </span></b><span class="t-en">The surviving global cache is quantized to E2M1/E4M3-per-16-channels and kept in HBM at 890 bytes per token. Nothing from the sliding-window branch is persisted; if the prefix is resumed later, those states are approximately rebuilt by replaying the last n<sub>win</sub> tokens.</span><span class="t-ko">살아남은 global 캐시는 16채널당 E2M1/E4M3로 양자화되어 토큰당 890바이트로 HBM에 남는다. sliding-window 분기에서 나온 건 아무것도 저장하지 않는다. 나중에 접두사를 재개하면 그 상태들은 마지막 n<sub>win</sub> 토큰을 재생해 근사 복원된다.</span></li>
+      <li><b><span class="t-en">Dial effort at serving time. </span><span class="t-ko">서빙 시점에 노력을 다이얼로 조절. </span></b><span class="t-en">A scalar effort level <i>b</i> is trained in as an RL conditioning signal, then exposed as three API tiers (low = 50, high = 75, max = 100). Moving 25 → 100 costs ~2.5× output tokens and buys 67.1% → 76.3% average reasoning Pass@1, with the gains front-loaded — the 60–80 range already recovers most of the accuracy.</span><span class="t-ko">스칼라 effort 값 <i>b</i>를 RL 조건 신호로 학습에 심고, API에서는 세 등급(low = 50, high = 75, max = 100)으로 노출한다. 25에서 100으로 올리면 출력 토큰이 약 2.5배 들고 추론 평균 Pass@1이 67.1%에서 76.3%로 오른다. 이득은 앞쪽에 몰려 있어, 60~80 구간에서 이미 정확도 대부분을 회수한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">Sharing the <i>sparse selection</i> across layers, not just the KV, is the idea most portable out of this system report. Cross-layer KV sharing is well-trodden; inheriting another layer's Top-<i>k</i> so a layer can skip indexing entirely is a cheaper trick than it looks, and the Hierarchical Sparse Indexer's candidate-pool refinement is a clean way to keep only one indexer's cost context-dependent.</p><p class="t-ko">층 간에 KV만이 아니라 <i>희소 선택</i>까지 공유한다는 것이 이 시스템 리포트에서 가장 이식성 있는 아이디어다. 층 간 KV 공유는 이미 많이 밟힌 길이지만, 다른 층의 Top-<i>k</i>를 물려받아 인덱싱을 통째로 건너뛰는 건 보기보다 값싼 트릭이고, Hierarchical Sparse Indexer의 후보 풀 정제는 인덱서 하나의 비용만 컨텍스트 의존으로 남기는 깔끔한 방법이다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">The prefill/decode parameter asymmetry (8B vs 16B) is a design axis this archive has not seen much of. Most efficiency work treats the two phases as one model with two access patterns; CED treats them as two budgets and spends less on the one agents hit hardest. Expect follow-ups that push the encoder/decoder split ratio itself.</p><p class="t-ko">prefill과 decode의 파라미터 비대칭(8B 대 16B)은 이 아카이브가 별로 본 적 없는 설계 축이다. 효율 연구 대부분은 두 단계를 접근 패턴만 다른 한 모델로 취급하는데, CED는 둘을 별개 예산으로 보고 에이전트가 가장 세게 때리는 쪽에 덜 쓴다. 인코더/디코더 분할 비율 자체를 밀어붙이는 후속 연구가 나올 것이다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">Read the compression numbers and the quality numbers as separate claims. The 890 B/token and ~1/8 persistent footprint are architectural facts you can verify from the released checkpoint. The benchmark gains arrive on a backbone nearly twice the size of the baseline's, so they are not evidence that the compression is free — only that it is compatible with a good model.</p><p class="t-ko">압축 숫자와 품질 숫자를 별개 주장으로 읽어야 한다. 토큰당 890 B와 persistent 약 1/8은 공개된 체크포인트로 검증할 수 있는 구조적 사실이다. 반면 벤치마크 향상은 기준선의 거의 두 배 크기인 백본 위에서 나왔다. 압축이 공짜라는 증거가 아니라, 좋은 모델과 양립한다는 증거일 뿐이다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the headline pairs "much smaller KV cache" with "substantially better performance", but Table 1 shows those two came from different places — V4.1-Flash carries a 552B backbone against V4-Flash's 284B, plus 196B of Engram parameters, so the quality comparison is not size-matched and the paper never isolates what CED + CSA2 + FP4 cost in accuracy at fixed capacity. The two benchmarks that would most expose such a cost are the ones that move least or move backward: LongBench-V2 goes 44.7 → 45.2 for a model whose entire thesis is long context, and MGSM falls 85.7 → 80.2. Add that SWA Bounded Replay is approximate <i>by construction</i> and its "negligible degradation" is asserted rather than tabulated at cache-resumption boundaries, and the honest reading is that the compression result is strong and independently checkable while the quality result rests on internal benchmarks and proprietary serving infrastructure.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 헤드라인은 "훨씬 작은 KV 캐시"와 "상당히 나은 성능"을 나란히 두지만, Table 1을 보면 둘의 출처가 다르다. V4.1-Flash는 V4-Flash의 284B에 맞서 552B 백본에 Engram 파라미터 196B를 더 들고 있다. 즉 품질 비교가 크기 정합이 아니고, 논문은 용량을 고정했을 때 CED + CSA2 + FP4가 정확도에서 얼마를 치르는지 분리해 보여주지 않는다. 그 비용을 가장 잘 드러낼 벤치마크 둘이 하필 가장 덜 움직이거나 뒤로 간다. 논지 전체가 장문 컨텍스트인 모델인데 LongBench-V2는 44.7 → 45.2에 그치고, MGSM은 85.7 → 80.2로 떨어진다. 여기에 SWA Bounded Replay가 <i>설계상</i> 근사이고 그 "무시할 만한 저하"가 캐시 재개 경계에서 표로 제시되지 않고 선언되기만 한다는 점을 더하면, 정직한 독해는 이렇다. 압축 결과는 강하고 독립 검증이 가능하지만, 품질 결과는 내부 벤치마크와 독점 서빙 인프라에 기대고 있다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2609.19969">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2609.19969">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2609.19969">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2609.19969">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>the 2026-08 wishlist queue is fully drained and there are no open mustread issues, so this came from the fallback search. No candidate in that search had a confirmed acceptance, so the policy's first tiebreaker did not apply and community signal decided it: at 550 votes and 81K views this is an order of magnitude above every other candidate, and it sits directly on the archive's busiest axis. It is a system report rather than a method paper — unlike yesterday's ACE (2609.06072, EMNLP 2026) — but it is the rare one that reframes KV compression as three simultaneous axes (layers, bits, and which layers run at all) instead of one. Adjacent unread candidates held for this axis: RestoreKV (2608.01247), which generates a learned complement to an evicted cache rather than only choosing what to keep, and Iso-LoRA (2609.12123) on the low-rank side</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-09-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>2026-08 위시리스트 큐가 완전히 소진됐고 열린 mustread 이슈도 없어 폴백 검색에서 골랐다. 그 검색의 어떤 후보도 학회 accept가 확인되지 않아 정책의 1순위 기준이 적용되지 않았고, 커뮤니티 신호가 결정했다. 550표에 81K 조회로 다른 모든 후보보다 한 자릿수 위이고, 아카이브에서 가장 붐비는 축 위에 정확히 놓여 있다. 어제의 ACE(2609.06072, EMNLP 2026)와 달리 방법론 논문이 아니라 시스템 리포트지만, KV 압축을 한 축이 아니라 세 축(층, 비트, 그리고 애초에 몇 개 층을 실행할지)의 동시 문제로 재정의하는 드문 사례다. 이 축의 다음 후보로는 버려진 캐시에 학습된 보완물을 생성하는 RestoreKV(2608.01247)와, 저랭크 쪽의 Iso-LoRA(2609.12123)를 남겨 둔다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-09-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
