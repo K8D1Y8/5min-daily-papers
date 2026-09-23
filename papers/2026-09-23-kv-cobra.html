@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · KV-COBRA: KV Cache Compression via Co-Optimized Bit-Rank Allocation</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · KV Cache · Low-rank + Quantization</span><span class="t-ko">Model Compression · KV Cache · 저랭크 + 양자화</span></span>
+      <span>2026.09.23</span>
+    </div>
+    <h1>KV-COBRA: KV Cache Compression via Co-Optimized Bit-Rank Allocation<br>
+      <span class="glow t-en">— same kernel, better budget: each attention head gets its own rank and bit-width</span>
+      <span class="glow t-ko">— 커널은 그대로, 예산만 다시: 어텐션 헤드마다 자기 랭크와 비트 폭을 준다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Sihyeon Ha</b>, Jaeho Lee, Yo-Seb Jeon <span class="t-en">(corresponding: Yo-Seb Jeon)</span><span class="t-ko">(교신: Yo-Seb Jeon)</span></span>
+      <span>🏛 POSTECH</span>
+      <span>🗓 2026-09-21</span>
+      <span>📄 <a href="https://arxiv.org/abs/2609.24298">arXiv:2609.24298</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">Strong KV-cache compressors keep the top-<i>r</i> SVD directions of each key and store them at <i>b</i> bits, but they use one global (<i>r</i>, <i>b</i>) for every head. KV-COBRA treats this as a rate-distortion budget problem (how to spend a fixed number of bits so total error is lowest): per head, pick the (<i>r</i>, <i>b</i>) pair that best trades truncation error against quantization error, then move bits between heads until each extra bit helps every head equally. Nothing changes at inference except the numbers, and the gains show up mostly below 1 bit per dimension.</p>
+    <p class="t-ko">강한 KV 캐시 압축기는 키마다 상위 <i>r</i>개 SVD 방향만 남기고 그걸 <i>b</i>비트로 저장한다. 그런데 모든 헤드에 전역 (<i>r</i>, <i>b</i>) 하나를 쓴다. KV-COBRA는 이를 rate-distortion 예산 문제(정해진 비트를 어디에 써야 전체 오차가 가장 작은가)로 본다. 헤드마다 잘라낸 오차와 양자화 오차를 가장 잘 맞바꾸는 (<i>r</i>, <i>b</i>)를 고르고, 이어서 비트 한 개를 더 줬을 때의 이득이 모든 헤드에서 같아질 때까지 헤드 사이로 비트를 옮긴다. 추론 때 바뀌는 건 숫자뿐이고, 이득은 주로 차원당 1비트 아래에서 나타난다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">At long context the KV cache, not the weights, sets the memory and bandwidth bill — and at extreme compression the question is no longer "which quantizer" but "where do the bits go".</p>
+    <p class="lead t-ko">긴 컨텍스트에서는 가중치가 아니라 KV 캐시가 메모리와 대역폭 비용을 정한다. 그리고 극단적 압축에서 물음은 더 이상 "어떤 양자화기냐"가 아니라 "비트를 어디에 쓰냐"다.</p>
+    <p class="t-en">Heads differ wildly. Some put almost all key energy in a handful of SVD directions; others spread it out. Under a uniform 2 bpd (bits per dimension — average storage bits per cached number) budget on LLaMA-3.1-8B, per-head distortion spans about 100× across the 256 KV heads (the figure annotates 123× max/min). A single global rank is wasteful for the concentrated heads and too small for the diffuse ones. KV-COBRA's claim is blunt: the bottleneck of low-bit KV compression is allocation across heads, not the kernel. That is directly relevant to the archive's low-rank KV thread (STAR-KV, JoLT, PuzzleKV), which mostly tunes rank alone.</p>
+    <p class="t-ko">헤드들은 서로 크게 다르다. 어떤 헤드는 키 에너지를 SVD 방향 몇 개에 거의 다 몰아 두고, 어떤 헤드는 넓게 퍼뜨린다. LLaMA-3.1-8B에 균일 2 bpd(차원당 비트 — 캐시에 저장되는 숫자 하나당 평균 비트) 예산을 걸면, 헤드별 왜곡이 256개 KV 헤드에서 약 100배 벌어진다(그림에는 최대/최소 123배로 표시). 전역 랭크 하나는 집중형 헤드엔 낭비이고 분산형 헤드엔 모자란다. KV-COBRA의 주장은 단호하다: 저비트 KV 압축의 병목은 커널이 아니라 헤드 간 배분이다. 이는 랭크만 주로 조정해 온 아카이브의 저랭크 KV 흐름(STAR-KV, JoLT, PuzzleKV)과 직접 맞닿는다.</p>
+    <figure class="fig">
+      <img src="fig/2609.24298/fig02_pipeline_final.png" alt="KV-COBRA pipeline: per-head SVD and two-level rank/bit allocation at calibration, then per-head rotate, truncate and quantize at inference">
+      <figcaption class="t-en"><b>Figure 2.</b> The pipeline. Once per model, a per-head SVD of prefill keys feeds a two-level allocator (C1 per head, C2 across heads, iterated 5×) that freezes each head's basis, rank <i>r</i>* and bit-width <i>b</i>*. At inference every head runs the same rotate–truncate–quantize kernel, just with different numbers — e.g. 80 dims × 2 bits for one head, 20 dims × 5 bits for another.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> 파이프라인. 모델당 한 번, prefill 키의 헤드별 SVD가 2단계 배분기(헤드 안 C1, 헤드 간 C2, 5회 반복)로 들어가 각 헤드의 기저·랭크 <i>r</i>*·비트 폭 <i>b</i>*를 고정한다. 추론 때는 모든 헤드가 같은 회전–절단–양자화 커널을 숫자만 달리해 돌린다. 예: 어떤 헤드는 80차원 × 2비트, 다른 헤드는 20차원 × 5비트.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2609.24298</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">0.5 bpd</div><div class="l"><span class="t-en">lowest rate evaluated (key cache, ~32× below FP16)</span><span class="t-ko">평가한 최저 비트율(키 캐시, FP16 대비 약 32배 작음)</span></div></div>
+      <div class="stat"><div class="n">~100×</div><div class="l"><span class="t-en">spread of per-head distortion under uniform 2 bpd (LLaMA-3.1-8B)</span><span class="t-ko">균일 2 bpd에서 헤드별 왜곡의 편차(LLaMA-3.1-8B)</span></div></div>
+      <div class="stat"><div class="n">2–8×</div><div class="l"><span class="t-en">lower cross-head distortion std after C2 rebalancing</span><span class="t-ko">C2 재배분 후 헤드 간 왜곡 표준편차 감소</span></div></div>
+      <div class="stat"><div class="n">&lt;200 ms</div><div class="l"><span class="t-en">full C1+C2 calibration time per model</span><span class="t-ko">모델당 C1+C2 보정 전체 시간</span></div></div>
+      <div class="stat"><div class="n">0</div><div class="l"><span class="t-en">extra per-token metadata bits (KIVI/GEAR pay +1.0 bpd)</span><span class="t-ko">토큰당 추가 메타데이터 비트(KIVI/GEAR는 +1.0 bpd)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">At 1 bpd, how close to FP16?</span><span class="t-ko">1 bpd에서 FP16에 얼마나 가까운가?</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 3 (excerpt).</b> KV-COBRA<sub>KL</sub> at 1.0 bpd, key-only compression, mean ± 1 SD over 5 seeds, shown as "compressed / FP16". PPL = mean over Wikitext-2, PTB, C4; zero-shot and LongBench = mean over five tasks each.</caption>
+        <caption class="t-ko"><b>Table 3 (발췌).</b> 1.0 bpd의 KV-COBRA<sub>KL</sub>, 키만 압축, 5개 시드 평균 ± 1 SD, "압축 / FP16"으로 표기. PPL은 Wikitext-2·PTB·C4 평균, zero-shot과 LongBench는 각 5개 과제 평균.</caption>
+        <thead><tr><th>Model</th><th>PPL ↓</th><th>Zero-shot ↑</th><th>LongBench F1 ↑</th></tr></thead>
+        <tbody>
+          <tr><td>LLaMA-3.1-8B</td><td>20.26 ± 0.87 / 7.67</td><td>51.6 ± 0.7 / 55.4</td><td>11.36 ± 0.77 / 15.80</td></tr>
+          <tr><td>Mistral-7B-v0.3</td><td>15.90 ± 0.13 / 13.15</td><td class="up">55.1 ± 0.5 / 56.3</td><td class="up">10.72 ± 0.49 / 11.54</td></tr>
+          <tr><td>Qwen2.5-7B-Instruct</td><td class="up">13.20 ± 0.06 / 9.50</td><td>52.5 ± 0.7 / 54.1</td><td>9.53 ± 0.30 / 10.64</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">1 · C1 — inside a head</span><span class="t-ko">1 · C1 — 헤드 안에서</span></div>
+          <div class="sub"><span class="t-en">Given a head's bit budget B, try every even rank r and set b = B/r. Keep the pair where dropping more directions would cost more than coarser quantization saves</span><span class="t-ko">헤드의 비트 예산 B가 주어지면 짝수 랭크 r을 모두 시도하고 b = B/r로 둔다. 방향을 더 버리는 손해가 양자화를 거칠게 하는 이득보다 커지는 지점의 쌍을 고른다</span></div>
+          <div class="latent">D(r,b) = Σ<sub>i&gt;r</sub> w<sub>i</sub> + q(b) Σ<sub>i≤r</sub> w<sub>i</sub> · q(b) = 2<sup>−2b</sup>/12</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">2 · C2 — across heads</span><span class="t-ko">2 · C2 — 헤드 사이에서</span></div>
+          <div class="sub"><span class="t-en">Treat C1 as a black box D*(B) and shift budget between heads until the marginal distortion (error saved by one more bit) is equal everywhere — classic water-filling</span><span class="t-ko">C1을 블랙박스 D*(B)로 보고, 한계 왜곡(비트 하나 더 줬을 때 줄어드는 오차)이 모든 헤드에서 같아질 때까지 예산을 옮긴다. 고전적인 water-filling이다</span></div>
+          <div class="latent">(D*)′(B<sub>ℓ,h</sub>) = −ν · damped update, 5 rounds</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">3 · freeze and run</span><span class="t-ko">3 · 고정하고 실행</span></div>
+          <div class="sub"><span class="t-en">A Hadamard rotation is fused into each head's projection so retained channels have equal variance; one uniform b-bit quantizer then fits all of them</span><span class="t-ko">각 헤드의 투영에 Hadamard 회전을 합쳐 남은 채널들의 분산을 같게 만든다. 그러면 균일 b비트 양자화기 하나로 전부 처리된다</span></div>
+          <div class="latent">V<sub>ℓ,h</sub> ← H<sub>r*</sub>·V<sub>ℓ,h</sub>[:, :r*] · one matmul, zero added latency</div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Everything is decided at calibration.</b> The inference kernel is the standard rotate-and-quantize one (as in SVDq/TurboQuant); only the per-head rank and bit-width differ. The weights <i>w<sub>i</sub></i> are either the key eigenvalues λ<sub>i</sub> (MSE version) or the query–key variance product σ²<sub>Q,i</sub>σ²<sub>K,i</sub> (attention-KL version, the main method).</div>
+      <div class="cap t-ko"><b>모든 것이 보정 단계에서 정해진다.</b> 추론 커널은 표준 회전-후-양자화 커널이다(SVDq/TurboQuant와 같음). 다른 건 헤드별 랭크와 비트 폭뿐이다. 가중치 <i>w<sub>i</sub></i>는 키 고유값 λ<sub>i</sub>(MSE 버전)이거나 쿼리–키 분산 곱 σ²<sub>Q,i</sub>σ²<sub>K,i</sub>(attention-KL 버전, 주 방법)이다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The idea in three pieces</span><span class="t-ko">아이디어를 셋으로 쪼개면</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">C1 + C2</span>
+        <h3><span class="t-en">Rank and bits are coupled</span><span class="t-ko">랭크와 비트는 묶여 있다</span></h3>
+        <p class="t-en">The best rank for a head depends on its bit-width and vice versa, so tuning one with the other held fixed cannot reach the joint optimum. C1 solves the inner trade-off by an O(d/2) enumeration; C2 solves the outer allocation with first-order conditions from rate-distortion theory. At 2 bpd the chosen ranks span roughly 16–100 and bit-widths 2–5 across heads.</p>
+        <p class="t-ko">헤드의 최적 랭크는 비트 폭에 달려 있고 그 반대도 마찬가지다. 그래서 하나를 고정하고 다른 하나만 조정하면 공동 최적에 닿지 못한다. C1은 안쪽 맞바꿈을 O(d/2) 열거로 풀고, C2는 rate-distortion 이론의 1차 조건으로 바깥 배분을 푼다. 2 bpd에서 고른 랭크는 헤드마다 대략 16–100, 비트 폭은 2–5에 걸친다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">Hadamard</span>
+        <h3><span class="t-en">Flatten variance for free</span><span class="t-ko">분산을 공짜로 평평하게</span></h3>
+        <p class="t-en">Retained SVD coordinates have variances spread over about 10³×, which would need a separate step-size per channel. A fused Walsh–Hadamard rotation (with a fixed random sign flip) collapses that to O(1) and pushes each channel toward Gaussian — the regime where Bennett's 2<sup>−2b</sup>/12 error model, which the whole solver relies on, is accurate.</p>
+        <p class="t-ko">남긴 SVD 좌표의 분산은 약 10³배에 걸쳐 퍼져 있어서, 채널마다 따로 스텝 크기를 둬야 한다. 합쳐 넣은 Walsh–Hadamard 회전(고정된 랜덤 부호 뒤집기 포함)이 이를 O(1)로 줄이고 각 채널을 가우시안 쪽으로 민다. 이 영역에서야 솔버 전체가 기대는 Bennett의 2<sup>−2b</sup>/12 오차 모델이 정확하다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">attention-KL</span>
+        <h3><span class="t-en">Rank directions by what the query sees</span><span class="t-ko">쿼리가 보는 만큼 방향 순위를 매긴다</span></h3>
+        <p class="t-en">A second-order bound on the KL divergence between clean and compressed attention gives a per-direction weight σ²<sub>Q,i</sub>σ²<sub>K,i</sub>. A direction with small key variance but large query variance would be cut by plain SVD truncation even though attention relies on it; reordering the basis by this weight before C1/C2 fixes that. This KL version wins on LongBench; the MSE version tends to win on perplexity.</p>
+        <p class="t-ko">깨끗한 어텐션과 압축된 어텐션 사이 KL 발산의 2차 상한에서 방향별 가중치 σ²<sub>Q,i</sub>σ²<sub>K,i</sub>가 나온다. 키 분산은 작지만 쿼리 분산이 큰 방향은, 어텐션이 거기에 기대는데도 일반 SVD 절단에선 잘려 나간다. C1/C2 전에 이 가중치로 기저 순서를 다시 매기면 이 문제가 해결된다. KL 버전은 LongBench에서, MSE 버전은 perplexity에서 대체로 이긴다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Calibrate once.</span><span class="t-ko">한 번만 보정한다.</span></b><span class="t-en"> Run 32 Wikitext-2 samples, collect each head's pre-RoPE key covariance (eigenvalues and SVD basis) and query variance in that basis.</span><span class="t-ko"> Wikitext-2 샘플 32개를 돌려, 헤드마다 RoPE 적용 전 키 공분산(고유값과 SVD 기저)과 그 기저에서의 쿼리 분산을 모은다.</span></li>
+      <li><b><span class="t-en">Reorder and allocate.</span><span class="t-ko">순서를 다시 매기고 배분한다.</span></b><span class="t-en"> Sort directions by w = σ²<sub>Q</sub>·λ, start every head at bpd·d bits, and alternate C1 (pick r*, b*) and C2 (move budget) for 5 rounds.</span><span class="t-ko"> 방향을 w = σ²<sub>Q</sub>·λ로 정렬하고, 모든 헤드를 bpd·d 비트에서 시작해 C1(r*, b* 선택)과 C2(예산 이동)를 5라운드 번갈아 돈다.</span></li>
+      <li><b><span class="t-en">Fuse and store.</span><span class="t-ko">합치고 저장한다.</span></b><span class="t-en"> Fold the Hadamard rotation into the truncated basis and keep (basis, r*, b*) per head.</span><span class="t-ko"> Hadamard 회전을 잘린 기저에 접어 넣고, 헤드마다 (기저, r*, b*)를 저장한다.</span></li>
+      <li><b><span class="t-en">Compress each token.</span><span class="t-ko">토큰마다 압축한다.</span></b><span class="t-en"> One matrix–vector multiply projects and rotates the key; quantize at b* bits; dequantize when attention reads it. Primitive-level attention runs 1.79–1.89× faster than FP16 SDPA at r = 16 (appendix).</span><span class="t-ko"> 행렬–벡터 곱 한 번으로 키를 투영·회전하고 b* 비트로 양자화하며, 어텐션이 읽을 때 역양자화한다. 부록에 따르면 r = 16에서 어텐션 연산 단위로 FP16 SDPA보다 1.79–1.89배 빠르다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">At ≥ 2 bpd the allocator barely matters; below 1 bpd it decides everything. If you work on low-rank KV compression, report results under 1 bpd or you may not see your method's real ranking.</p><p class="t-ko">2 bpd 이상에선 배분기가 거의 상관없고, 1 bpd 아래에선 모든 걸 좌우한다. 저랭크 KV 압축을 한다면 1 bpd 아래 결과를 보고해야 방법의 진짜 순위가 보인다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">The surrogate matters more than the solver: an exact DP solver lowered modeled distortion 12–16% yet worsened PPL by ~0.5. The error model is the weak link, which is why switching the objective to attention-KL helps where more MSE optimization cannot.</p><p class="t-ko">솔버보다 대리 목표(surrogate)가 더 중요하다. 정확한 DP 솔버는 모델링된 왜곡을 12–16% 낮췄지만 PPL은 약 0.5 나빠졌다. 약한 고리는 오차 모델이고, 그래서 MSE를 더 최적화하는 것보다 목표를 attention-KL로 바꾸는 게 효과가 있다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">In joint K+V compression, V-heavy splits win, and V at 2 bpd collapses on LLaMA and Mistral (PPL &gt; 150). Values need more bits than keys because their spectrum is flatter — a useful prior for any KV budget split.</p><p class="t-ko">K+V 공동 압축에서는 V에 비트를 더 주는 분할이 이기고, V를 2 bpd로 두면 LLaMA와 Mistral에서 무너진다(PPL &gt; 150). 값(V)은 스펙트럼이 더 평평해서 키보다 비트가 더 필요하다. 어떤 KV 예산 분할에도 쓸 만한 사전 지식이다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> "graceful" is relative. The headline results compress keys only (values stay FP16), yet at 1 bpd LLaMA's mean PPL still rises from 7.67 to 20.26 and LongBench F1 falls from 15.80 to 11.36. The only numeric table in the main text compares KV-COBRA's own two variants; the baseline comparison lives in plots (Fig. 4), and LongBench uses 50 samples per task with low absolute F1 even at FP16. The allocation insight is solid; the practical operating point is not yet shown.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> "완만하다"는 건 상대적이다. 대표 결과는 키만 압축한 것인데(값은 FP16 그대로), 그래도 1 bpd에서 LLaMA의 평균 PPL은 7.67에서 20.26으로 오르고 LongBench F1은 15.80에서 11.36으로 떨어진다. 본문의 유일한 수치 표는 KV-COBRA 자기 두 변형끼리의 비교이고, 베이스라인 비교는 그래프(Fig. 4)에만 있다. LongBench는 과제당 50개 샘플이며 FP16에서도 절대 F1이 낮다. 배분에 대한 통찰은 탄탄하지만, 실제로 쓸 만한 운용점은 아직 보여 주지 않았다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2609.24298">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2609.24298">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2609.24298">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2609.24298">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>the wishlist is fully drained and there are no open mustread issues, so this came from the fallback search (latent communication · compression · low-rank). No new candidate had a confirmed acceptance, so topic fit decided it: it is the newest unread paper (posted two days ago) on the archive's busiest axis, and it joins rank selection (STAR-KV, JoLT, PuzzleKV) with bit allocation instead of tuning rank alone. Preprint, no venue yet</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-09-23.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>wishlist가 모두 소진됐고 열린 mustread 이슈도 없어 대체 검색(잠재 통신 · 압축 · 저랭크)에서 골랐다. 새 후보 중 학회 채택이 확인된 것이 없어 주제 적합도로 정했다. 아카이브에서 가장 붐비는 축의 가장 최신 미열람 논문(이틀 전 게시)이고, 랭크만 조정하던 흐름(STAR-KV, JoLT, PuzzleKV)에 비트 배분을 결합한다. 프리프린트, 아직 학회 없음</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-09-23.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
