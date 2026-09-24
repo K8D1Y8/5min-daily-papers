@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · StepKV: Step-Aware KV Cache Compression for LLM Agents</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · KV Cache · LLM Agents</span><span class="t-ko">Model Compression · KV Cache · LLM 에이전트</span></span>
+      <span>2026.09.24</span>
+    </div>
+    <h1>StepKV: Step-Aware KV Cache Compression for LLM Agents<br>
+      <span class="glow t-en">— an agent thinks in steps, so evict by step: score each Thought–Action–Observation, then let tokens inherit it</span>
+      <span class="glow t-ko">— 에이전트는 스텝 단위로 생각한다. 그러니 스텝 단위로 버린다: Thought–Action–Observation마다 점수를 매기고 토큰이 그 점수를 물려받는다</span>
+    </h1>
+    <div class="meta">
+      <span>👥 <b>Boyu Feng</b>, Jiahong Liu, Yifan Li, … Irwin King <span class="t-en">(corresponding: Jiahong Liu)</span><span class="t-ko">(교신: Jiahong Liu)</span></span>
+      <span>🏛 CUHK · Huawei</span>
+      <span>🗓 2026-08-26</span>
+      <span>📄 <a href="https://arxiv.org/abs/2609.22158">arXiv:2609.22158</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <p class="t-en">KV-cache eviction methods such as H<sub>2</sub>O and TOVA rank single tokens by attention. In a ReAct-style agent (one that loops Thought → Action → Observation with tools), that throws away early evidence that only becomes useful several steps later, and the agent derails. StepKV gives every finished step a utility score (was the observation usable? is it new? is the action a repeat? is it reused later?), adds it to each token's attention score, and keeps the top tokens. At a 20% cache budget on HotpotQA with Qwen2.5-7B it keeps 18.07 EM (exact match) where token-only baselines fall to ~1.</p>
+    <p class="t-ko">H<sub>2</sub>O나 TOVA 같은 KV 캐시 축출(eviction) 방법은 토큰 하나하나를 어텐션으로 순위 매긴다. ReAct식 에이전트(도구를 쓰며 Thought → Action → Observation을 반복하는 에이전트)에서는 이 방식이, 몇 스텝 뒤에야 쓸모가 드러나는 초기 증거를 버리고, 에이전트가 길을 잃는다. StepKV는 끝난 스텝마다 효용 점수(관찰이 쓸 만했나? 새로운가? 행동이 반복인가? 나중에 다시 쓰이나?)를 매기고, 이를 각 토큰의 어텐션 점수에 더해 상위 토큰만 남긴다. Qwen2.5-7B로 HotpotQA를 20% 캐시 예산에서 돌리면 EM(정답 완전 일치율) 18.07을 유지하는데, 토큰 단위 베이스라인은 약 1로 떨어진다.</p>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
+    <p class="lead t-en">Agents are where context grows fastest — and where the unit of meaning is a step, not a token.</p>
+    <p class="lead t-ko">컨텍스트가 가장 빨리 불어나는 곳은 에이전트다. 그리고 거기서 의미의 단위는 토큰이 아니라 스텝이다.</p>
+    <p class="t-en">One question turns into a chain of thoughts, tool calls and retrieved pages; on BrowseComp-Plus a trajectory can pass 100K tokens. Classic eviction assumes "what gets attention now matters later". Agents break that: the director's name found in step 1 gets little attention during step 2's failed search, then is needed again in step 3. The authors call this <b>Reasoning Continuity Disruption</b>. For this archive, it is a bridge between the multi-agent/agent-memory thread and the KV-compression thread: the cache is being managed by the <i>structure of the agent's reasoning</i>, not by attention alone.</p>
+    <p class="t-ko">질문 하나가 생각·도구 호출·검색 결과의 사슬로 불어난다. BrowseComp-Plus에서는 궤적 하나가 100K 토큰을 넘기도 한다. 고전적인 축출은 "지금 어텐션을 받는 게 나중에도 중요하다"고 가정한다. 에이전트는 이 가정을 깬다. 1스텝에서 찾은 감독 이름은 2스텝의 실패한 검색 동안 어텐션을 거의 못 받다가, 3스텝에서 다시 필요해진다. 저자들은 이를 <b>Reasoning Continuity Disruption</b>(추론 연속성 단절)이라 부른다. 이 아카이브에선 멀티에이전트·에이전트 메모리 흐름과 KV 압축 흐름을 잇는 논문이다. 캐시를 어텐션만이 아니라 <i>에이전트 추론의 구조</i>로 관리한다.</p>
+    <figure class="fig">
+      <img src="fig/2609.22158/fig01_case.png" alt="A three-step ReAct trajectory for 'where was the director of Snatch born'; token-only pruning evicts 'Guy Ritchie' and answers Britain/London, StepKV keeps it and answers Hatfield">
+      <figcaption class="t-en"><b>Figure 1.</b> "In which city was the director of the 2000 film Snatch born?" Step 1 finds Guy Ritchie, step 2's search fails, step 3 finds Hatfield. Token-only pruning evicts "Snatch, 2000, Guy Ritchie" in step 1 and ends at "Britain, London". StepKV scores step 1 high (evidence gain) and step 2 low (invalid observation), so it drops step 2's filler instead and answers correctly.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> "2000년 영화 Snatch의 감독은 어느 도시에서 태어났나?" 1스텝이 Guy Ritchie를 찾고, 2스텝 검색은 실패하고, 3스텝이 Hatfield를 찾는다. 토큰 단위 가지치기는 1스텝에서 "Snatch, 2000, Guy Ritchie"를 버리고 "Britain, London"으로 끝난다. StepKV는 1스텝을 높게(증거 획득), 2스텝을 낮게(쓸모없는 관찰) 평가해 2스텝의 군더더기를 대신 버리고 정답을 낸다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2609.22158</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
+    <div class="stats">
+      <div class="stat"><div class="n">18.07 vs 1.53</div><div class="l"><span class="t-en">HotpotQA EM at 20% budget, Qwen2.5-7B (StepKV vs H<sub>2</sub>O)</span><span class="t-ko">20% 예산 HotpotQA EM, Qwen2.5-7B (StepKV 대 H<sub>2</sub>O)</span></div></div>
+      <div class="stat"><div class="n">25.07 / 25.27</div><div class="l"><span class="t-en">HotpotQA EM at 50% budget vs Full KV, Llama-3.1-8B</span><span class="t-ko">50% 예산 HotpotQA EM 대 Full KV, Llama-3.1-8B</span></div></div>
+      <div class="stat"><div class="n">−15.6 EM</div><div class="l"><span class="t-en">drop on 2WikiMultihopQA when the step score is removed (Qwen)</span><span class="t-ko">스텝 점수를 빼면 2WikiMultihopQA에서 떨어지는 EM (Qwen)</span></div></div>
+      <div class="stat"><div class="n">0</div><div class="l"><span class="t-en">extra model passes — token saliency reused from observation prefill</span><span class="t-ko">추가 모델 패스 — 토큰 중요도는 관찰 prefill에서 재사용</span></div></div>
+      <div class="stat"><div class="n">&gt;100K</div><div class="l"><span class="t-en">tokens per trajectory on BrowseComp-Plus (long-horizon web test)</span><span class="t-ko">BrowseComp-Plus(장기 웹 추론 테스트)의 궤적당 토큰 수</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">When the budget gets tight</span><span class="t-ko">예산이 빠듯해지면</span></h2>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1 (excerpt).</b> Qwen2.5-7B-Instruct, EM (%), mean over 3 seeds (± std omitted). Budget = fraction of prunable trajectory tokens kept. Bold/green = best compressed result at that budget.</caption>
+        <caption class="t-ko"><b>Table 1 (발췌).</b> Qwen2.5-7B-Instruct, EM(%), 3개 시드 평균(± 표준편차 생략). 예산 = 가지치기 대상 궤적 토큰 중 남기는 비율. 굵게/초록 = 해당 예산의 최고 압축 결과.</caption>
+        <thead><tr><th>Method</th><th>Budget</th><th>HotpotQA</th><th>2WikiMQA</th><th>MuSiQue</th></tr></thead>
+        <tbody>
+          <tr><td>Full KV</td><td>100%</td><td>26.40</td><td>24.20</td><td>5.13</td></tr>
+          <tr><td>H<sub>2</sub>O</td><td>20%</td><td>1.53</td><td>1.07</td><td>0.00</td></tr>
+          <tr><td>TOVA</td><td>20%</td><td>0.73</td><td>1.47</td><td>0.07</td></tr>
+          <tr><td>StepKV</td><td>20%</td><td class="up">18.07</td><td class="up">13.47</td><td class="up">2.80</td></tr>
+          <tr><td>StepKV</td><td>50%</td><td class="up">23.23</td><td class="up">22.67</td><td class="up">7.27</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">1 · score the new step</span><span class="t-ko">1 · 새 스텝에 점수</span></div>
+          <div class="sub"><span class="t-en">When step k finishes, reward a usable observation and new content (vs. every earlier step), penalize an action that repeats an earlier one</span><span class="t-ko">스텝 k가 끝나면, 쓸 만한 관찰과 (이전 모든 스텝 대비) 새로운 내용에 보상하고, 이전과 겹치는 행동엔 벌점을 준다</span></div>
+          <div class="latent">r<sub>k</sub> = valid<sub>k</sub> + gain<sub>k</sub> − λ·red<sub>k</sub></div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">2 · credit old steps on reuse</span><span class="t-ko">2 · 재사용되면 옛 스텝에 가산</span></div>
+          <div class="sub"><span class="t-en">Each new observation that overlaps an old one adds delayed credit to that old step, so early evidence can climb back up</span><span class="t-ko">새 관찰이 옛 관찰과 겹칠 때마다 그 옛 스텝에 뒤늦은 점수를 더한다. 그래서 초기 증거가 다시 올라올 수 있다</span></div>
+          <div class="latent">c<sub>k</sub> += min(1, η·sim(Obs<sub>t</sub>, Obs<sub>k</sub>)) · S<sub>k</sub> = clip(w<sub>r</sub>r<sub>k</sub> + w<sub>c</sub>log(1+c<sub>k</sub>))</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">3 · rank tokens, keep top B</span><span class="t-ko">3 · 토큰 순위, 상위 B개 유지</span></div>
+          <div class="sub"><span class="t-en">Every token inherits its step's utility on top of its own attention score; one global sort under the keep ratio ρ</span><span class="t-ko">모든 토큰이 자기 어텐션 점수 위에 소속 스텝의 효용을 물려받는다. 유지 비율 ρ 아래에서 전역 정렬 한 번</span></div>
+          <div class="latent">P<sub>i</sub> = α·T<sub>i</sub> + β·S<sub>k(i)</sub> · B<sub>t</sub> = ⌊ρ·N<sub>t</sub>⌋</div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Pruning happens only at step boundaries.</b> The prompt and question are protected; only trajectory tokens are candidates. "sim" is a cheap text-overlap score over up to 64 extracted evidence cues per field — no embedding model, no extra forward pass. Added cost per boundary is O(N<sub>t</sub> log N<sub>t</sub>), dominated by the sort.</div>
+      <div class="cap t-ko"><b>가지치기는 스텝 경계에서만 일어난다.</b> 프롬프트와 질문은 보호되고, 궤적 토큰만 후보다. "sim"은 필드마다 최대 64개 증거 단서를 뽑아 겹침을 세는 값싼 텍스트 유사도다. 임베딩 모델도, 추가 순전파도 없다. 경계당 추가 비용은 O(N<sub>t</sub> log N<sub>t</sub>)이고 정렬이 대부분을 차지한다.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The idea in three pieces</span><span class="t-ko">아이디어를 셋으로 쪼개면</span></h2>
+    <div class="mech">
+      <div class="m">
+        <span class="tag">unit mismatch</span>
+        <h3><span class="t-en">Compress in the unit you reason in</span><span class="t-ko">추론하는 단위로 압축한다</span></h3>
+        <p class="t-en">Token-level eviction treats the cache as a flat stream. But an agent's evidence arrives and is reused a step at a time, and a step's value is uneven and often delayed. Figure 2 in the paper shows H<sub>2</sub>O and TOVA wiping out early-step cohorts within a few steps, while StepKV keeps a stable share of prior-step tokens.</p>
+        <p class="t-ko">토큰 단위 축출은 캐시를 평평한 흐름으로 본다. 하지만 에이전트의 증거는 스텝 단위로 들어오고 스텝 단위로 다시 쓰이며, 스텝의 가치는 고르지 않고 흔히 뒤늦게 드러난다. 논문의 Figure 2는 H<sub>2</sub>O와 TOVA가 몇 스텝 만에 초기 스텝 토큰 묶음을 쓸어내는 반면, StepKV는 이전 스텝 토큰의 몫을 안정적으로 지킨다는 걸 보여 준다.</p>
+      </div>
+      <div class="m">
+        <span class="tag">immediate + delayed</span>
+        <h3><span class="t-en">Two clocks for step value</span><span class="t-ko">스텝 가치의 두 시계</span></h3>
+        <p class="t-en">Utility has an immediate part set when the step closes (valid, novel, non-repetitive) and a delayed part that grows when later observations echo it. The log and clipping keep long trajectories from inflating old steps without bound. Ablations on MuSiQue show each of the four cues matters (−2.4 to −3.4 EM each on Qwen).</p>
+        <p class="t-ko">효용에는 스텝이 끝날 때 정해지는 즉시 부분(쓸 만한가, 새로운가, 반복이 아닌가)과, 나중 관찰이 그 내용을 되풀이할 때 커지는 지연 부분이 있다. 로그와 클리핑이 긴 궤적에서 옛 스텝 점수가 끝없이 부풀지 않게 막는다. MuSiQue 절제 실험에서 네 단서 각각이 효과가 있다(Qwen에서 각 −2.4~−3.4 EM).</p>
+      </div>
+      <div class="m">
+        <span class="tag">soft, not hard</span>
+        <h3><span class="t-en">A bias, not a lock</span><span class="t-ko">잠금이 아니라 기울기</span></h3>
+        <p class="t-en">No step is permanently protected. Step utility is bounded, so it mainly breaks ties between tokens of similar attention; a token with much higher attention still wins. Figure 7 finds intermediate β best — step-only or token-only both do worse, and Table 3 shows removing either signal hurts.</p>
+        <p class="t-ko">어떤 스텝도 영구 보호되지 않는다. 스텝 효용에는 상한이 있어서, 주로 어텐션이 비슷한 토큰들 사이의 우열을 가른다. 어텐션이 훨씬 큰 토큰은 여전히 이긴다. Figure 7에선 중간 β가 가장 좋다. 스텝만 쓰거나 토큰만 쓰면 둘 다 나쁘고, Table 3에선 어느 신호를 빼도 성능이 떨어진다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
+    <ol class="steps">
+      <li><b><span class="t-en">Finish the step first.</span><span class="t-ko">스텝을 먼저 끝낸다.</span></b><span class="t-en"> The agent generates Thought and Action, runs the tool, appends the Observation — no eviction mid-step.</span><span class="t-ko"> 에이전트가 Thought와 Action을 만들고, 도구를 돌리고, Observation을 붙인다. 스텝 도중엔 축출하지 않는다.</span></li>
+      <li><b><span class="t-en">Score it.</span><span class="t-ko">점수를 매긴다.</span></b><span class="t-en"> Compute validity, evidence gain and action redundancy against all earlier steps to get r<sub>k</sub>; start its reuse counter at 0.</span><span class="t-ko"> 이전 모든 스텝과 비교해 유효성·증거 획득·행동 중복을 계산해 r<sub>k</sub>를 얻고, 재사용 카운터는 0에서 시작한다.</span></li>
+      <li><b><span class="t-en">Update the past.</span><span class="t-ko">과거를 갱신한다.</span></b><span class="t-en"> Compare the new observation with each old one and add capped reuse credit; recompute every S<sub>k</sub>.</span><span class="t-ko"> 새 관찰을 옛 관찰 각각과 비교해 상한이 있는 재사용 점수를 더하고, 모든 S<sub>k</sub>를 다시 계산한다.</span></li>
+      <li><b><span class="t-en">Select and evict.</span><span class="t-ko">고르고 버린다.</span></b><span class="t-en"> Take attention saliency T<sub>i</sub> (from the prefill already done), form P<sub>i</sub> = αT<sub>i</sub> + βS<sub>k</sub>, keep the top ⌊ρN<sub>t</sub>⌋ trajectory tokens, drop the rest.</span><span class="t-ko"> 이미 끝난 prefill에서 어텐션 중요도 T<sub>i</sub>를 가져와 P<sub>i</sub> = αT<sub>i</sub> + βS<sub>k</sub>를 만들고, 궤적 토큰 중 상위 ⌊ρN<sub>t</sub>⌋개만 남긴다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
+    <div class="take">
+      <div class="t"><span class="ic">🚀</span><p class="t-en">For agents, <i>when</i> you prune may matter as much as <i>what</i> you prune. Evicting only at step boundaries keeps each step internally coherent; under the same keep ratio, token-only methods can even miss their expected cache savings, because the derailed agent loops and generates more.</p><p class="t-ko">에이전트에선 <i>무엇을</i> 버리느냐만큼 <i>언제</i> 버리느냐가 중요할 수 있다. 스텝 경계에서만 축출하면 각 스텝 안이 온전하다. 같은 유지 비율에서도 토큰 단위 방법은 기대한 캐시 절감을 놓치기도 한다. 길을 잃은 에이전트가 맴돌며 더 많이 생성하기 때문이다.</p></div>
+      <div class="t"><span class="ic">🧠</span><p class="t-en">Cheap symbolic signals from the agent loop (tool failed? action repeated? evidence echoed later?) are a strong prior for cache value — and they are free, unlike another attention pass. The same idea should carry to latent multi-agent setups that relay KV caches between agents.</p><p class="t-ko">에이전트 루프에서 나오는 값싼 기호적 신호(도구 실패? 행동 반복? 증거가 나중에 되풀이됨?)는 캐시 가치에 대한 강한 사전 정보다. 어텐션을 한 번 더 계산하는 것과 달리 공짜다. 에이전트끼리 KV 캐시를 전달하는 잠재 멀티에이전트 설정에도 같은 발상이 통할 것이다.</p></div>
+      <div class="t"><span class="ic">🔬</span><p class="t-en">Deeper trajectories are harder for everyone (Figure 6), which is exactly where cross-step dependence piles up. Benchmarks for agent KV compression should report accuracy by step count, not just an average.</p><p class="t-ko">궤적이 깊을수록 모두에게 어렵다(Figure 6). 바로 스텝 간 의존이 쌓이는 곳이다. 에이전트 KV 압축 벤치마크는 평균만이 아니라 스텝 수별 정확도를 보고해야 한다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <span class="t-en">⚠️ <b>One critical note:</b> the comparison is not apples-to-apples. StepKV waits for a step to finish before evicting, while H<sub>2</sub>O/TOVA/TokenSkipping prune inside an ongoing step — and the paper itself credits part of the gain to this schedule. No baseline is re-run with the same step-boundary schedule, so the near-zero baseline scores at 20% may say more about mid-step eviction than about the step score. The reference rows are also odd (on Llama the unconstrained ReAct row scores 6.80 EM vs 25.27 for Full KV), absolute accuracy is low (MuSiQue Full KV EM 5.13), and there are only 3 seeds on two 7–8B models. BrowseComp-Plus results appear only as normalized radar plots.</span>
+      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> 비교 조건이 같지 않다. StepKV는 스텝이 끝난 뒤에만 축출하지만, H<sub>2</sub>O/TOVA/TokenSkipping은 진행 중인 스텝 안에서 가지치기한다. 논문 스스로도 이득의 일부를 이 일정 덕으로 돌린다. 같은 스텝 경계 일정으로 베이스라인을 다시 돌린 결과가 없어서, 20%에서 베이스라인이 거의 0인 것은 스텝 점수보다 스텝 중간 축출의 문제를 보여 주는 것일 수도 있다. 기준 행도 이상하다(Llama에서 제약 없는 ReAct 행이 EM 6.80, Full KV는 25.27). 절대 정확도가 낮고(MuSiQue Full KV EM 5.13), 7–8B 모델 두 개에 시드 3개뿐이다. BrowseComp-Plus 결과는 정규화된 레이더 그림으로만 나온다.</span>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2609.22158">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2609.22158">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2609.22158">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2609.22158">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>the wishlist is fully drained and there are no open mustread issues, so this came from the fallback search (latent communication · compression · low-rank). No new candidate had a confirmed acceptance, so topic fit decided it: it is the freshest unread paper (v2 posted two days ago) that sits between the archive's two main threads — KV-cache compression and LLM agents — and it manages the cache by the agent's step structure rather than attention alone. Preprint, no venue yet</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-09-24.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>wishlist가 모두 소진됐고 열린 mustread 이슈도 없어 대체 검색(잠재 통신 · 압축 · 저랭크)에서 골랐다. 새 후보 중 학회 채택이 확인된 것이 없어 주제 적합도로 정했다. 아카이브의 두 주요 흐름인 KV 캐시 압축과 LLM 에이전트 사이에 놓인 가장 최신 미열람 논문(v2가 이틀 전 게시)이고, 어텐션만이 아니라 에이전트의 스텝 구조로 캐시를 관리한다. 프리프린트, 아직 학회 없음</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-09-24.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
