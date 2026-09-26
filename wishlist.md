@@ -6,10 +6,9 @@
 #  - 이 줄처럼 '#' 로 시작하면 주석(무시).
 #  - 비어 있으면(미처리 항목 0개) 아래 FALLBACK 정책으로 alphaXiv 자동 검색.
 #
-# === FALLBACK 정책 (위시리스트 소진 시) ===
-#  주제: Multi-Agent Latent Communication / Model Compression / Low-rank Decomposition
-#  우선순위: 가장 최근 학회(NeurIPS·ICML·ICLR·ACL·EMNLP) accept 논문 우선.
-#  범위: arXiv (CS/ML). 이미 done.log 에 있는 건 제외.
+# === FALLBACK 정책 (위시리스트 소진 시) — 2026-09-26 개정 ===
+#  주목도 점수로 고른다: 탑 학회 메인 트랙 · 저명 연구실/저자 · 프런티어 랩 기술 보고서 · 화제성(alphaXiv/HF/GitHub).
+#  목록·점수·기준값은 sources.md 에서 직접 고칠 수 있다. 이미 done.log 에 있는 건 제외.
 #
 # ============================================================
 # === ICML 2026 큐 (2026-06-22 큐잉) — ✅ 10/10 전부 처리 완료 (2026-07-21 소진) ===

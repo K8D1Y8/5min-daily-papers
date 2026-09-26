@@ -294,3 +294,87 @@ body.lang-ko .t-en{display:none !important}
   .agent-row{flex-direction:column}
   .flow{transform:rotate(90deg)}
 }
+/* ============================================================================
+   v2 "visual-first" card components (2026-09-26) — additive only; v1 cards unaffected.
+   signal badges · bullet TL;DR · bar charts · 2-up grid · one-line verdicts
+   ============================================================================ */
+:root{
+  --viz-hl:#C8643F;       /* emphasis mark (ours)   — validated vs #BDB6A6: ΔE 20 normal / 17 deutan */
+  --viz-base:#BDB6A6;     /* de-emphasis mark (baselines); every bar is direct-labeled (contrast relief) */
+  --viz-track:#F1EDE3;
+  --viz-ref:#403C34;
+}
+/* signal badges under the title: why this paper is worth 5 minutes */
+.badges{display:flex;flex-wrap:wrap;gap:7px;margin:4px 0 12px;font-family:var(--sans)}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;border-radius:999px;
+  padding:5px 11px;background:var(--card);border:1px solid var(--line);color:var(--ink-soft);line-height:1.2}
+.badge.venue{background:var(--clay);border-color:transparent;color:#fff}
+.badge.lab{background:var(--clay-tint);border-color:transparent;color:var(--clay-deep)}
+.badge.hot{background:#FFF4DC;border-color:#F1DFB4;color:#7A5A12}
+.badge.pre{color:var(--muted)}
+/* TL;DR as 4 labeled bullets: Motivation → Analysis → Method → Results */
+.tldr ul.tl{list-style:none;margin:2px 0 0;padding:0;display:grid;gap:9px}
+.tldr ul.tl li{display:grid;grid-template-columns:92px 1fr;gap:12px;align-items:baseline;font-size:16px;line-height:1.55;color:var(--ink-soft)}
+.tldr ul.tl .k{font-family:var(--sans);font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--clay-deep)}
+.tldr ul.tl li.m{background:var(--clay-tint-2);border-radius:10px;padding:8px 10px;margin:0 -10px}
+.tldr ul.tl b{color:var(--ink);font-weight:650}
+/* custom charts (horizontal bars; values start at 0; width = value / axis max) */
+figure.chart{margin:16px 0;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px 12px;box-shadow:var(--shadow);font-family:var(--sans)}
+.chart .ct{font-size:13px;font-weight:700;color:var(--ink);margin:0 0 2px}
+.chart .cs{font-size:11.5px;color:var(--muted);margin:0 0 10px}
+.bars{--lw:104px;--vw:52px;display:grid}
+.bar{display:grid;grid-template-columns:var(--lw) 1fr var(--vw);align-items:center;gap:10px;padding:4px 0;border-radius:6px}
+.bar:hover{background:var(--card-2)}
+.bar .bl{font-size:12.5px;color:var(--ink-soft);font-weight:600;line-height:1.2}
+.bar .bv{font-size:12.5px;color:var(--ink-soft);font-weight:650;font-variant-numeric:tabular-nums;text-align:left;white-space:nowrap}
+.bar .bt{position:relative;height:16px;background:var(--viz-track);border-radius:0 4px 4px 0}
+.bar .bf{display:block;height:100%;width:var(--w);background:var(--viz-base);border-radius:0 4px 4px 0}
+.bar.hl .bf{background:var(--viz-hl)}
+.bar.hl .bl,.bar.hl .bv{color:var(--ink);font-weight:800}
+.bars.mono .bf{background:var(--viz-hl)}   /* single series (all bars are "ours"): accent fill, regular labels */
+.bars[style*="--x"] .bt:after{content:"";position:absolute;left:var(--x);top:-4px;bottom:-4px;width:1px;background:var(--viz-ref);opacity:.7}
+/* 2-part stacked split bar (e.g. share A vs share B) */
+.bar .bt.stack{display:flex;gap:2px;background:transparent}
+.bt.stack .seg{flex:0 0 calc(var(--w) - 1px);height:100%;display:flex;align-items:center;justify-content:center;
+  font-size:10.5px;font-weight:700;color:#fff;overflow:visible;white-space:nowrap}
+.bt.stack .seg.a{background:var(--viz-hl);border-radius:0}
+.bt.stack .seg.b{background:var(--viz-base);color:var(--ink);border-radius:0 4px 4px 0}
+.chart .legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:11.5px;color:var(--muted);margin:2px 0 8px}
+.chart .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.chart .legend i.a{background:var(--viz-hl)} .chart .legend i.b{background:var(--viz-base)}
+.chart .legend i.r{width:10px;height:2px;border-radius:0;background:var(--viz-ref);vertical-align:3px}
+.chart figcaption{margin-top:8px;font-size:12px;color:var(--muted);line-height:1.5}
+.chart figcaption b{color:var(--clay-deep)}
+/* two visuals side by side on desktop, stacked on phones */
+.vgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.vgrid figure.chart{margin:0}
+.vgrid .bars{--lw:92px;--vw:46px}
+/* v2.1 guiding text: intuition box · one-sentence visual leads · compact 3-step summary */
+.intuit{background:linear-gradient(160deg,#FBEFE9,#F7F4EC);border:1px solid #ECD3C6;border-radius:14px;padding:14px 18px;margin:18px 0 0}
+.intuit .lab{font-family:var(--sans);font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--clay-deep)}
+.intuit p{margin:6px 0 0;font-size:15.5px;line-height:1.66;color:var(--ink-soft)}
+.intuit b{color:var(--ink);font-weight:650}
+.vlead{font-size:16.5px;line-height:1.62;color:var(--ink-soft);margin:2px 0 12px}
+.vlead b{color:var(--ink);font-weight:650}
+ol.steps.compact{margin:6px 0 4px}
+ol.steps.compact li{padding:8px 0 8px 40px}
+ol.steps.compact li:before{width:26px;height:26px;top:8px;font-size:13px;border-radius:8px}
+ol.steps.compact b,ol.steps.compact b span{font-size:15px;color:var(--ink)}
+.vlead.gap{margin-top:18px}
+/* one-line verdicts: 💡 takeaway + ⚠️ caveat */
+.verdict{display:grid;gap:10px}
+.verdict .v{display:grid;grid-template-columns:26px 1fr;gap:8px;align-items:start;background:var(--card);border:1px solid var(--line);
+  border-radius:12px;padding:12px 14px;font-size:14.5px;line-height:1.55;color:var(--ink-soft)}
+.verdict .v.take{border-left:3px solid var(--clay)}
+.verdict .v.warn{border-left:3px solid var(--clay-deep);background:var(--card-2)}
+.verdict .v .ic{font-size:17px;line-height:1.3}
+.verdict .v p{margin:0}
+@media(max-width:640px){
+  .vgrid{grid-template-columns:1fr}
+  .tldr ul.tl li{grid-template-columns:1fr;gap:2px}
+  .bars,.vgrid .bars{--lw:92px;--vw:48px}
+  .stats.three{grid-template-columns:1fr;gap:8px}
+  .stats.three .stat{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center;text-align:left;padding:12px 14px}
+  .stats.three .stat .l{margin-top:0}
+}
+figure.fig a.zoom{display:block;cursor:zoom-in}

@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · FreeToken: Efficient Edge-Native MoE Serving with Bandwidth-Adaptive Execution</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Efficient Inference · MoE Offloading · Edge Serving</span><span class="t-ko">Efficient Inference · MoE 오프로딩 · 로컬 서빙</span></span>
+      <span>2026.09.26</span>
+    </div>
+    <h1>FreeToken: Efficient Edge-Native MoE Serving with Bandwidth-Adaptive Execution<br>
+      <span class="glow t-en">— run a 284B MoE on a gaming PC by splitting each expert miss between PCIe and CPU by measured bandwidth</span>
+      <span class="glow t-ko">— GPU에 없는 전문가(expert)를 잰 대역폭 비율대로 PCIe와 CPU에 나눠, 게이밍 PC에서 284B MoE를 돌린다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge lab">🏛 Berkeley · Stoica · Zaharia · Keutzer · Song Han</span>
+      <span class="badge hot">▲ 103 alphaXiv · 112 HF · ★ 13.8k GitHub</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Shuo Yang*</b>, Xiaoze Fan*, Melissa Pan, Haocheng Xi, Zhe Wang, Shanlin Sun, Kurt Keutzer, Song Han, Matei Zaharia, Chenfeng Xu, Ion Stoica <span class="t-en">(*equal · corresponding: Shuo Yang, Chenfeng Xu)</span><span class="t-ko">(*공동 1저자 · 교신: Shuo Yang, Chenfeng Xu)</span></span>
+      <span>🏛 UC Berkeley · UT Austin</span>
+      <span>🗓 2026-08-17</span>
+      <span>📄 <a href="https://arxiv.org/abs/2608.16157">arXiv:2608.16157</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">284B–753B open MoE models don't fit consumer GPUs, and current local engines stall on multi-turn agent sessions.</span><span class="t-ko">284B–753B 공개 MoE(토큰마다 전문가 일부만 쓰는 모델)는 소비자용 GPU에 안 들어가고, 지금의 로컬 엔진은 여러 턴 에이전트 세션에서 멈춘다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Prefill touches nearly every expert, so transfer dominates. A decode miss can go over PCIe or run on the CPU, and the best mix is machine-specific.</span><span class="t-ko">prefill(프롬프트를 한꺼번에 처리하는 단계)은 거의 모든 전문가를 건드려 전송이 시간을 잡아먹는다. decode(토큰을 하나씩 만드는 단계)의 미스는 PCIe(GPU–CPU 연결 버스)로 옮기거나 CPU에서 돌릴 수 있고, 알맞은 비율은 기계마다 다르다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Let measured bandwidth split the work.</b> An LRU (least-recently-used) GPU cache catches most experts. Of m misses, q* = m·B<sub>PCIe</sub>/B<sub>host</sub> are copied while the CPU computes the rest, so both finish together.</span><span class="t-ko"><b>잰 대역폭이 일을 나누게 한다.</b> LRU(가장 오래 안 쓴 것부터 버리는) GPU 캐시가 전문가 대부분을 잡는다. 미스 m개 중 q* = m·B<sub>PCIe</sub>/B<sub>host</sub>개는 GPU로 옮기고 나머지는 CPU가 동시에 계산해, 두 쪽이 함께 끝난다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">1.3–2.1× faster decode than the best baseline on five consumer GPUs; 35B at 39.3 tok/s on an 8 GB laptop; 753B on one workstation GPU.</span><span class="t-ko">소비자용 GPU 다섯 대에서 가장 강한 기준 엔진보다 decode가 1.3–2.1배 빠르다. 8 GB 노트북에서 35B가 39.3 tok/s, 워크스테이션 GPU 한 장에서 753B가 돈다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Think of VRAM as a small desk and host RAM as a bookshelf. A missing expert can be <b>carried to the desk</b> (PCIe) or <b>read at the shelf</b> (CPU). FreeToken does both at once and splits the pile so both finish together; how it splits depends on how fast each path is on your machine.</p>
+    <p class="t-ko">VRAM을 작은 책상, 호스트 RAM을 책장이라고 생각하면 쉽다. 필요한 전문가가 책상에 없으면 <b>책상으로 가져오거나</b>(PCIe) <b>책장 앞에서 바로 읽을</b> 수 있다(CPU). FreeToken은 둘을 동시에 하되 두 쪽이 같이 끝나도록 나눈다. 얼마씩 나눌지는 내 기계에서 각 길이 얼마나 빠른지로 정해진다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">The system in one figure</span><span class="t-ko">한 장으로 보는 시스템</span></h2>
+    <p class="vlead t-en"><b>Two phases, two different bottlenecks.</b> Prefill moves almost the whole expert pool, so the job is hiding transfer; decode touches only a few experts, so the job is serving the misses well.</p>
+    <p class="vlead t-ko"><b>단계가 둘이면 병목도 둘이다.</b> prefill은 전문가를 거의 전부 옮기므로 전송을 숨기는 게 관건이고, decode는 전문가 몇 개만 쓰므로 미스를 잘 처리하는 게 관건이다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2608.16157/Overview.svg" target="_blank"><img src="fig/2608.16157/Overview.svg" alt="FreeToken overview. Prefill: PCIe loads layer l+1 while the GPU computes layer l; recurrent-state checkpoints at think, tool-call and tool-output tags let an edited context resume and re-prefill only the new suffix. Decode: router picks top-12 experts, 8 hit the GPU LRU expert cache; of 4 misses, 1 is copied over PCIe and 3 are computed in place on the CPU, with q* = m times B_PCIe over B_Host; GPU and CPU outputs merge exactly."></a>
+      <figcaption class="t-en"><b>Figure 2.</b> Top, prefill: overlapped loading and tag-anchored checkpoints. Bottom, decode: 8/12 experts hit the cache; 4 misses → 1 PCIe copy + 3 on the CPU.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> 위, prefill: 겹쳐 싣기와 태그 위치 체크포인트. 아래, decode: 12개 중 8개가 캐시에 있고, 미스 4개 → PCIe 복사 1개 + CPU 계산 3개.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2608.16157</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Prefill: overlap transfer with compute.</span><span class="t-ko">prefill: 전송과 계산을 겹친다.</span></b><span class="t-en">Load layer l+1 while the GPU runs layer l; state checkpoints at tool-call tags mean an agent's edit re-prefills only the new part.</span><span class="t-ko">GPU가 l층을 도는 동안 l+1층을 싣는다. 도구 호출 태그 위치의 상태 체크포인트 덕에 에이전트가 문맥을 고쳐도 새 부분만 다시 처리한다.</span></li>
+      <li><b><span class="t-en">Decode: cache first, then split the misses.</span><span class="t-ko">decode: 캐시 먼저, 미스는 나눈다.</span></b><span class="t-en">An LRU cache follows the router; of the m misses, q* are copied and stay cached, the rest run on the CPU. Outputs merge exactly.</span><span class="t-ko">LRU 캐시가 라우터(토큰마다 전문가를 고르는 부분)를 따라간다. 미스 m개 중 q*개는 복사해 캐시에 남기고 나머지는 CPU가 돌린다. 결과는 근사 없이 합쳐진다.</span></li>
+      <li><b><span class="t-en">Elastic memory.</span><span class="t-ko">늘었다 줄었다 하는 메모리.</span></b><span class="t-en">When a game or browser grabs VRAM, the expert cache shrinks on the fly, with no restart; host RAM keeps the full expert pool.</span><span class="t-ko">게임이나 브라우저가 VRAM을 가져가면 전문가 캐시를 재시작 없이 바로 줄인다. 전체 전문가는 늘 호스트 RAM에 있다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key idea: split by machine</span><span class="t-ko">핵심: 기계마다 다른 분할</span></h2>
+    <p class="vlead t-en"><b>The split is a ratio you can measure, not a constant.</b> Copying and CPU compute both read host memory, so the CPU only gets what PCIe leaves over. Making both paths finish together gives q*/m = B<sub>PCIe</sub>/B<sub>host</sub>.</p>
+    <p class="vlead t-ko"><b>나누는 비율은 상수가 아니라 잴 수 있는 값이다.</b> 복사와 CPU 계산은 둘 다 호스트 메모리에서 읽으므로, CPU는 PCIe가 쓰고 남은 대역폭만 쓴다. 두 길이 같이 끝나게 맞추면 q*/m = B<sub>PCIe</sub>/B<sub>host</sub>가 된다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Share of expert misses copied over PCIe</span><span class="t-ko">PCIe로 옮기는 미스 비율</span></div>
+      <div class="cs"><span class="t-en">q*/m = B<sub>PCIe</sub>/B<sub>host</sub>, from the paper's measured bandwidths (Table 1) · right: GB/s</span><span class="t-ko">q*/m = B<sub>PCIe</sub>/B<sub>host</sub>, 논문이 잰 대역폭(Table 1)으로 계산 · 오른쪽: GB/s</span></div>
+      <div class="legend"><span><i class="a"></i><span class="t-en">copy over PCIe → GPU</span><span class="t-ko">PCIe로 복사 → GPU</span></span><span><i class="b"></i><span class="t-en">compute on CPU in place</span><span class="t-ko">CPU에서 그 자리 계산</span></span></div>
+      <div class="bars" style="--vw:84px">
+        <div class="bar" title="RTX 4060 laptop: 25% PCIe / 75% CPU"><span class="bl">4060 laptop</span><span class="bt stack"><span class="seg a" style="--w:25%">25%</span><span class="seg b" style="--w:75%">75%</span></span><span class="bv">11.8 / 47.5</span></div>
+        <div class="bar" title="RTX PRO 6000: 29% PCIe / 71% CPU"><span class="bl">PRO 6000</span><span class="bt stack"><span class="seg a" style="--w:29%">29%</span><span class="seg b" style="--w:71%">71%</span></span><span class="bv">51.5 / 178</span></div>
+        <div class="bar" title="RTX 4090 server: 40% PCIe / 60% CPU"><span class="bl">4090</span><span class="bt stack"><span class="seg a" style="--w:40%">40%</span><span class="seg b" style="--w:60%">60%</span></span><span class="bv">25.1 / 63.2</span></div>
+        <div class="bar" title="RTX 3090 server: 45% PCIe / 55% CPU"><span class="bl">3090</span><span class="bt stack"><span class="seg a" style="--w:45%">45%</span><span class="seg b" style="--w:55%">55%</span></span><span class="bv">25.3 / 56.7</span></div>
+        <div class="bar" title="RTX 5090 server: 68% PCIe / 32% CPU"><span class="bl">5090 server</span><span class="bt stack"><span class="seg a" style="--w:68%">68%</span><span class="seg b" style="--w:32%">32%</span></span><span class="bv">52.7 / 77.3</span></div>
+        <div class="bar" title="RTX 5090 desktop: 91% PCIe / 9% CPU"><span class="bl">5090 desktop</span><span class="bt stack"><span class="seg a" style="--w:91%">91%</span><span class="seg b" style="--w:9%"></span></span><span class="bv">49.0 / 53.8</span></div>
+      </div>
+      <figcaption class="t-en">A narrow laptop link or fast workstation DRAM favors the CPU; the two-channel 5090 desktop mostly copies. No fixed split fits all six.</figcaption>
+      <figcaption class="t-ko">노트북의 좁은 링크나 워크스테이션의 빠른 DRAM은 CPU 쪽으로, 메모리 채널이 둘인 5090 데스크톱은 복사 쪽으로 기운다. 고정 비율 하나로는 여섯 대를 다 못 맞춘다.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results</span><span class="t-ko">결과</span></h2>
+    <p class="vlead t-en"><b>Faster everywhere, and it doesn't stall.</b> The decode gain holds on all six machines, and no turn waits long enough to trip an agent client's timeout.</p>
+    <p class="vlead t-ko"><b>어디서나 빠르고, 멈추지 않는다.</b> decode 이득은 여섯 기계 모두에서 유지되고, 어떤 턴도 에이전트 클라이언트의 타임아웃에 걸릴 만큼 오래 기다리지 않는다.</p>
+    <div class="vgrid">
+      <figure class="chart">
+        <div class="ct"><span class="t-en">Decode speedup vs best baseline</span><span class="t-ko">가장 강한 기준 엔진 대비 decode 속도</span></div>
+        <div class="cs"><span class="t-en">Coding agent, Qwen3.6-35B · line = 1×</span><span class="t-ko">코딩 에이전트, Qwen3.6-35B · 선 = 1×</span></div>
+        <div class="bars mono" style="--x:40%">
+          <div class="bar" title="RTX 5090 desktop: 2.1×"><span class="bl">5090 desktop</span><span class="bt"><span class="bf" style="--w:84%"></span></span><span class="bv">2.1×</span></div>
+          <div class="bar" title="RTX PRO 6000 (GLM-5.2): 2.0×"><span class="bl">PRO 6000*</span><span class="bt"><span class="bf" style="--w:80%"></span></span><span class="bv">2.0×</span></div>
+          <div class="bar" title="RTX 5090 server: 1.9×"><span class="bl">5090 server</span><span class="bt"><span class="bf" style="--w:76%"></span></span><span class="bv">1.9×</span></div>
+          <div class="bar" title="RTX 4060 laptop: 1.8×"><span class="bl">4060 laptop</span><span class="bt"><span class="bf" style="--w:72%"></span></span><span class="bv">1.8×</span></div>
+          <div class="bar" title="RTX 3090: 1.3×"><span class="bl">3090</span><span class="bt"><span class="bf" style="--w:52%"></span></span><span class="bv">1.3×</span></div>
+          <div class="bar" title="RTX 4090: 1.3×"><span class="bl">4090</span><span class="bt"><span class="bf" style="--w:52%"></span></span><span class="bv">1.3×</span></div>
+        </div>
+        <figcaption class="t-en">*GLM-5.2 753B: 14.9 vs 7.3 tok/s.</figcaption>
+        <figcaption class="t-ko">*GLM-5.2 753B: 14.9 대 7.3 tok/s.</figcaption>
+      </figure>
+      <figure class="chart">
+        <div class="ct"><span class="t-en">Worst-turn time to first token</span><span class="t-ko">가장 느린 턴의 첫 토큰 시간</span></div>
+        <div class="cs"><span class="t-en">RTX 5090, 4 agent workloads · line = 120 s</span><span class="t-ko">RTX 5090, 에이전트 작업 4개 · 선 = 120초</span></div>
+        <div class="bars" style="--x:12%">
+          <div class="bar hl" title="FreeToken: below 44 s in every workload"><span class="bl">FreeToken</span><span class="bt"><span class="bf" style="--w:4.4%"></span></span><span class="bv">&lt;44 s</span></div>
+          <div class="bar" title="Ollama: 179 s"><span class="bl">Ollama</span><span class="bt"><span class="bf" style="--w:17.9%"></span></span><span class="bv">179 s</span></div>
+          <div class="bar" title="llama.cpp: 232 s"><span class="bl">llama.cpp</span><span class="bt"><span class="bf" style="--w:23.2%"></span></span><span class="bv">232 s</span></div>
+          <div class="bar" title="KTransformers: 946 s"><span class="bl">KTransformers</span><span class="bt"><span class="bf" style="--w:94.6%"></span></span><span class="bv">946 s</span></div>
+        </div>
+        <figcaption class="t-en">Past the line, OpenClaw's watchdog drops the request.</figcaption>
+        <figcaption class="t-ko">선을 넘으면 OpenClaw의 감시 타이머가 요청을 버린다.</figcaption>
+      </figure>
+    </div>
+    <p class="vlead gap t-en"><b>Why the cache works:</b> consecutive tokens reuse experts, so a cache that follows the router misses far less than a placement frozen at load or prefill time.</p>
+    <p class="vlead gap t-ko"><b>캐시가 통하는 이유:</b> 이어지는 토큰은 같은 전문가를 다시 쓰므로, 라우터를 따라가는 캐시가 불러올 때나 prefill 때 고정한 배치보다 훨씬 덜 빗나간다.</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Figure 4b values.</b> Share of decode expert reads that miss the GPU cache: same routing traces, same cache size (the 5090's: 37% of Qwen3.6's expert pool, 11% of DeepSeek-V4-Flash's). Lower is better.</caption>
+        <caption class="t-ko"><b>Figure 4b 수치.</b> decode 중 전문가 읽기가 GPU 캐시에서 빗나간 비율: 같은 라우팅 기록, 같은 캐시 크기(5090 기준: Qwen3.6 전문가의 37%, DeepSeek-V4-Flash의 11%). 낮을수록 좋다.</caption>
+        <thead><tr><th><span class="t-en">Placement policy</span><span class="t-ko">배치 정책</span></th><th>Qwen3.6-35B</th><th>DSV4-Flash 284B</th></tr></thead>
+        <tbody>
+          <tr><td>llama.cpp <span class="t-en">(static)</span><span class="t-ko">(고정)</span></td><td>62%</td><td>89%</td></tr>
+          <tr><td>KTransformers <span class="t-en">(set at prefill)</span><span class="t-ko">(prefill 때 결정)</span></td><td>41%</td><td>59%</td></tr>
+          <tr><td>FreeToken <span class="t-en">(global LRU)</span><span class="t-ko">(전역 LRU)</span></td><td class="up">16%</td><td class="up">39%</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">753B</div><div class="l"><span class="t-en">GLM-5.2 on one RTX PRO 6000, 14.9 tok/s</span><span class="t-ko">RTX PRO 6000 한 장에서 GLM-5.2, 14.9 tok/s</span></div></div>
+      <div class="stat"><div class="n">39.3 tok/s</div><div class="l"><span class="t-en">35B on an 8 GB laptop GPU (Codex median: 33)</span><span class="t-ko">8 GB 노트북 GPU에서 35B (Codex 중앙값 33)</span></div></div>
+      <div class="stat"><div class="n">≤12%</div><div class="l"><span class="t-en">decode drop in agent sessions vs single-turn</span><span class="t-ko">단일 턴 → 에이전트 세션의 decode 감소폭</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">On local hardware the limit is orchestration, not just VRAM. Using the CPU as a second expert executor, sized by measured bandwidth, lifts a ceiling that better prefetching can't, because every prefetched expert still crosses PCIe.</span><span class="t-ko">로컬 하드웨어의 한계는 VRAM만이 아니라 조율이다. 잰 대역폭만큼 CPU를 두 번째 전문가 실행기로 쓰면, 미리 가져오기(prefetch)로는 못 넘는 한계를 넘는다. 미리 가져온 전문가도 결국 PCIe를 건너야 하기 때문이다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">The q* split itself is never compared with all-PCIe or all-CPU serving. Three of six machines are rented servers throttled to mimic a PC, and every run is single-user.</span><span class="t-ko">q* 분할 자체를 전부 PCIe·전부 CPU 처리와 비교한 실험이 없다. 기계 여섯 대 중 셋은 PC처럼 보이게 스레드를 제한한 임대 서버이고, 모든 실험이 사용자 한 명 기준이다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2608.16157">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2608.16157">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2608.16157">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2608.16157">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>requested sample for the v2 format · listed labs (Stoica, Zaharia, Keutzer, Song Han) · hot (▲103 alphaXiv, 112 HF, ★13.8k) · preprint</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-09-26.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>v2 형식 예시로 요청받음 · 목록 연구실(Stoica, Zaharia, Keutzer, Song Han) · 화제성(alphaXiv ▲103, HF 112, ★13.8k) · 프리프린트</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-09-26.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

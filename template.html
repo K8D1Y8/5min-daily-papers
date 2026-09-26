@@ -1,19 +1,23 @@
 <!DOCTYPE html>
 <!--
   ============================================================================
-  5-MIN PAPER SUMMARY — BILINGUAL TEMPLATE (English default · 한국어 toggle)
+  5-MIN PAPER CARD — v2.1 "VISUAL-FIRST + GUIDING TEXT" TEMPLATE (English default · 한국어 toggle)
   ----------------------------------------------------------------------------
   규칙:
-   1) 디자인은 ../assets/style.css, 동작(진행바+언어토글)은 ../assets/app.js 가 담당.
-      페이지엔 인라인 <style>/<script> 를 새로 만들지 말 것.
-   2) **영어가 기본(primary)**, 한국어는 토글로 표시. 번역되는 텍스트는 두 형제 요소로:
-        <p class="t-en">English…</p><p class="t-ko">한국어…</p>
-      인라인이면 <span class="t-en">…</span><span class="t-ko">…</span>.
-      → t-en 이 기본 노출, t-ko 는 .langtoggle 의 '한' 클릭 시 노출.
-   3) 공용(번역 불필요): 숫자/지표, arXiv ID·링크, 날짜, 저자명, 표의 수치, 그림(그림 안 글자).
-      섹션 제목·본문·캡션·라벨·takeaway·비판 등 "읽는 글"은 모두 en/ko 쌍으로.
-   4) 분량(5분): 스탯 4~6 · 메커니즘 2~4 · 단계 3~5 · takeaway 3~4 · 비판 1 ·
-      (arXiv HTML 있으면) 대표 그림 1 + 핵심 표 1. robots=noindex 유지. 파일은 papers/ 에 저장.
+   1) 디자인은 ../assets/style.css, 동작(진행바·언어토글·평가)은 ../assets/app.js.
+      인라인 <style>/<script> 금지. style="--w:…" 같은 데이터 변수만 허용.
+   2) 영어 기본, 한국어 토글: <p class="t-en">…</p><p class="t-ko">…</p> (인라인은 span).
+      공용(번역 X): 숫자·지표·arXiv ID·날짜·저자명·표 수치·그림·차트 값.
+   3) 시각 요소가 본문, 글은 그걸 "읽게 해 주는" 안내. 영어 읽는 글 350~600단어(제목·표·차트 라벨·SVG 제외).
+      - TL;DR 불렛 4개: Motivation → Analysis → Method(핵심+직관) → Results. 각 ≤ 25단어, Method ≤ 40.
+      - 💭 직관 박스(.intuit): 비유/그림으로 핵심 메커니즘을 2~3문장에.
+      - 시각 요소마다 위에 .vlead 한 문장: <b>굵은 요점.</b> + 왜 그런지 한 줄.
+      - 논문 그림 뒤 3단계 요약(ol.steps.compact): 굵은 한 줄 + 짧은 설명.
+      - 캡션은 1~2줄. 차트는 값이 0에서 시작(--w = 값/축 최대). 우리 방법 = .bar.hl.
+      - 시각 요소: 논문 그림 1~3 + 커스텀 차트/도식 ≥ 1 + 핵심 표 1(≤ 6행).
+      - 숫자 3개 · 💡 교훈 1~2문장 · ⚠️ 비판 1~2문장.
+   4) 검사: python3 ~/.claude/skills/daily-paper-card/scripts/check_card.py papers/<file>.html
+   5) robots=noindex 유지. .rating 의 data-arxiv = arXiv ID. footer 의 "venue: <학회 연도>" (프리프린트면 생략).
   ============================================================================
 -->
 <html lang="en">
@@ -43,8 +47,14 @@
       <span class="glow t-en">— {{SUBTITLE_EN}}</span>
       <span class="glow t-ko">— {{SUBTITLE_KO}}</span>
     </h1>
+    <!-- signal badges: only the signals this paper actually has (drop the rest) -->
+    <div class="badges">
+      <span class="badge venue">{{VENUE_BADGE}}</span>           <!-- e.g. ICML'26 Oral · or class="badge pre" Preprint -->
+      <span class="badge lab">🏛 {{LAB_BADGE}}</span>            <!-- listed lab/author from sources.md -->
+      <span class="badge hot">▲ {{HOT_BADGE}}</span>             <!-- e.g. 103 alphaXiv · 112 HF · ★13.8k -->
+    </div>
     <div class="meta">
-      <span>👥 <b>{{FIRST_AUTHOR}}</b> <span class="t-en">{{AUTHORS_TAIL_EN}}</span><span class="t-ko">{{AUTHORS_TAIL_KO}}</span></span>
+      <span>👥 <b>{{FIRST_AUTHOR}}</b>{{OTHER_AUTHORS}} <span class="t-en">(corresponding: {{CORR}})</span><span class="t-ko">(교신: {{CORR}})</span></span>
       <span>🏛 {{AFFILIATIONS}}</span>
       <span>🗓 {{PUB_DATE}}</span>
       <span>📄 <a href="https://arxiv.org/abs/{{ARXIV_ID}}">arXiv:{{ARXIV_ID}}</a></span>
@@ -55,103 +65,100 @@
 <div class="wrap">
   <div class="card tldr">
     <span class="lab">⚡ TL;DR</span>
-    <p class="t-en">{{TLDR_EN}}</p>
-    <p class="t-ko">{{TLDR_KO}}</p>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">{{MOTIVATION_EN}}</span><span class="t-ko">{{MOTIVATION_KO}}</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">{{ANALYSIS_EN}}</span><span class="t-ko">{{ANALYSIS_KO}}</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>{{METHOD_CORE_EN}}</b> {{METHOD_INTUITION_EN}}</span><span class="t-ko"><b>{{METHOD_CORE_KO}}</b> {{METHOD_INTUITION_KO}}</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">{{RESULTS_EN}}</span><span class="t-ko">{{RESULTS_KO}}</span></span></li>
+    </ul>
   </div>
 </div>
 
 <main class="wrap">
 
+  <!-- 0 · intuition: the mechanism as an analogy or picture-in-words (2–3 sentences, bold the two moves) -->
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">{{INTUITION_EN}}</p>
+    <p class="t-ko">{{INTUITION_KO}}</p>
+  </div>
+
+  <!-- 1 · the paper's own method/overview figure (required when arXiv HTML exists) + 3-step summary -->
   <section>
-    <h2><span class="t-en">Why it matters</span><span class="t-ko">왜 중요한가</span></h2>
-    <p class="lead t-en">{{LEAD_EN}}</p>
-    <p class="lead t-ko">{{LEAD_KO}}</p>
-    <p class="t-en">{{WHY_EN}}</p>
-    <p class="t-ko">{{WHY_KO}}</p>
-    <!-- (선택·best-effort) 대표 그림 1개. img/figsrc 는 공용, figcaption 만 en/ko 쌍. -->
+    <h2><span class="t-en">{{FIG_HEADING_EN}}</span><span class="t-ko">{{FIG_HEADING_KO}}</span></h2>
+    <p class="vlead t-en"><b>{{FIG_LEAD_BOLD_EN}}</b> {{FIG_LEAD_EN}}</p>
+    <p class="vlead t-ko"><b>{{FIG_LEAD_BOLD_KO}}</b> {{FIG_LEAD_KO}}</p>
     <figure class="fig">
-      <img src="fig/{{ARXIV_ID}}/{{FIG_FILE}}" alt="{{FIG_ALT}}">
+      <a class="zoom" href="fig/{{ARXIV_ID}}/{{FIG_FILE}}" target="_blank"><img src="fig/{{ARXIV_ID}}/{{FIG_FILE}}" alt="{{FIG_ALT}}"></a>
       <figcaption class="t-en"><b>{{FIG_LABEL}}.</b> {{FIG_CAPTION_EN}}</figcaption>
       <figcaption class="t-ko"><b>{{FIG_LABEL}}.</b> {{FIG_CAPTION_KO}}</figcaption>
       <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:{{ARXIV_ID}}</div>
     </figure>
-  </section>
-
-  <section>
-    <h2><span class="t-en">By the numbers</span><span class="t-ko">핵심 숫자</span></h2>
-    <div class="stats">
-      <div class="stat"><div class="n">{{N1}}</div><div class="l"><span class="t-en">{{L1_EN}}</span><span class="t-ko">{{L1_KO}}</span></div></div>
-      <div class="stat"><div class="n">{{N2}}</div><div class="l"><span class="t-en">{{L2_EN}}</span><span class="t-ko">{{L2_KO}}</span></div></div>
-      <div class="stat"><div class="n">{{N3}}</div><div class="l"><span class="t-en">{{L3_EN}}</span><span class="t-ko">{{L3_KO}}</span></div></div>
-      <div class="stat"><div class="n">{{N4}}</div><div class="l"><span class="t-en">{{L4_EN}}</span><span class="t-ko">{{L4_KO}}</span></div></div>
-    </div>
-  </section>
-
-  <!-- (선택·best-effort) 핵심 표. 수치/열헤더는 공용, caption 만 en/ko 쌍. -->
-  <section>
-    <h2><span class="t-en">{{TABLE_HEADING_EN}}</span><span class="t-ko">{{TABLE_HEADING_KO}}</span></h2>
-    <div class="tablewrap">
-      <table class="ptable">
-        <caption class="t-en"><b>{{TABLE_LABEL}}.</b> {{TABLE_CAPTION_EN}}</caption>
-        <caption class="t-ko"><b>{{TABLE_LABEL}}.</b> {{TABLE_CAPTION_KO}}</caption>
-        <thead><tr><th>{{COL1}}</th><th>{{COL2}}</th><th>{{COL3}}</th><th>{{COL4}}</th></tr></thead>
-        <tbody>
-          <tr><td>{{R1C1}}</td><td>{{R1C2}}</td><td>{{R1C3}}</td><td class="up">{{R1C4}}</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-  <!-- (선택) 한 장의 그림: 인라인 SVG/agent-flow. 다이어그램 안 라벨은 공용(영문)으로 둬도 됨; .cap 은 쌍. -->
-  <section>
-    <h2><span class="t-en">In one diagram</span><span class="t-ko">한 장의 그림</span></h2>
-    <div class="diagram">
-      {{INLINE_DIAGRAM}}
-      <div class="cap t-en">{{CAP_EN}}</div>
-      <div class="cap t-ko">{{CAP_KO}}</div>
-    </div>
-  </section>
-
-  <section>
-    <h2><span class="t-en">{{IDEA_HEADING_EN}}</span><span class="t-ko">{{IDEA_HEADING_KO}}</span></h2>
-    <div class="mech">
-      <div class="m">
-        <span class="tag">{{TAG1}}</span>
-        <h3>{{MECH1_TITLE}}</h3>
-        <p class="t-en">{{MECH1_EN}}</p>
-        <p class="t-ko">{{MECH1_KO}}</p>
-      </div>
-      <div class="m">
-        <span class="tag">{{TAG2}}</span>
-        <h3>{{MECH2_TITLE}}</h3>
-        <p class="t-en">{{MECH2_EN}}</p>
-        <p class="t-ko">{{MECH2_KO}}</p>
-      </div>
-    </div>
-  </section>
-
-  <section>
-    <h2><span class="t-en">How it works</span><span class="t-ko">어떻게 작동하나</span></h2>
-    <ol class="steps">
+    <ol class="steps compact">
       <li><b><span class="t-en">{{STEP1_EN}}</span><span class="t-ko">{{STEP1_KO}}</span></b><span class="t-en">{{STEP1D_EN}}</span><span class="t-ko">{{STEP1D_KO}}</span></li>
       <li><b><span class="t-en">{{STEP2_EN}}</span><span class="t-ko">{{STEP2_KO}}</span></b><span class="t-en">{{STEP2D_EN}}</span><span class="t-ko">{{STEP2D_KO}}</span></li>
       <li><b><span class="t-en">{{STEP3_EN}}</span><span class="t-ko">{{STEP3_KO}}</span></b><span class="t-en">{{STEP3D_EN}}</span><span class="t-ko">{{STEP3D_KO}}</span></li>
     </ol>
   </section>
 
+  <!-- 2 · the key idea as a custom visual (chart or inline-SVG diagram). Example: horizontal bars.
+       Bars: --w = value / axis max. Optional reference line: style="--x:40%" on .bars (+ legend <i class="r">).
+       Two-part split: <span class="bt stack"><span class="seg a" style="--w:25%">25%</span><span class="seg b" style="--w:75%">75%</span></span> -->
   <section>
-    <h2><span class="t-en">What to take away</span><span class="t-ko">그래서, 가져갈 것</span></h2>
-    <div class="take">
-      <div class="t"><span class="ic">🚀</span><p class="t-en">{{TAKE1_EN}}</p><p class="t-ko">{{TAKE1_KO}}</p></div>
-      <div class="t"><span class="ic">🧠</span><p class="t-en">{{TAKE2_EN}}</p><p class="t-ko">{{TAKE2_KO}}</p></div>
-      <div class="t"><span class="ic">🔬</span><p class="t-en">{{TAKE3_EN}}</p><p class="t-ko">{{TAKE3_KO}}</p></div>
+    <h2><span class="t-en">{{IDEA_HEADING_EN}}</span><span class="t-ko">{{IDEA_HEADING_KO}}</span></h2>
+    <p class="vlead t-en"><b>{{IDEA_LEAD_BOLD_EN}}</b> {{IDEA_LEAD_EN}}</p>
+    <p class="vlead t-ko"><b>{{IDEA_LEAD_BOLD_KO}}</b> {{IDEA_LEAD_KO}}</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">{{CHART1_TITLE_EN}}</span><span class="t-ko">{{CHART1_TITLE_KO}}</span></div>
+      <div class="cs"><span class="t-en">{{CHART1_SUB_EN}}</span><span class="t-ko">{{CHART1_SUB_KO}}</span></div>
+      <div class="bars">
+        <div class="bar hl" title="{{B1_LABEL}}: {{B1_VALUE}}"><span class="bl">{{B1_LABEL}}</span><span class="bt"><span class="bf" style="--w:{{B1_PCT}}%"></span></span><span class="bv">{{B1_VALUE}}</span></div>
+        <div class="bar" title="{{B2_LABEL}}: {{B2_VALUE}}"><span class="bl">{{B2_LABEL}}</span><span class="bt"><span class="bf" style="--w:{{B2_PCT}}%"></span></span><span class="bv">{{B2_VALUE}}</span></div>
+      </div>
+      <figcaption class="t-en">{{CHART1_CAP_EN}}</figcaption>
+      <figcaption class="t-ko">{{CHART1_CAP_KO}}</figcaption>
+    </figure>
+  </section>
+
+  <!-- 3 · results: two charts side by side (.vgrid) and/or a paper figure, then the key table (≤ 6 rows) -->
+  <section>
+    <h2><span class="t-en">{{RESULTS_HEADING_EN}}</span><span class="t-ko">{{RESULTS_HEADING_KO}}</span></h2>
+    <p class="vlead t-en"><b>{{RESULTS_LEAD_BOLD_EN}}</b> {{RESULTS_LEAD_EN}}</p>
+    <p class="vlead t-ko"><b>{{RESULTS_LEAD_BOLD_KO}}</b> {{RESULTS_LEAD_KO}}</p>
+    <div class="vgrid">
+      <figure class="chart"><!-- chart 2 (same structure as above) --></figure>
+      <figure class="chart"><!-- chart 3 --></figure>
+    </div>
+    <!-- optional: one lead sentence for the table (why the number pattern matters) -->
+    <p class="vlead gap t-en"><b>{{TABLE_LEAD_BOLD_EN}}</b> {{TABLE_LEAD_EN}}</p>
+    <p class="vlead gap t-ko"><b>{{TABLE_LEAD_BOLD_KO}}</b> {{TABLE_LEAD_KO}}</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>{{TABLE_LABEL}}.</b> {{TABLE_CAPTION_EN}}</caption>
+        <caption class="t-ko"><b>{{TABLE_LABEL}}.</b> {{TABLE_CAPTION_KO}}</caption>
+        <thead><tr><th>{{COL1}}</th><th>{{COL2}}</th><th>{{COL3}}</th></tr></thead>
+        <tbody>
+          <tr><td>{{R1C1}}</td><td>{{R1C2}}</td><td>{{R1C3}}</td></tr>
+          <tr><td>{{R2C1}}</td><td class="up">{{R2C2}}</td><td class="up">{{R2C3}}</td></tr>
+        </tbody>
+      </table>
     </div>
   </section>
 
+  <!-- 4 · three numbers -->
   <section>
-    <div class="note">
-      <span class="t-en">⚠️ <b>One critical note:</b> {{CRITIQUE_EN}}</span>
-      <span class="t-ko">⚠️ <b>한 줄 비판적 시선:</b> {{CRITIQUE_KO}}</span>
+    <div class="stats three">
+      <div class="stat"><div class="n">{{N1}}</div><div class="l"><span class="t-en">{{L1_EN}}</span><span class="t-ko">{{L1_KO}}</span></div></div>
+      <div class="stat"><div class="n">{{N2}}</div><div class="l"><span class="t-en">{{L2_EN}}</span><span class="t-ko">{{L2_KO}}</span></div></div>
+      <div class="stat"><div class="n">{{N3}}</div><div class="l"><span class="t-en">{{L3_EN}}</span><span class="t-ko">{{L3_KO}}</span></div></div>
+    </div>
+  </section>
+
+  <!-- 5 · takeaway (1–2 sentences) + one honest caveat (1–2 sentences) -->
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">{{TAKE_EN}}</span><span class="t-ko">{{TAKE_KO}}</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">{{CAVEAT_EN}}</span><span class="t-ko">{{CAVEAT_KO}}</span></p></div>
     </div>
   </section>
 

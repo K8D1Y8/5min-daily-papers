@@ -38,7 +38,7 @@
   if (!box) return;
   var arxiv = box.getAttribute('data-arxiv');
   var KEY = 'paper-rating:' + arxiv;
-  var REPO = 'K8D1Y8/papers-1ca6dded';
+  var REPO = 'K8D1Y8/5min-daily-papers';
   var rates = box.querySelectorAll('.rate');
 
   // build the "Generate Full Review" CTA (prefilled GitHub issue)
