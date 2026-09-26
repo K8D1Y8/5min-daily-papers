@@ -24,6 +24,11 @@ def strip(s):
 def major_topic(topic_text):
     """Map a paper's topic-chip prefix to one of the canonical major topics (for the columns view)."""
     p = (topic_text or "").split("·")[0].strip().lower()
+    # priority topics (2026-09-26): chip prefixes "Small–Large Alignment · …" and "Video & World Generation · …"
+    if "alignment" in p:
+        return "Small–Large Alignment"
+    if "video" in p:
+        return "Video & World Generation"
     if "agent" in p:
         return "Multi-Agent & Latent Comm"
     if "world" in p:

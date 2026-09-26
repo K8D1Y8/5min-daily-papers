@@ -46,8 +46,8 @@
 <div class="kg-head">
   <a class="home" href="index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
   <h1 style="margin-top:8px"><span class="t-en">My Research <span class="g">Interest Map</span></span><span class="t-ko">내 연구 <span class="g">관심 지도</span></span></h1>
-  <p class="t-en">Four areas → subfields → key methods, auto-researched and cross-linked. Clay dashed lines are cross-area bridges; ringed nodes appear in more than one area.</p>
-  <p class="t-ko">네 대주제 → 소분류 → 핵심 기법을 자동 조사·연결했습니다. 점선(clay)은 영역 간 다리, 테두리 노드는 두 영역 이상에 걸치는 개념입니다.</p>
+  <p class="t-en">Six areas → subfields → key methods, auto-researched and cross-linked. Clay dashed lines are cross-area bridges; ringed nodes appear in more than one area.</p>
+  <p class="t-ko">여섯 대주제 → 소분류 → 핵심 기법을 자동 조사·연결했습니다. 점선(clay)은 영역 간 다리, 테두리 노드는 두 영역 이상에 걸치는 개념입니다.</p>
 </div>
 
 <div class="kg-bar">
@@ -65,6 +65,8 @@ const AREA_META = {
   seq:  { en:'Efficient Sequence Models',  ko:'효율 시퀀스 모델 (SSM·선형)',   color:'#2f7d77' },
   comp: { en:'Model Compression',          ko:'모델 압축',                     color:'#B8862F' },
   world:{ en:'Shared World Models',        ko:'공유·멀티에이전트 World Model', color:'#6f5aa0' },
+  align:{ en:'Small–Large Alignment',      ko:'소형–대형 모델 분포 정렬',       color:'#2F80C0' },
+  video:{ en:'Efficient Video & World Gen.', ko:'효율 비디오·월드 모델 생성',   color:'#C2477F' },
 };
 
 const DATA = {
@@ -409,9 +411,63 @@ const DATA = {
         ['XBridge','method','Entity-grounded latent bridge for communication between heterogeneous LLM families','2608.11676'],
         ['Cross-Family KV Transfer','method','Closed-form linear mapping reuses prefill KV across sizes of one model family','2608.03893'],
         ['XKV Dual-Cache','method','Pools both agents\' caches into a joint one-token-per-layer memory each receiver position queries','2608.20617'],
-        ['Mixture-of-Translators','method','Multiple translator modules map a source LLM\'s context KV cache into a heterogeneous target LLM\'s cache space','2607.28979'] ]} ]}
+        ['Mixture-of-Translators','method','Multiple translator modules map a source LLM\'s context KV cache into a heterogeneous target LLM\'s cache space','2607.28979'] ]} ]},
+    { key:'align', subs:[
+      { name:'Measuring behavior drift', blurb:'Compressed or small models that keep benchmark accuracy but change answers, reasoning, or actions.', nodes:[
+        ['Accuracy is Not All You Need','concept','"Flips": answers that change after compression even when accuracy holds; KL to the base model','2407.09141'],
+        ['Accuracy is Not Enough','method','Divergence-based fidelity metric for quantized LLMs beyond zero-shot accuracy','2609.07664'],
+        ['Benchmark Illusion','concept','Pruned LLMs pass multiple choice but fail to generate the answer','2606.17609'],
+        ['Silent Failures','concept','Quantization silently shifts reasoning failure modes at equal accuracy','2607.09999'],
+        ['Quantization Inflates Reasoning','concept','Low-bit reasoning models generate longer traces: a hidden cost','2606.25519'],
+        ['Asymmetric Harms','concept','Compression shifts behavior unevenly behind aggregate perplexity and accuracy','2608.19670'],
+        ['KV Compression Faithfulness','concept','KV cache compression keeps final answers but breaks the reasoning that supports them','2608.01631'],
+        ['Closed-Loop Collapse','concept','A compressed VLA policy passes offline evaluation yet fails in closed-loop execution','2609.23048'] ]},
+      { name:'On-policy distillation', blurb:'The student learns the teacher\'s token distribution on its own rollouts, fixing exposure bias.', nodes:[
+        ['GKD','method','On-policy distillation: student trains on self-generated sequences with teacher feedback · ICLR 2024','2306.13649'],
+        ['MiniLLM','method','Reverse-KL on-policy distillation of LLMs · ICLR 2024','2306.08543'],
+        ['Rethinking OPD','concept','Phenomenology, mechanism and recipe of on-policy distillation','2604.13016'],
+        ['OmniOPD','method','Logit-free on-policy distillation via speculative verification','2606.01476'],
+        ['On-Policy Delta Distillation','method','Token-level teacher supervision on student rollouts without a reward model','2607.15161'],
+        ['SOD','method','Step-wise on-policy distillation for small language-model agents','2605.07725'],
+        ['WAM-OPD','method','On-policy distillation for world action models (video prediction + robot actions)','2608.22364'] ]},
+      { name:'Distribution-aware compression', blurb:'Compression and draft models trained to match the original model\'s output distribution, not layer reconstruction.', nodes:[
+        ['LFQ','method','Logit-aware final-block quantization for generation quality · ICML 2026','2605.29756'],
+        ['KVSculpt','method','KV cache compression framed as distillation','2603.27819'],
+        ['DistillSpec','method','Distills a draft model toward the target so speculative decoding accepts more tokens','2310.08461'],
+        ['ALRA','method','Local relational alignment for logit-based pre-training distillation','2609.03355'] ]} ]},
+    { key:'video', subs:[
+      { name:'AR video diffusion & distillation', blurb:'Turning bidirectional video diffusion into fast causal (autoregressive) generators.', nodes:[
+        ['CausVid','method','Distills slow bidirectional video diffusion into fast autoregressive generation · CVPR 2025','2412.07772'],
+        ['Self Forcing','method','Trains AR video diffusion on its own rollouts to close the train–test gap · NeurIPS 2025','2506.08009'],
+        ['Diffusion Forcing','method','Next-token prediction meets full-sequence diffusion with per-token noise levels','2407.01392'],
+        ['Causal Forcing','method','AR diffusion distillation done right for real-time interactive video · ICML 2026','2602.02214'],
+        ['Causal-rCM','method','Unified teacher-forcing and self-forcing recipe for AR diffusion distillation','2606.25473'],
+        ['Context-Matched Distillation','method','Matches teacher causality to the student in AR video distillation','2608.13391'],
+        ['Mask Forcing','method','Dual-noise masking rollout for AR video diffusion distillation','2609.09123'] ]},
+      { name:'Attention & cache efficiency', blurb:'Sparse, linear and cached attention for long streaming video.', nodes:[
+        ['Forcing-KV','method','Hybrid KV cache compression for AR video diffusion','2605.09681'],
+        ['Sparse Forcing','method','Native trainable sparse attention for real-time AR video generation','2604.21221'],
+        ['Temporal Cache Compression','method','Temporal cache compression + sparse attention for AR video and world models · ICML 2026','2602.01801'],
+        ['Video DeltaNet','method','Video-native hybrid linear attention for livestream generation','2609.20744'],
+        ['SANA-Video 2.0','model','Hybrid linear-attention video DiT at 5B and 14B','2607.21553'],
+        ['HeadCast','method','Casts attention heads to cut KV cost in AR video generation','2607.20125'] ]},
+      { name:'Interactive world models', blurb:'Real-time, controllable, long-horizon world generation.', nodes:[
+        ['WorldKV','method','World memory with retrieval and compression for persistent AR worlds','2605.22718'],
+        ['RELIC','model','Interactive video world model with long-horizon memory','2512.04040'],
+        ['Wonder','model','Real-time camera-controllable video world model','2607.26037'],
+        ['Helios','model','14B real-time long video generation at 19.5 FPS on one H100','2603.04379'],
+        ['minWM','model','Full-stack open framework for real-time interactive video world models','2605.30263'],
+        ['WAM-OPD','method','On-policy distillation for world action models (video prediction + robot actions)','2608.22364'] ]} ]}
   ],
   links: [
+    ['Self Forcing','GKD','both train the student on its own rollouts to fix exposure bias'],
+    ['Causal Forcing','Self Forcing','AR diffusion distillation recipes'],
+    ['CausVid','Self Forcing','bidirectional → autoregressive video'],
+    ['OmniOPD','DistillSpec','speculative verification as a distribution-alignment signal'],
+    ['Accuracy is Not All You Need','GKD','measure the drift → train it away'],
+    ['KVSculpt','Forcing-KV','KV cache compression, LLM vs video'],
+    ['WorldKV','Forcing-KV','KV memory for AR video worlds'],
+    ['Video DeltaNet','SANA-Video 2.0','hybrid linear attention for video'],
     ['Cache-to-Cache','MLA','KV-cache compression'],
     ['xKV','MLA','low-rank KV latent'],
     ['xKV','SVD-LLM','singular-vector low-rank'],

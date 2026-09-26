@@ -31,3 +31,20 @@
 2606.05711   # [Multi-Agent·latent] Beyond tokens: a unified framework for latent communication in LLM-based MAS — 통합 프레임워크
 2608.02032   # [Efficient-Seq] DART: Decoded Attention over Recurrent States for Efficient Long-Context Sequence Modeling
 2603.02263   # [World-Model·shared] Social-JEPA: Emergent Geometric Isomorphism — 서로 다른 시점의 에이전트가 공유 world model 획득
+#
+# ============================================================
+# === 2026-09-26 우선 주제 큐 — [P1] 소형–대형 분포 정렬 / [P2] 효율 비디오·월드 모델 생성 ===
+#  사용자가 정한 새 우선순위. 루틴은 `paper_signals.py --slot`이 알려주는 오늘 슬롯(P1/P2/legacy)에 맞는
+#  태그의 맨 위 항목을 고른다(legacy 날엔 이 큐를 건너뛰고 기존 주제로 대체 검색).
+#  선정: alphaXiv 검색 + paper_signals 점수(학회·연구실·화제성·주제) · arXiv id 실재 확인 · done.log 중복 0.
+# ============================================================
+2407.09141   # [P1] Accuracy is Not All You Need — "flips"·KL: 정확도는 같아도 답이 바뀐다 (Microsoft Research, 이 흐름의 출발점)
+2602.02214   # [P2] Causal Forcing — AR 비디오 확산 증류 제대로 하기 (ICML'26, ▲173)
+2306.13649   # [P1] GKD — On-Policy Distillation of LMs (Google DeepMind, ICLR'24, OPD의 원조)
+2602.01801   # [P2] Fast AR Video Diffusion & World Models — 시간 캐시 압축 + 희소 어텐션 (ICML'26, NVIDIA)
+2604.13016   # [P1] Rethinking On-Policy Distillation — 현상·메커니즘·레시피 (Tsinghua, ▲309)
+2609.20744   # [P2] Video DeltaNet — 라이브스트림용 비디오 하이브리드 선형 어텐션 (Berkeley·Keutzer, 9월)
+2606.25519   # [P1] Quantization Inflates Reasoning — 정답은 유지, 추론 토큰은 증가 (UIUC·Microsoft)
+2608.13391   # [P2] Context-Matched Distillation — AR 비디오 증류의 교사 인과성 맞추기 (NVIDIA, P1과 다리)
+2606.01476   # [P1] OmniOPD — 추측 검증(speculative verification)으로 logit 없는 OPD (Meta AI, ▲96)
+2608.22364   # [P1] WAM-OPD — 월드 액션 모델을 위한 OPD (UCL, P1·P2 교차점)
