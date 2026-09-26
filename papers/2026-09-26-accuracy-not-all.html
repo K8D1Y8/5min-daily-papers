@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Accuracy is Not All You Need</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Small–Large Alignment · Compression Fidelity</span><span class="t-ko">Small–Large Alignment · 압축 충실도</span></span>
+      <span>2026.09.26</span>
+    </div>
+    <h1>Accuracy is Not All You Need<br>
+      <span class="glow t-en">— a compressed model can keep its benchmark score while answering a different set of questions right</span>
+      <span class="glow t-ko">— 압축 모델은 벤치마크 점수를 지키면서도, 맞히는 문제는 달라질 수 있다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge venue">NeurIPS'24</span>
+      <span class="badge lab">🏛 Microsoft Research</span>
+      <span class="badge"><span class="t-en">P1 · the paper that named "flips"</span><span class="t-ko">P1 · "flips"를 처음 정의한 논문</span></span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Abhinav Dutta</b>, Sanjeev Krishnan, Nipun Kwatra, Ramachandran Ramjee <span class="t-en">(all Microsoft Research, Bangalore)</span><span class="t-ko">(전원 Microsoft Research 벵갈루루)</span></span>
+      <span>🏛 Microsoft Research India</span>
+      <span>🗓 2024-07-12</span>
+      <span>📄 <a href="https://arxiv.org/abs/2407.09141">arXiv:2407.09141</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Compression papers prove a quantized or pruned model is "the same" by showing benchmark accuracy within 1–2 points of the original.</span><span class="t-ko">압축 논문들은 양자화·가지치기한 모델이 원본과 "같다"는 근거로, 벤치마크 정확도가 1~2점 안이라는 것만 보여 준다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Behind that equal score, many answers switch in both directions (correct→wrong and wrong→correct), so the changes cancel out in the average.</span><span class="t-ko">같은 점수 뒤에서 많은 답이 양방향으로 바뀐다(정답→오답, 오답→정답). 그래서 평균에서는 서로 상쇄된다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Judge a compressed model by its distance to the original, not its capability.</b> Count flips (answers whose correctness changed) and measure KL divergence (the gap between the two models' token distributions).</span><span class="t-ko"><b>압축 모델은 능력이 아니라 원본과의 거리로 평가한다.</b> flips(정답 여부가 바뀐 문항 비율)를 세고, KL divergence(두 모델의 토큰 확률분포 차이)를 잰다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">Six quantization schemes keep accuracy within 0–2 points, yet flips reach 13.6%. Flips track KL (Spearman 0.981) and worse MT-Bench generation.</span><span class="t-ko">양자화 방식 여섯 개가 정확도를 0~2점 안에 지키는데도 flips는 13.6%까지 오른다. flips는 KL과 함께 움직이고(스피어만 0.981), MT-Bench 생성 점수 하락과도 맞물린다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Two students both score 47 out of 100 on the same exam. Their <b>averages match</b>, but they may have gotten <b>different questions</b> right. Accuracy only compares the totals. Flips compare the answer sheets question by question, and KL compares how confident each student was on every option.</p>
+    <p class="t-ko">두 학생이 같은 시험에서 둘 다 100점 만점에 47점을 받았다고 하자. <b>점수는 같지만</b>, 맞힌 <b>문제는 다를</b> 수 있다. 정확도는 총점만 비교한다. flips는 답안지를 문항별로 대조하고, KL은 선택지마다 각자 얼마나 확신했는지를 비교한다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">The finding in one figure</span><span class="t-ko">한 장으로 보는 발견</span></h2>
+    <p class="vlead t-en"><b>Accuracy barely moves; the answers do.</b> Left, accuracy change stays near zero; right, the same runs spread to double-digit flips. Only GPTQ W8A16 stays close.</p>
+    <p class="vlead t-ko"><b>정확도는 거의 안 움직이는데, 답은 움직인다.</b> 왼쪽의 정확도 변화는 0 근처에 모이고, 오른쪽에서는 같은 실험이 두 자릿수 flips까지 퍼진다. GPTQ W8A16만 가깝게 남는다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2407.09141/analysis5.png" target="_blank"><img src="fig/2407.09141/analysis5.png" alt="Two scatter plots with baseline accuracy on the y-axis for seven tasks and five models. Left: change in accuracy, clustered between about -2.5 and +1.5 points for all six quantization schemes. Right: percent flips, spread from 0 up to about 13.6 percent, with GPTQ W8A16 staying near zero and SQ W8A8, BnB W4A4, AWQ and GPTQ W4A16 reaching 5 to 13 percent."></a>
+      <figcaption class="t-en"><b>Figure 1.</b> Each dot is one model × task (5 chat models, 7 tasks). Left: accuracy change vs. the 16-bit model. Right: flips for the same runs.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> 점 하나가 모델 × 과제 하나다(대화 모델 5개, 과제 7개). 왼쪽은 16비트 모델 대비 정확도 변화, 오른쪽은 같은 실험의 flips.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2407.09141</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Define two distance metrics.</span><span class="t-ko">거리 지표 두 개를 정한다.</span></b><span class="t-en">Flips count correct→wrong plus wrong→correct changes; KL is averaged over every token of every answer option.</span><span class="t-ko">flips는 정답→오답과 오답→정답 변화를 합쳐 센다. KL은 모든 선택지의 모든 토큰에 대해 평균한다.</span></li>
+      <li><b><span class="t-en">Test widely.</span><span class="t-ko">넓게 시험한다.</span></b><span class="t-en">Five Llama2/Yi chat models, six quantization schemes plus three pruning methods, ten tasks including MT-Bench.</span><span class="t-ko">Llama2/Yi 대화 모델 다섯 개, 양자화 여섯 가지와 가지치기 세 가지, MT-Bench를 포함한 과제 열 개.</span></li>
+      <li><b><span class="t-en">Explain, then validate.</span><span class="t-ko">설명하고 검증한다.</span></b><span class="t-en">A "top margin" analysis explains the cancelling; flips are checked against KL and generation quality.</span><span class="t-ko">"top margin" 분석으로 상쇄를 설명하고, flips를 KL 및 생성 품질과 대조한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key idea: accuracy is a net count</span><span class="t-ko">핵심: 정확도는 순증감이다</span></h2>
+    <p class="vlead t-en"><b>Accuracy reports the net change; flips report the gross traffic.</b> On the same axis, the accuracy bars are slivers and the flip bars are 6–14× longer.</p>
+    <p class="vlead t-ko"><b>정확도는 순증감을, flips는 오간 총량을 보여 준다.</b> 같은 축에 놓으면 정확도 막대는 가늘고 flips 막대는 6~14배 길다.</p>
+    <div class="vgrid">
+      <figure class="chart">
+        <div class="ct"><span class="t-en">|Accuracy change|, points</span><span class="t-ko">|정확도 변화|, 점</span></div>
+        <div class="cs"><span class="t-en">Llama2-7B chat, MMLU 5-shot (Table 5, base 47.21%)</span><span class="t-ko">Llama2-7B chat, MMLU 5-shot (Table 5, 기준 47.21%)</span></div>
+        <div class="bars">
+          <div class="bar" title="SQ W8A8: -2.36"><span class="bl">SQ W8A8</span><span class="bt"><span class="bf" style="--w:15.7%"></span></span><span class="bv">−2.36</span></div>
+          <div class="bar" title="BnB W4A4: -1.51"><span class="bl">BnB W4A4</span><span class="bt"><span class="bf" style="--w:10.1%"></span></span><span class="bv">−1.51</span></div>
+          <div class="bar" title="GPTQ W4A16: -0.58"><span class="bl">GPTQ W4A16</span><span class="bt"><span class="bf" style="--w:3.9%"></span></span><span class="bv">−0.58</span></div>
+          <div class="bar" title="AWQ W4A16: -0.62"><span class="bl">AWQ W4A16</span><span class="bt"><span class="bf" style="--w:4.1%"></span></span><span class="bv">−0.62</span></div>
+          <div class="bar" title="BnB W8A8: -0.30"><span class="bl">BnB W8A8</span><span class="bt"><span class="bf" style="--w:2%"></span></span><span class="bv">−0.30</span></div>
+          <div class="bar" title="GPTQ W8A16: +0.08"><span class="bl">GPTQ W8A16</span><span class="bt"><span class="bf" style="--w:0.5%"></span></span><span class="bv">+0.08</span></div>
+        </div>
+      </figure>
+      <figure class="chart">
+        <div class="ct"><span class="t-en">Flips, % of questions</span><span class="t-ko">flips, 문항 %</span></div>
+        <div class="cs"><span class="t-en">Same runs · same 0–15 axis · W8A16 = 8-bit weights, 16-bit activations</span><span class="t-ko">같은 실험 · 같은 0–15 축 · W8A16 = 가중치 8비트, 활성값 16비트</span></div>
+        <div class="bars mono">
+          <div class="bar" title="SQ W8A8: 13.62%"><span class="bl">SQ W8A8</span><span class="bt"><span class="bf" style="--w:90.8%"></span></span><span class="bv">13.62</span></div>
+          <div class="bar" title="BnB W4A4: 10.65%"><span class="bl">BnB W4A4</span><span class="bt"><span class="bf" style="--w:71%"></span></span><span class="bv">10.65</span></div>
+          <div class="bar" title="GPTQ W4A16: 8.26%"><span class="bl">GPTQ W4A16</span><span class="bt"><span class="bf" style="--w:55.1%"></span></span><span class="bv">8.26</span></div>
+          <div class="bar" title="AWQ W4A16: 7.50%"><span class="bl">AWQ W4A16</span><span class="bt"><span class="bf" style="--w:50%"></span></span><span class="bv">7.50</span></div>
+          <div class="bar" title="BnB W8A8: 4.15%"><span class="bl">BnB W8A8</span><span class="bt"><span class="bf" style="--w:27.7%"></span></span><span class="bv">4.15</span></div>
+          <div class="bar" title="GPTQ W8A16: 0.60%"><span class="bl">GPTQ W8A16</span><span class="bt"><span class="bf" style="--w:4%"></span></span><span class="bv">0.60</span></div>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Why the flips cancel out</span><span class="t-ko">flips가 상쇄되는 이유</span></h2>
+    <p class="vlead t-en"><b>Unsure answers are the ones that move, and wrong answers are usually unsure.</b> Top margin is the probability gap between the best and second-best option; compression noise swaps them when it is small.</p>
+    <p class="vlead t-ko"><b>확신이 낮은 답이 움직이는데, 틀린 답은 대개 확신이 낮다.</b> top margin은 1등과 2등 선택지의 확률 차이이고, 이 차이가 작으면 압축 잡음이 둘을 뒤바꾼다.</p>
+    <figure class="fig narrow">
+      <a class="zoom" href="fig/2407.09141/top_margin_stay_change_Llama270b_llmint84bit_mmlu.png" target="_blank"><img src="fig/2407.09141/top_margin_stay_change_Llama270b_llmint84bit_mmlu.png" alt="Bar chart of the fraction of answers that stay or change versus top margin for Llama2-70B with 4-bit bitsandbytes on MMLU; at top margin near 0 about 43 percent change, falling below 5 percent above 0.5."></a>
+      <figcaption class="t-en"><b>Figure 3.</b> Llama2-70B, 4-bit (BnB W4A4), MMLU. Near-zero margins change about 42% of the time; margins above 0.5 rarely do. Wrong answers change 1.4–4.9× as often as right ones (our ratio from Table 2).</figcaption>
+      <figcaption class="t-ko"><b>Figure 3.</b> Llama2-70B, 4비트(BnB W4A4), MMLU. 여유가 0에 가까우면 약 42%가 바뀌고, 0.5를 넘으면 드물게만 바뀐다. 틀린 답은 맞은 답보다 1.4~4.9배 자주 바뀐다(Table 2로 계산한 비율).</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2407.09141</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results</span><span class="t-ko">결과</span></h2>
+    <p class="vlead t-en"><b>Flips are a cheap stand-in for distribution distance, which averages can't see.</b> Flips rise with KL; perplexity, another average, stays flat as the output falls apart.</p>
+    <p class="vlead t-ko"><b>flips는 분포 거리를 싸게 대신하는 지표이고, 평균 지표는 그 거리를 못 본다.</b> flips는 KL과 같이 오르고, 역시 평균인 perplexity(평균 예측 불확실성)는 출력이 무너져도 그대로다.</p>
+    <div class="vgrid">
+      <figure class="fig">
+        <a class="zoom" href="fig/2407.09141/flips_vs_fullKLDiv_mmlufewshot5.png" target="_blank"><img src="fig/2407.09141/flips_vs_fullKLDiv_mmlufewshot5.png" alt="Scatter of KL divergence against percent flips on MMLU 5-shot, one point per model and quantization pair, rising together with correlation 0.981."></a>
+        <figcaption class="t-en"><b>Figure 5c.</b> MMLU: KL vs. flips, one dot per model × scheme (Spearman 0.981).</figcaption>
+        <figcaption class="t-ko"><b>Figure 5c.</b> MMLU에서 KL 대 flips, 점 하나가 모델 × 방식 하나(스피어만 0.981).</figcaption>
+      </figure>
+      <figure class="chart">
+        <div class="ct"><span class="t-en">Tokens still matching the greedy pick</span><span class="t-ko">원래 greedy 선택과 같은 토큰 비율</span></div>
+        <div class="cs"><span class="t-en">Llama2-13B chat, Gaussian noise σ on log-probs · perplexity stays 5.70 in every row</span><span class="t-ko">Llama2-13B chat, 로그확률에 가우시안 잡음 σ · perplexity는 모든 행에서 5.70</span></div>
+        <div class="bars mono">
+          <div class="bar" title="sigma 0: 61.3%, KL 0.00"><span class="bl">σ 0</span><span class="bt"><span class="bf" style="--w:61.3%"></span></span><span class="bv">61.3%</span></div>
+          <div class="bar" title="sigma 1: 58.2%, KL 0.20"><span class="bl">σ 1</span><span class="bt"><span class="bf" style="--w:58.2%"></span></span><span class="bv">58.2%</span></div>
+          <div class="bar" title="sigma 3: 42.5%, KL 1.86"><span class="bl">σ 3</span><span class="bt"><span class="bf" style="--w:42.5%"></span></span><span class="bv">42.5%</span></div>
+          <div class="bar" title="sigma 5: 21.5%, KL 5.67"><span class="bl">σ 5</span><span class="bt"><span class="bf" style="--w:21.5%"></span></span><span class="bv">21.5%</span></div>
+        </div>
+        <figcaption class="t-en">Table 19 values; KL grows 0 → 5.67 over the same rows.</figcaption>
+        <figcaption class="t-ko">Table 19 수치. 같은 행에서 KL은 0 → 5.67로 커진다.</figcaption>
+      </figure>
+    </div>
+    <p class="vlead gap t-en"><b>In free-form generation the gap shows.</b> At near-equal MMLU accuracy the 70B model loses MT-Bench points; the fewest-flips variant loses least.</p>
+    <p class="vlead gap t-ko"><b>자유 생성에서는 차이가 드러난다.</b> MMLU 정확도가 거의 같아도 70B 모델은 MT-Bench 점수를 잃고, flips가 가장 적은 변형이 가장 덜 잃는다.</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Tables 3 &amp; 5, Llama2-70B chat.</b> MMLU 5-shot accuracy change and flips vs. the 16-bit model, and MT-Bench average score (GPT-4 judge, 0–10). SmoothQuant W8A8 is omitted to keep the table short (−0.24 / 3.73 / 7.003).</caption>
+        <caption class="t-ko"><b>Table 3 &amp; 5, Llama2-70B chat.</b> 16비트 대비 MMLU 5-shot 정확도 변화와 flips, 그리고 MT-Bench 평균 점수(GPT-4 채점, 0–10). 표를 짧게 하려고 SmoothQuant W8A8은 뺐다(−0.24 / 3.73 / 7.003).</caption>
+        <thead><tr><th><span class="t-en">Scheme</span><span class="t-ko">방식</span></th><th>Δ acc</th><th>flips %</th><th>MT-Bench</th></tr></thead>
+        <tbody>
+          <tr><td>16-bit</td><td>63.17 base</td><td>—</td><td>7.431</td></tr>
+          <tr><td>GPTQ W8A16</td><td class="up">−0.01</td><td class="up">0.26</td><td class="up">7.225</td></tr>
+          <tr><td>BnB W8A8</td><td>−0.55</td><td>3.32</td><td>7.059</td></tr>
+          <tr><td>GPTQ W4A16</td><td>−0.45</td><td>4.26</td><td>6.801</td></tr>
+          <tr><td>AWQ W4A16</td><td>−0.76</td><td>4.05</td><td>6.937</td></tr>
+          <tr><td>BnB W4A4</td><td>−0.78</td><td>5.65</td><td>7.018</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">13.6%</div><div class="l"><span class="t-en">flips at a 2.4-point accuracy change (SQ W8A8, 7B)</span><span class="t-ko">정확도 2.4점 변화에서의 flips (SQ W8A8, 7B)</span></div></div>
+      <div class="stat"><div class="n">0.981</div><div class="l"><span class="t-en">Spearman correlation of flips with KL on MMLU</span><span class="t-ko">MMLU에서 flips와 KL의 스피어만 상관</span></div></div>
+      <div class="stat"><div class="n">18.3%</div><div class="l"><span class="t-en">GSM8k flips while accuracy rose 43.3 → 44.2 (70B chat, 4-bit)</span><span class="t-ko">정확도가 43.3 → 44.2로 오른 채 GSM8k flips (70B chat, 4비트)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">When a compressed or distilled model replaces a larger one, report flips and KL to it next to accuracy. Drift starts at low-top-margin tokens, a natural place to spend extra bits, rank, or distillation signal.</span><span class="t-ko">압축·증류 모델이 큰 모델을 대신한다면, 정확도 옆에 그 모델 대비 flips와 KL을 함께 보고하자. drift(원본에서 멀어짐)는 top margin이 낮은 토큰에서 시작하니, 추가 비트·랭크·증류 신호를 쓸 자리다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">A measurement paper with no fix. Flips use first-token multiple-choice answers, and the link to real harm rests on GPT-4-judged MT-Bench, where the order isn't strict (BnB W4A4: more flips than GPTQ W4A16, higher score). Models are 2023-era Llama2 and Yi.</span><span class="t-ko">해결책 없는 측정 논문이다. flips는 객관식 첫 토큰 답으로 재고, 실제 피해와의 연결은 GPT-4 채점 MT-Bench에 기대는데 순서가 엄밀하지 않다(BnB W4A4는 GPTQ W4A16보다 flips가 많지만 점수는 높다). 모델은 2023년 세대 Llama2와 Yi다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2407.09141">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2407.09141">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2407.09141">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2407.09141">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>first P1 card: the paper that named the gap behind your Small–Large Alignment priority (top of the P1 queue) · venue: NeurIPS 2024 · Microsoft Research</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-09-26.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>첫 P1 카드: 소형–대형 분포 정렬 우선 주제의 문제를 처음 이름 붙인 논문(P1 큐 1순위) · venue: NeurIPS 2024 · Microsoft Research</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-09-26.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
