@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · On-Policy Distillation of Language Models: Learning from Self-Generated Mistakes</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Small–Large Alignment · On-Policy Distillation</span><span class="t-ko">Small–Large Alignment · 온폴리시 증류</span></span>
+      <span>2026.09.28</span>
+    </div>
+    <h1>On-Policy Distillation of Language Models: Learning from Self-Generated Mistakes<br>
+      <span class="glow t-en">— let the student write, let the teacher grade every token, so training covers the states the student really visits</span>
+      <span class="glow t-ko">— 학생이 직접 쓰고 교사가 토큰마다 채점해, 학생이 실제로 가게 될 상태에서 학습한다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge venue">ICLR'24</span>
+      <span class="badge lab">🏛 Google DeepMind</span>
+      <span class="badge hot">▲ 116 alphaXiv · 38 HF</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Rishabh Agarwal*</b>, Nino Vieillard*, Yongchao Zhou, Piotr Stanczyk, Sabela Ramos, Matthieu Geist, Olivier Bachem <span class="t-en">(*equal · corresponding: Rishabh Agarwal, Nino Vieillard)</span><span class="t-ko">(*공동 1저자 · 교신: Rishabh Agarwal, Nino Vieillard)</span></span>
+      <span>🏛 Google DeepMind · Mila · University of Toronto</span>
+      <span>🗓 2023-06-23</span>
+      <span>📄 <a href="https://arxiv.org/abs/2306.13649">arXiv:2306.13649</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Standard KD (knowledge distillation) trains on fixed teacher or gold outputs, but at inference the student reads its own tokens, so early errors compound.</span><span class="t-ko">일반 KD(지식 증류)는 고정된 교사·정답 출력으로 학습하지만, 추론 때 학생은 자기가 쓴 토큰을 이어 읽으므로 초반 실수가 쌓여 간다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">It is imitation learning's train–test mismatch. A small student also can't fit the whole teacher distribution, so forward KL spreads mass onto unlikely tokens.</span><span class="t-ko">이는 모방 학습의 학습–추론 불일치다. 게다가 작은 학생은 교사 분포 전체를 못 맞추니, forward KL은 교사가 거의 안 고르는 토큰에도 확률을 흩뿌린다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Sample from the student, grade with the teacher.</b> On the student's own outputs, the teacher supplies its next-token distribution at every prefix and the student minimizes a chosen divergence to it.</span><span class="t-ko"><b>학생이 샘플링하고, 교사가 채점한다.</b> 학생이 직접 만든 출력의 모든 앞부분(prefix)에서 교사가 다음 토큰 분포를 주고, 학생은 그 분포와의 발산(divergence, 두 분포의 차이)을 줄인다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">T5-XL → T5 students (77M–800M): the gain over the starting student is 2.1×, 1.7× and 1.9× baseline KD's on XSum summarization, WMT translation and GSM8K math.</span><span class="t-ko">T5-XL → T5 학생(77M–800M): 시작 학생 대비 향상폭이 XSum 요약·WMT 번역·GSM8K 수학에서 기존 KD의 2.1배·1.7배·1.9배.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Think of learning to drive. Supervised KD is <b>watching the instructor drive</b>: you only see the road from a perfect lane position. On-policy distillation <b>puts you at the wheel</b>, and the instructor says what they would do from wherever you actually are, including the spots only your own mistakes lead to.</p>
+    <p class="t-ko">운전 배우기를 떠올리면 쉽다. 지도 학습 KD는 <b>강사가 운전하는 걸 옆에서 보는 것</b>이라, 늘 완벽한 차선 위치에서 본 길만 익힌다. 온폴리시 증류는 <b>내가 직접 운전대를 잡고</b>, 강사가 "지금 네 위치라면 나는 이렇게 하겠다"고 알려 준다. 내 실수로만 가게 되는 자리까지 포함해서.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">The result in one figure</span><span class="t-ko">한 장으로 보는 결과</span></h2>
+    <p class="vlead t-en"><b>Training on the student's own outputs wins at every size.</b> The green on-policy line sits above supervised KD and SeqKD (training on teacher-written outputs) for all three students on all three tasks.</p>
+    <p class="vlead t-ko"><b>학생 자신의 출력으로 학습하면 모든 크기에서 이긴다.</b> 초록색 온폴리시 선이 세 과제, 세 학생 크기 모두에서 지도 학습 KD와 SeqKD(교사가 쓴 출력으로 학습)보다 위에 있다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2306.13649/intro_fig_gkd.svg" target="_blank"><img src="fig/2306.13649/intro_fig_gkd.svg" alt="Three line plots (XSum ROUGE-2, WMT BLEU, GSM8K accuracy) versus student size T5-Small 77M, T5-Base 250M, T5-Large 800M. The GKD on-policy line is above supervised fine-tuning, supervised KD and SeqKD everywhere, approaching the dashed T5-XL teacher line; labels +111%, +70%, +90%."></a>
+      <figcaption class="t-en"><b>Figure 1.</b> Dashed line = T5-XL (~3B) teacher. +111% / +70% / +90% = how much larger GKD's gain is than baseline KD's, averaged over student sizes.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> 점선 = T5-XL(~3B) 교사. +111% / +70% / +90% = GKD의 향상폭이 기존 KD보다 얼마나 큰지(학생 크기 평균).</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2306.13649</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Start from a fine-tuned student.</span><span class="t-ko">미세조정된 학생에서 시작한다.</span></b><span class="t-en">As in RLHF, the student is first SFT'd (supervised fine-tuned) so its outputs are good enough for the teacher to grade.</span><span class="t-ko">RLHF처럼, 학생을 먼저 SFT(지도 미세조정)해 교사가 채점할 만한 출력을 쓰게 한다.</span></li>
+      <li><b><span class="t-en">Pick the data source each step.</span><span class="t-ko">매 스텝 데이터 출처를 고른다.</span></b><span class="t-en">With probability λ the student samples outputs at temperature 1; otherwise use a batch of gold or teacher outputs. λ = 1 is fully on-policy.</span><span class="t-ko">확률 λ로 학생이 온도 1로 출력을 샘플링하고, 아니면 정답·교사 출력 묶음을 쓴다. λ = 1이면 완전 온폴리시.</span></li>
+      <li><b><span class="t-en">Match the teacher token by token.</span><span class="t-ko">토큰마다 교사에 맞춘다.</span></b><span class="t-en">The student minimizes forward KL, reverse KL or JSD(β), a bounded blend of the two, averaged over tokens. No gradient flows through sampling.</span><span class="t-ko">학생은 forward KL·reverse KL·JSD(β)(둘을 섞은 유계 발산) 중 하나를 토큰 평균으로 줄인다. 샘플링 과정으로는 기울기를 흘리지 않는다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key idea: train where the student goes</span><span class="t-ko">핵심: 학생이 가는 곳에서 학습한다</span></h2>
+    <p class="vlead t-en"><b>The student's own outputs are the better training set.</b> Same loss, only the data changes: going from fixed data (λ = 0) to self-generated data (λ = 1) nearly doubles the GSM8K gain and triples the WMT one.</p>
+    <p class="vlead t-ko"><b>학생 자신의 출력이 더 좋은 학습 데이터다.</b> 손실은 같고 데이터만 바꾼다: 고정 데이터(λ = 0)를 자기 생성 데이터(λ = 1)로 바꾸면 GSM8K 이득은 거의 2배, WMT는 3배가 된다.</p>
+    <div class="vgrid">
+      <figure class="chart">
+        <div class="ct"><span class="t-en">GSM8K accuracy gain</span><span class="t-ko">GSM8K 정확도 향상</span></div>
+        <div class="cs"><span class="t-en">T5-XL → T5-base, forward KL · points over the starting student (Figure 7)</span><span class="t-ko">T5-XL → T5-base, forward KL · 시작 학생 대비 %p (Figure 7)</span></div>
+        <div class="bars" style="--lw:118px">
+          <div class="bar" title="λ = 0 (fixed data): +4.7"><span class="bl">λ = 0 · fixed</span><span class="bt"><span class="bf" style="--w:47%"></span></span><span class="bv">+4.7</span></div>
+          <div class="bar" title="λ = 0.5 (mixed): +6.8"><span class="bl">λ = 0.5 · mixed</span><span class="bt"><span class="bf" style="--w:68%"></span></span><span class="bv">+6.8</span></div>
+          <div class="bar hl" title="λ = 1 (on-policy): +8.8"><span class="bl">λ = 1 · on-policy</span><span class="bt"><span class="bf" style="--w:88%"></span></span><span class="bv">+8.8</span></div>
+        </div>
+        <figcaption class="t-en">λ = 1 is best for all five divergences tested.</figcaption>
+        <figcaption class="t-ko">시험한 발산 다섯 개 모두에서 λ = 1이 가장 좋다.</figcaption>
+      </figure>
+      <figure class="chart">
+        <div class="ct"><span class="t-en">WMT en→de BLEU gain</span><span class="t-ko">WMT 영→독 BLEU 향상</span></div>
+        <div class="cs"><span class="t-en">T5-XL → T5-small, JSD(0.1) · BLEU over the starting student (Figure 6)</span><span class="t-ko">T5-XL → T5-small, JSD(0.1) · 시작 학생 대비 BLEU (Figure 6)</span></div>
+        <div class="bars" style="--lw:118px">
+          <div class="bar" title="λ = 0 (fixed data): +0.28"><span class="bl">λ = 0 · fixed</span><span class="bt"><span class="bf" style="--w:28%"></span></span><span class="bv">+0.28</span></div>
+          <div class="bar" title="λ = 0.5 (mixed): +0.71"><span class="bl">λ = 0.5 · mixed</span><span class="bt"><span class="bf" style="--w:71%"></span></span><span class="bv">+0.71</span></div>
+          <div class="bar hl" title="λ = 1 (on-policy): +0.85"><span class="bl">λ = 1 · on-policy</span><span class="bt"><span class="bf" style="--w:85%"></span></span><span class="bv">+0.85</span></div>
+        </div>
+        <figcaption class="t-en">Student 25.58 BLEU, teacher 28; fixed data barely closes the gap.</figcaption>
+        <figcaption class="t-ko">학생 25.58 BLEU, 교사 28. 고정 데이터로는 차이가 거의 안 줄어든다.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Which divergence? It depends</span><span class="t-ko">어떤 발산? 과제에 따라 다르다</span></h2>
+    <p class="vlead t-en"><b>Forward KL covers every teacher mode; reverse KL commits to one.</b> A small student can't do both, so covering spreads probability onto poor tokens, while committing trades diversity for quality.</p>
+    <p class="vlead t-ko"><b>forward KL은 교사의 봉우리를 모두 덮고, reverse KL은 하나를 고른다.</b> 작은 학생은 둘 다 못 하니, 덮으려 하면 나쁜 토큰에 확률이 흩어지고, 고르면 다양성을 내주고 품질을 얻는다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2306.13649/reverse_forward_kl.svg" target="_blank"><img src="fig/2306.13649/reverse_forward_kl.svg" alt="Three panels fitting a single Gaussian Q to a two-peak distribution P. The forward-KL fit (red dashed) is a wide bump spanning both peaks; the reverse-KL fit (green dotted) sits tightly on one peak."></a>
+      <figcaption class="t-en"><b>Figure A.16.</b> One Gaussian fit to a two-peak P: forward KL (red dashed) straddles both peaks; reverse KL (green dotted) locks onto one.</figcaption>
+      <figcaption class="t-ko"><b>Figure A.16.</b> 봉우리 둘인 P에 가우시안 하나를 맞추면: forward KL(빨간 점선)은 두 봉우리 사이에 걸치고, reverse KL(초록 점선)은 하나에 붙는다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2306.13649</div>
+    </figure>
+    <p class="vlead gap t-en"><b>No single winner.</b> Mode-seeking losses help when sampling at temperature 1 and reverse KL wins instruction tuning, yet forward KL is best on GSM8K.</p>
+    <p class="vlead gap t-ko"><b>하나의 정답은 없다.</b> 온도 1로 샘플링할 땐 봉우리 하나를 좇는 손실이 낫고 instruction tuning에선 reverse KL이 이기지만, GSM8K에선 forward KL이 가장 좋다.</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Figures A.12, A.13, 6, 7, 10.</b> On-policy GKD (λ = 1) with each divergence; higher is better, best per row highlighted. Δ = gain over the starting student; * read from a bar plot.</caption>
+        <caption class="t-ko"><b>Figures A.12, A.13, 6, 7, 10.</b> 온폴리시 GKD(λ = 1)의 발산별 결과. 높을수록 좋고, 행마다 최고값 강조. Δ = 시작 학생 대비 향상; * 막대 그림에서 읽은 값.</caption>
+        <thead><tr><th><span class="t-en">Setting</span><span class="t-ko">설정</span></th><th>Fwd KL</th><th>JSD(0.1)</th><th>JSD(0.5)</th><th>JSD(0.9)</th><th>Rev KL</th></tr></thead>
+        <tbody>
+          <tr><td>XSum · small · ROUGE-2 (temp. 1)</td><td>13.2</td><td>15.1</td><td class="up">15.5</td><td>15.2</td><td>14.5</td></tr>
+          <tr><td>XSum · small · ROUGE-2 (greedy)</td><td>16.4</td><td class="up">16.6</td><td class="up">16.6</td><td>16.3</td><td>15.6</td></tr>
+          <tr><td>WMT · small · ΔBLEU</td><td>0.55</td><td class="up">0.85</td><td>0.77</td><td>0.79</td><td>0.46</td></tr>
+          <tr><td>GSM8K · base · Δacc</td><td class="up">8.8</td><td>7.6</td><td>7.0</td><td>6.7</td><td>8.0</td></tr>
+          <tr><td>FLAN → MMLU · base · Δacc</td><td>−0.5*</td><td>–</td><td>–</td><td>–</td><td class="up">+2.0*</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">2.1×</div><div class="l"><span class="t-en">XSum gain vs baseline KD's gain</span><span class="t-ko">XSum 향상폭, 기존 KD 향상폭 대비</span></div></div>
+      <div class="stat"><div class="n">5%</div><div class="l"><span class="t-en">of XSum data beats full-data supervised KD</span><span class="t-ko">XSum 데이터 5%로 전체 데이터 지도 KD를 앞섬</span></div></div>
+      <div class="stat"><div class="n">7000×</div><div class="l"><span class="t-en">smaller T5 beats few-shot PaLM-540B on XSum</span><span class="t-ko">더 작은 T5가 XSum에서 few-shot PaLM-540B를 앞섬</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">If a distilled or compressed model matches the teacher on benchmarks but drifts when it generates, fix the data before the loss: grade the student's own rollouts with teacher logits. The same loss drops into RLHF by moving the KL anchor from the initial policy to the teacher.</span><span class="t-ko">증류·압축한 모델이 벤치마크는 맞추는데 생성할 때 어긋난다면, 손실보다 데이터를 먼저 고쳐라: 학생이 직접 만든 출력을 교사 logit으로 채점하게. 같은 손실은 RLHF의 KL 기준점을 초기 정책에서 교사로 옮기기만 하면 그대로 끼워 넣을 수 있다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">Everything is T5 (teacher ~3B, students ≤ 800M) scored by ROUGE, BLEU or accuracy; the paper never measures how close the student's output distribution gets to the teacher's. Sampling from the student makes training about 1.8–2.2× costlier than fixed data, and the divergence must be tuned per task.</span><span class="t-ko">모든 실험이 T5(교사 ~3B, 학생 ≤ 800M)와 ROUGE·BLEU·정확도뿐이고, 학생 출력 분포가 교사에 얼마나 가까워졌는지는 재지 않는다. 학생 샘플링 때문에 고정 데이터보다 학습 비용이 약 1.8–2.2배 들고, 발산은 과제마다 따로 골라야 한다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2306.13649">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2306.13649">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2306.13649">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2306.13649">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>top P1 wishlist item, the origin of on-policy distillation · ICLR main track · Google DeepMind · hot (▲116 alphaXiv, 38 HF) · score 12 · venue: ICLR 2024</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-09-28.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P1 위시리스트 1순위, 온폴리시 증류의 원조 · ICLR 메인 트랙 · Google DeepMind · 화제성(alphaXiv ▲116, HF 38) · 점수 12 · venue: ICLR 2024</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-09-28.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
