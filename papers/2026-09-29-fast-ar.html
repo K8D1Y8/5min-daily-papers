@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · FAST-AR: Fast Autoregressive Video Diffusion and World Models with Temporal Cache Compression and Sparse Attention</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Video &amp; World Generation · KV Cache &amp; Sparse Attention</span><span class="t-ko">Video &amp; World Generation · KV 캐시·희소 어텐션</span></span>
+      <span>2026.09.29</span>
+    </div>
+    <h1>FAST-AR: Fast Autoregressive Video Diffusion and World Models with Temporal Cache Compression and Sparse Attention<br>
+      <span class="glow t-en">— merge cached keys that track the same object across frames, attend only to near neighbors: 10× faster, flat memory</span>
+      <span class="glow t-ko">— 프레임을 건너 같은 물체를 가리키는 캐시 키를 합치고 가까운 이웃에만 어텐션해, 10배 빠르고 메모리는 일정하다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge venue">ICML'26</span>
+      <span class="badge lab">🏛 NVIDIA · Gal Chechik</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Dvir Samuel</b>, Issar Tzachor, Matan Levy, Michael Green, Gal Chechik, Rami Ben-Ari <span class="t-en">(corresponding: Dvir Samuel)</span><span class="t-ko">(교신: Dvir Samuel)</span></span>
+      <span>🏛 OriginAI · Bar-Ilan University · Hebrew University of Jerusalem · NVIDIA</span>
+      <span>🗓 2026-02-02 (v2 2026-06-12)</span>
+      <span>📄 <a href="https://arxiv.org/abs/2602.01801">arXiv:2602.01801</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Autoregressive video models stream frames, but their KV cache (stored keys/values of past frames) grows every frame, so speed falls and memory climbs.</span><span class="t-ko">AR(자기회귀, 한 프레임씩 이어 만드는) 비디오 모델은 스트리밍이 되지만, KV 캐시(지난 프레임의 키·값 저장소)가 프레임마다 커져 속도는 떨어지고 메모리는 늘어난다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Attention is sparse (30% of entries keep ~85% of its mass); cached keys repeat across frames; each frame needs only a few prompt words.</span><span class="t-ko">어텐션은 희소하다(상위 30% 항목이 어텐션 질량의 약 85%를 차지). 캐시된 키는 프레임마다 거의 복사본이고, 한 프레임에 필요한 프롬프트 단어는 몇 개뿐이다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Three training-free modules built on fast ANN (approximate nearest neighbor) lookup:</b> TempCache merges keys that track the same content, AnnCA drops irrelevant prompt tokens, AnnSA limits self-attention to matched keys — compute only where attention lands.</span><span class="t-ko"><b>빠른 ANN(근사 최근접 이웃) 검색으로 만든, 추가 학습이 필요 없는 모듈 3개:</b> TempCache는 같은 내용을 가리키는 키를 합치고, AnnCA는 상관없는 프롬프트 토큰을 빼고, AnnSA는 셀프 어텐션을 짝이 맞는 키로만 제한한다. 어텐션이 실제로 가는 곳만 계산한다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">Rolling-Forcing: 10.8× end-to-end at dense quality (VBench 83.99 vs 84.08); best baseline combo 4.4× at 45.15. LongVie2 world model: 6.9×.</span><span class="t-ko">Rolling-Forcing: dense 품질(VBench 83.99 대 84.08)에서 종단 10.8배. 가장 좋은 기준선 조합은 4.4배에 45.15. LongVie2 월드 모델: 6.9배.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Picture an editor logging a two-minute shot of a walking cat. Instead of a fresh card for the cat every frame, they <b>keep only the latest card and tally how many frames it stands for</b>, and when checking the script they <b>read only the lines about who is on screen now</b>. If the cards are true duplicates, the tally makes the merge lossless.</p>
+    <p class="t-ko">고양이가 걸어오는 2분짜리 장면을 정리하는 편집자를 떠올려 보자. 매 프레임마다 고양이 카드를 새로 만드는 대신 <b>가장 최근 카드 한 장만 두고 몇 프레임을 대신하는지 개수를 적는다</b>. 대본을 확인할 때는 <b>지금 화면에 나온 인물에 대한 줄만 읽는다</b>. 카드가 진짜 중복이라면 적어 둔 개수 덕분에 합쳐도 잃는 것이 없다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: track, merge, look up</span><span class="t-ko">작동 방식: 추적하고, 합치고, 찾아본다</span></h2>
+    <p class="vlead t-en"><b>The same patch of the cat reappears in every frame, so its keys only need storing once.</b> Matching each current query to its closest past key recovers these tracks cheaply.</p>
+    <p class="vlead t-ko"><b>고양이의 같은 부분이 매 프레임 다시 나오므로, 그 키는 한 번만 저장하면 된다.</b> 현재 쿼리마다 가장 비슷한 과거 키를 찾으면 이 궤적을 싸게 복원할 수 있다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2602.01801/temporal_correspondance.png" target="_blank"><img src="fig/2602.01801/temporal_correspondance.png" alt="Three frames (f = 1, 2, 3) of key features colored by PCA, with a green cat-shaped region in the middle. A blue dot and an orange dot in each frame are linked by arrows to the matching dots in the next frame, showing the same keys tracked over time."></a>
+      <figcaption class="t-en"><b>Figure 5.</b> Keys colored by PCA over frames 1–3; arrows link each point to its match in the next frame.</figcaption>
+      <figcaption class="t-ko"><b>Figure 5.</b> 프레임 f = 1, 2, 3의 키를 PCA(주성분 분석)로 색칠했다. 화살표는 각 점을 다음 프레임에서 짝이 되는 점과 잇는다(시간 대응).</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2602.01801</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">TempCache: merge tracked keys.</span><span class="t-ko">TempCache: 추적된 키를 합친다.</span></b><span class="t-en">Similar keys matched across frames form a group: keep the newest key, average values, add log(group size) to its score.</span><span class="t-ko">프레임을 건너 짝지어진 비슷한 키를 한 그룹으로 묶는다. 최신 키 하나만 남기고, 값은 평균 내고, 점수에 log(그룹 크기)를 더한다.</span></li>
+      <li><b><span class="t-en">AnnCA: prune the prompt per frame.</span><span class="t-ko">AnnCA: 프레임마다 프롬프트를 솎아 낸다.</span></b><span class="t-en">Hash frame queries and prompt keys into buckets (LSH, locality-sensitive hashing, or 8-bit codes); tokens sharing no bucket are skipped.</span><span class="t-ko">프레임 쿼리와 프롬프트 키를 버킷에 나눠 담는다(LSH, 비슷한 벡터가 같은 칸에 들어가게 하는 해싱, 또는 8비트 코드). 쿼리와 겹치는 버킷이 없는 토큰은 건너뛴다.</span></li>
+      <li><b><span class="t-en">AnnSA: attend within buckets.</span><span class="t-ko">AnnSA: 같은 버킷 안에서만 어텐션한다.</span></b><span class="t-en">Reuse those semantic buckets for self-attention: each query sees only keys in its bucket(s), via block-sparse FlashInfer kernels.</span><span class="t-ko">그 의미 버킷을 셀프 어텐션에 재사용한다. 각 쿼리는 자기 버킷의 키만 보고, 블록 희소 FlashInfer 커널로 계산한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key idea: fewer keys, same attention</span><span class="t-ko">핵심: 키는 적게, 어텐션은 그대로</span></h2>
+    <p class="vlead t-en"><b>TempCache computes on about one-sixth of the cache yet keeps more attention mass than cache-reuse baselines.</b> It drops only duplicate keys.</p>
+    <p class="vlead t-ko"><b>TempCache는 캐시의 약 6분의 1만 계산하면서도 캐시 재사용 기준선보다 어텐션 질량을 더 많이 지킨다.</b> 중복 키만 빼기 때문이다.</p>
+    <div class="vgrid">
+      <figure class="chart">
+        <div class="ct"><span class="t-en">Attention density</span><span class="t-ko">어텐션 밀도</span></div>
+        <div class="cs"><span class="t-en">Table 1 · Rolling-Forcing · share of query–key pairs computed · lower is cheaper</span><span class="t-ko">Table 1 · Rolling-Forcing · 계산하는 쿼리–키 쌍 비율 · 낮을수록 싸다</span></div>
+        <div class="bars">
+          <div class="bar hl" title="TempCache-Quant: 16.2%"><span class="bl">TempCache</span><span class="bt"><span class="bf" style="--w:16.2%"></span></span><span class="bv">16.2%</span></div>
+          <div class="bar" title="FlowCache: 82.9%"><span class="bl">FlowCache</span><span class="bt"><span class="bf" style="--w:82.9%"></span></span><span class="bv">82.9%</span></div>
+          <div class="bar" title="TeaCache: 93.2%"><span class="bl">TeaCache</span><span class="bt"><span class="bf" style="--w:93.2%"></span></span><span class="bv">93.2%</span></div>
+        </div>
+        <figcaption class="t-en">TempCache (Quant) keeps about 1 in 6 query–key pairs.</figcaption>
+        <figcaption class="t-ko">TempCache(Quant)는 쿼리–키 쌍 6개 중 약 1개만 남긴다.</figcaption>
+      </figure>
+      <figure class="chart">
+        <div class="ct"><span class="t-en">Attention recall</span><span class="t-ko">어텐션 recall</span></div>
+        <div class="cs"><span class="t-en">Table 1 · share of dense attention mass kept · higher is better</span><span class="t-ko">Table 1 · dense 어텐션 질량 중 지킨 비율 · 높을수록 좋음</span></div>
+        <div class="bars">
+          <div class="bar hl" title="TempCache-Quant: 91.4%"><span class="bl">TempCache</span><span class="bt"><span class="bf" style="--w:91.4%"></span></span><span class="bv">91.4%</span></div>
+          <div class="bar" title="FlowCache: 86.9%"><span class="bl">FlowCache</span><span class="bt"><span class="bf" style="--w:86.9%"></span></span><span class="bv">86.9%</span></div>
+          <div class="bar" title="TeaCache: 84.6%"><span class="bl">TeaCache</span><span class="bt"><span class="bf" style="--w:84.6%"></span></span><span class="bv">84.6%</span></div>
+        </div>
+        <figcaption class="t-en">Yet it keeps the most mass; VBench 84.19 vs dense 84.08.</figcaption>
+        <figcaption class="t-ko">그런데도 어텐션 질량은 가장 많이 지키고, VBench는 84.19로 dense(84.08)와 같다.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: 10× faster over 3000 frames</span><span class="t-ko">결과: 3000프레임에서 10배 빠르다</span></h2>
+    <p class="vlead t-en"><b>The full stack is about 2.5× faster than the best baseline combo and keeps dense-level quality.</b> The baseline combo buys speed with collapsed quality.</p>
+    <p class="vlead t-ko"><b>전체 조합은 가장 좋은 기준선 조합보다 약 2.5배 빠르고 품질은 dense 수준이다.</b> 기준선 조합은 속도를 얻는 대신 품질이 무너진다.</p>
+    <div class="vgrid">
+      <figure class="chart">
+        <div class="ct"><span class="t-en">End-to-end speedup</span><span class="t-ko">종단 속도 향상</span></div>
+        <div class="cs"><span class="t-en">Table 1 · Rolling-Forcing, 3000 frames, one H100 · × over dense FA3 · 2.5× = 10.8 / 4.4 (computed)</span><span class="t-ko">Table 1 · Rolling-Forcing, 3000프레임, H100 한 장 · dense FA3 대비 배수 · 2.5배 = 10.8 / 4.4 (계산)</span></div>
+        <div class="bars">
+          <div class="bar hl" title="All Ours-Quant: ×10.8"><span class="bl">Ours-Quant</span><span class="bt"><span class="bf" style="--w:90%"></span></span><span class="bv">×10.8</span></div>
+          <div class="bar hl" title="All Ours-LSH: ×10.7"><span class="bl">Ours-LSH</span><span class="bt"><span class="bf" style="--w:89.2%"></span></span><span class="bv">×10.7</span></div>
+          <div class="bar" title="FlowCache+RadialAttn: ×4.4"><span class="bl">Flow+Radial</span><span class="bt"><span class="bf" style="--w:36.7%"></span></span><span class="bv">×4.4</span></div>
+          <div class="bar" title="Dense FA3: ×1.0"><span class="bl">Dense FA3</span><span class="bt"><span class="bf" style="--w:8.3%"></span></span><span class="bv">×1.0</span></div>
+        </div>
+        <figcaption class="t-en">Module gains roughly multiply: 3.2 × 2.8 × 1.2 ≈ 10.8 (computed).</figcaption>
+        <figcaption class="t-ko">모듈별 속도 향상이 거의 곱해진다: 3.2 × 2.8 × 1.2 ≈ 10.8 (계산).</figcaption>
+      </figure>
+      <figure class="chart">
+        <div class="ct"><span class="t-en">VBench quality</span><span class="t-ko">VBench 품질</span></div>
+        <div class="cs"><span class="t-en">Table 1 · LongVBench prompts · higher is better</span><span class="t-ko">Table 1 · LongVBench 프롬프트 · 높을수록 좋음</span></div>
+        <div class="bars">
+          <div class="bar hl" title="All Ours-Quant: 83.99"><span class="bl">Ours-Quant</span><span class="bt"><span class="bf" style="--w:83.99%"></span></span><span class="bv">83.99</span></div>
+          <div class="bar hl" title="All Ours-LSH: 84.02"><span class="bl">Ours-LSH</span><span class="bt"><span class="bf" style="--w:84.02%"></span></span><span class="bv">84.02</span></div>
+          <div class="bar" title="FlowCache+RadialAttn: 45.15"><span class="bl">Flow+Radial</span><span class="bt"><span class="bf" style="--w:45.15%"></span></span><span class="bv">45.15</span></div>
+          <div class="bar" title="Dense FA3: 84.08"><span class="bl">Dense FA3</span><span class="bt"><span class="bf" style="--w:84.08%"></span></span><span class="bv">84.08</span></div>
+        </div>
+        <figcaption class="t-en">The baseline combo nearly halves VBench; ours stays within 0.1 of dense.</figcaption>
+        <figcaption class="t-ko">기준선 조합은 VBench가 거의 절반이 되고, 제안 방법은 dense와 0.1 이내다.</figcaption>
+      </figure>
+    </div>
+    <p class="vlead gap t-en"><b>Dense attention slows from ~19 to ~4 FPS as the cache grows; ours holds ~20 FPS with flat memory.</b> That makes multi-minute streaming practical.</p>
+    <p class="vlead gap t-ko"><b>캐시가 커지면서 dense 어텐션은 약 19에서 약 4 FPS로 느려지지만, 제안 방법은 약 20 FPS를 유지하고 메모리도 평평하다.</b> 몇 분짜리 스트리밍이 가능해지는 이유다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2602.01801/quantitative_figs.png" target="_blank"><img src="fig/2602.01801/quantitative_figs.png" alt="Two line plots over 1 to 3000 generated frames. (a) Frames per second: FlashAttention3 falls from about 19 to about 3.6; AnnSA (ours) stays flat near 19.8; RadialAttention falls from about 10 to about 5.7; SVG1 and SVG2 stay near 2.5 to 3. (b) Peak GPU memory: FlashAttention3 rises from 21.5 to about 23.5 GB, SVG1, SVG2 and RadialAttention also rise, while ours stays flat at about 21.5 GB."></a>
+      <figcaption class="t-en"><b>Figure 6.</b> Rolling-Forcing, 3000 frames: (a) FPS, (b) peak GPU memory (GB). Blue = ours (legend: AnnSA).</figcaption>
+      <figcaption class="t-ko"><b>Figure 6.</b> Rolling-Forcing, 3000프레임: (a) FPS(초당 프레임), (b) 최대 GPU 메모리(GB). 파란 선 = 제안 방법(범례: AnnSA).</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2602.01801</div>
+    </figure>
+    <p class="vlead gap t-en"><b>The world model gains less and loses some quality.</b> LongVie2: 6.9× faster, but about 5 points below dense.</p>
+    <p class="vlead gap t-ko"><b>월드 모델에서는 이득이 작고 품질도 조금 잃는다.</b> LongVie2에서 전체 조합은 6.9배 빠르지만 LongVGenBench는 dense보다 약 5점 낮다.</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Tables 1–2 (selected rows).</b> RF = Rolling-Forcing (LongVBench; PSNR vs dense output); LV2 = LongVie2 (LongVGenBench). Speed = end-to-end × over dense FA3. Higher is better.</caption>
+        <caption class="t-ko"><b>Table 1–2 (일부 행).</b> RF = Rolling-Forcing(LongVBench, PSNR은 dense 출력과 비교), LV2 = LongVie2(LongVGenBench). 속도 = dense FA3 대비 종단 배수. 높을수록 좋다.</caption>
+        <thead><tr><th><span class="t-en">Method</span><span class="t-ko">방법</span></th><th>RF PSNR</th><th>RF VBench</th><th>RF speed</th><th>LV2 score</th><th>LV2 speed</th></tr></thead>
+        <tbody>
+          <tr><td>Dense FA3</td><td>–</td><td>84.08</td><td>×1.0</td><td>69.67</td><td>×1.0</td></tr>
+          <tr><td>FlowCache+RadialAttn</td><td>16.98</td><td>45.15</td><td>×4.4</td><td>49.84</td><td>×3.1</td></tr>
+          <tr><td>TempCache-Quant</td><td>24.26</td><td class="up">84.19</td><td>×3.2</td><td>63.16</td><td>×3.7</td></tr>
+          <tr><td>AnnSA-Quant</td><td class="up">25.77</td><td>83.29</td><td>×2.8</td><td class="up">66.43</td><td>×5.4</td></tr>
+          <tr><td>All Ours-LSH</td><td>25.71</td><td>84.02</td><td>×10.7</td><td>64.91</td><td>×6.3</td></tr>
+          <tr><td>All Ours-Quant</td><td>25.73</td><td>83.99</td><td class="up">×10.8</td><td>63.69</td><td class="up">×6.9</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">×10.8</div><div class="l"><span class="t-en">end-to-end speedup, Rolling-Forcing, 3000 frames</span><span class="t-ko">종단 속도 향상, Rolling-Forcing, 3000프레임</span></div></div>
+      <div class="stat"><div class="n">16.2%</div><div class="l"><span class="t-en">query–key pairs TempCache keeps (91.4% recall)</span><span class="t-ko">TempCache가 남기는 쿼리–키 쌍 (recall 91.4%)</span></div></div>
+      <div class="stat"><div class="n">×6.9</div><div class="l"><span class="t-en">speedup on the LongVie2 world model</span><span class="t-ko">LongVie2 월드 모델 속도 향상</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">Merging identical keys is exact if you add log(group size) to the merged logit, a lossless primitive for any KV compression where tokens repeat (video, multi-turn agents). Find redundancy by correspondence, not by recency.</span><span class="t-ko">같은 키를 합칠 때 합친 로짓에 log(그룹 크기)를 더하면 오차가 없다. 토큰이 반복되는 KV 압축(비디오, 여러 턴 에이전트)이라면 어디서든 다시 쓸 만한 무손실 도구다. 중복은 최신순이 아니라 대응 관계로 찾아라.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">All methods run with no context-window limit, although Rolling-Forcing normally caps its window, so ×10.8 overstates the gain over the usual setup. Fidelity to dense is only PSNR ≈ 25.7 dB (similar, not identical), and on LongVie2 the score drops about 5 points.</span><span class="t-ko">모든 방법을 컨텍스트 창 제한 없이 돌렸는데, Rolling-Forcing은 원래 창을 제한한다. 그래서 ×10.8은 보통 설정 대비 이득을 과장한다. dense 출력과의 충실도도 PSNR ≈ 25.7 dB로 '비슷함'이지 '같음'이 아니고, LongVie2에서는 점수가 약 5점 떨어진다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2602.01801">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2602.01801">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2602.01801">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2602.01801">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>top P2 wishlist item · ICML main track · NVIDIA (Gal Chechik) · 29 HF upvotes · score 9 · venue: ICML 2026</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-09-29.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P2 위시리스트 1순위 · ICML 메인 트랙 · NVIDIA(Gal Chechik) · HF 추천 29 · 점수 9 · venue: ICML 2026</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-09-29.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
