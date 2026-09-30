@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Rethinking On-Policy Distillation of Large Language Models: Phenomenology, Mechanism, and Recipe</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Small–Large Alignment · On-Policy Distillation</span><span class="t-ko">Small–Large Alignment · 온폴리시 증류</span></span>
+      <span>2026.09.30</span>
+    </div>
+    <h1>Rethinking On-Policy Distillation of Large Language Models: Phenomenology, Mechanism, and Recipe<br>
+      <span class="glow t-en">— a stronger teacher can fail completely; OPD works when the student already shares the teacher's top tokens</span>
+      <span class="glow t-ko">— 더 강한 교사가 완전히 실패할 수 있다. OPD는 학생이 교사와 상위 토큰을 이미 공유할 때 통한다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge lab">🏛 Tsinghua · Zhiyuan Liu · Ning Ding</span>
+      <span class="badge hot">▲ 309 alphaXiv</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Yaxuan Li</b>, Yuxin Zuo, Bingxiang He, Jinqian Zhang, Chaojun Xiao, Cheng Qian, Tianyu Yu, Huan-ang Gao, Wenkai Yang, Zhiyuan Liu, Ning Ding <span class="t-en">(corresponding: Bingxiang He, Ning Ding)</span><span class="t-ko">(교신: Bingxiang He, Ning Ding)</span></span>
+      <span>🏛 ShanghaiTech · Tsinghua · UIUC · Renmin University of China</span>
+      <span>🗓 2026-04-14</span>
+      <span>📄 <a href="https://arxiv.org/abs/2604.13016">arXiv:2604.13016</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">On-policy distillation (OPD, the student writes its own answers and the teacher scores each token) is widely used, yet a stronger teacher sometimes teaches nothing.</span><span class="t-ko">온폴리시 증류(OPD, 학생이 직접 쓴 답을 교사가 토큰마다 채점하는 방식)는 널리 쓰이지만, 더 강한 교사가 아무것도 못 가르칠 때가 있다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Success needs compatible thinking patterns and knowledge the student lacks; a same-family 7B teacher acts exactly like the 1.5B one.</span><span class="t-ko">성공하려면 사고 방식이 맞고 학생에게 없는 지식이 있어야 한다. 같은 계열 7B 교사는 1.5B 교사와 똑같이 작용한다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Track overlap: the share of top-k tokens student and teacher have in common.</b> Rising overlap marks success; a cold-start SFT (supervised fine-tuning) and teacher-style prompts raise it.</span><span class="t-ko"><b>겹침(학생과 교사의 상위 k개 토큰 중 공통 비율)을 추적한다.</b> 겹침이 오르면 성공이고, 콜드스타트 SFT(지도 미세조정)와 교사 방식 프롬프트가 겹침을 높인다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">Overlap climbs from 72% to 91%, holding 97–99% of probability mass. Post-RL teachers recover 58.6% of the gap versus 15.6%.</span><span class="t-ko">겹침은 72%에서 91%로 오르고 확률 질량의 97–99%를 차지한다. RL을 더 거친 교사는 격차의 58.6%를 회복, 아니면 15.6%.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Think of an apprentice writing a draft while a master pencils a mark on every word. If both already <b>reach for the same few words</b>, the marks nudge the apprentice toward the master's taste. If the master is simply a bigger copy of the same apprentice, <b>there is nothing new to learn</b>.</p><p class="t-ko">수련생이 초안을 쓰고 스승이 단어마다 연필로 표시하는 장면을 떠올리자. 둘이 이미 <b>같은 몇 단어를 고르고 있다면</b> 표시가 스승의 취향 쪽으로 이끈다. 스승이 같은 수련생의 더 큰 복사본일 뿐이라면 <b>새로 배울 것이 없다</b>.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">The paper in one figure</span><span class="t-ko">한 장으로 보는 논문</span></h2>
+    <p class="vlead t-en"><b>Benchmark score does not decide what OPD transfers.</b> Teachers that gained skills through extra RL are learned far better than same-pipeline giants.</p><p class="vlead t-ko"><b>벤치마크 점수는 OPD가 무엇을 전달하는지 정하지 않는다.</b> RL로 새 능력을 얻은 교사가 같은 파이프라인의 큰 모델보다 훨씬 잘 전달된다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2604.13016/opd_teaser.png" target="_blank"><img src="fig/2604.13016/opd_teaser.png" alt="Three panels. Left: gap recovery bars, DS-7B teacher 5.3% versus SW-7B 16.9% for a DS-1.5B student, and Qwen3-4B 15.6% versus Qwen3-4B-Math 58.6% for a Qwen3-1.7B student. Middle: reverse distillation curves that both regress to about 0.3 AIME accuracy. Right: overlap token ratio rising from 0.72 to 0.92 in the successful run and staying near 0.75 in the failed run."></a>
+      <figcaption class="t-en"><b>Figure 1.</b> Gap recovery by teacher (left), reverse distillation (middle), overlap ratio in a successful vs failed run (right).</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> 교사별 격차 회복(왼쪽), 역방향 증류(가운데), 성공·실패 실행의 겹침 비율(오른쪽).</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2604.13016</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Test the teacher.</span><span class="t-ko">교사를 시험한다.</span></b><span class="t-en">Pair one student with teachers that differ in thinking pattern or in post-training.</span><span class="t-ko">한 학생에 사고 방식이나 사후 학습이 다른 교사들을 짝지어 본다.</span></li>
+      <li><b><span class="t-en">Watch overlap.</span><span class="t-ko">겹침을 본다.</span></b><span class="t-en">Track shared top-k tokens, their advantage, and the entropy gap during training.</span><span class="t-ko">학습 중 공통 top-k 토큰, 그 우위, 엔트로피 격차를 추적한다.</span></li>
+      <li><b><span class="t-en">Repair.</span><span class="t-ko">고친다.</span></b><span class="t-en">Cold-start SFT on teacher rollouts, and prompts matched to the teacher's post-training data.</span><span class="t-ko">교사 롤아웃으로 콜드스타트 SFT를 하고, 교사 사후 학습 데이터에 맞춘 프롬프트를 쓴다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Same size or bigger: no new knowledge</span><span class="t-ko">크기가 커도 새 지식은 없다</span></h2>
+    <p class="vlead t-en"><b>Post-RL teachers transfer several times more of their lead.</b> Recovery is the fraction of the teacher–student gap closed.</p><p class="vlead t-ko"><b>RL을 더 거친 교사는 우위를 몇 배 더 전달한다.</b> 회복률은 교사–학생 격차를 메운 비율이다.</p>
+    <div class="vgrid">
+      <figure class="chart">
+        <div class="ct"><span class="t-en">Gap recovery, DS-1.5B student</span><span class="t-ko">격차 회복, DS-1.5B 학생</span></div>
+        <div class="cs"><span class="t-en">Figure 1 labels · % of gap closed · higher is better</span><span class="t-ko">Figure 1 수치 · 메운 격차 % · 높을수록 좋음</span></div>
+        <div class="bars">
+          <div class="bar" title="DS-7B"><span class="bl">DS-7B</span><span class="bt"><span class="bf" style="--w:5.3%"></span></span><span class="bv">5.3%</span></div>
+          <div class="bar hl" title="SW-7B (RL)"><span class="bl">SW-7B (RL)</span><span class="bt"><span class="bf" style="--w:16.9%"></span></span><span class="bv">16.9%</span></div>
+        </div>
+        <figcaption class="t-en">Axis 0–100%. Same family; SW-7B is DS-7B after RL.</figcaption>
+        <figcaption class="t-ko">축 0–100%. 같은 계열이며 SW-7B는 RL을 거친 DS-7B다.</figcaption>
+      </figure>
+      <figure class="chart">
+        <div class="ct"><span class="t-en">Gap recovery, Qwen3-1.7B student</span><span class="t-ko">격차 회복, Qwen3-1.7B 학생</span></div>
+        <div class="cs"><span class="t-en">Figure 1 labels · % of gap closed · higher is better</span><span class="t-ko">Figure 1 수치 · 메운 격차 % · 높을수록 좋음</span></div>
+        <div class="bars">
+          <div class="bar" title="Qwen3-4B"><span class="bl">Qwen3-4B</span><span class="bt"><span class="bf" style="--w:15.6%"></span></span><span class="bv">15.6%</span></div>
+          <div class="bar hl" title="4B-Math (RL)"><span class="bl">4B-Math (RL)</span><span class="bt"><span class="bf" style="--w:58.6%"></span></span><span class="bv">58.6%</span></div>
+        </div>
+        <figcaption class="t-en">Axis 0–100%. RL on math adds transferable skill.</figcaption>
+        <figcaption class="t-ko">축 0–100%. 수학 RL이 전달 가능한 능력을 더한다.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Mechanism: overlap tokens carry the gradient</span><span class="t-ko">원리: 공통 토큰이 그래디언트를 나른다</span></h2>
+    <p class="vlead t-en"><b>Successful runs are the ones where overlap keeps rising.</b> Training only on shared tokens matches full top-k OPD; non-shared tokens are much weaker.</p><p class="vlead t-ko"><b>성공한 실행은 겹침이 계속 오르는 실행이다.</b> 공통 토큰만으로 학습해도 전체 top-k OPD와 같고, 공통이 아닌 토큰만으로는 훨씬 약하다.</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Sections 3–4, 6 (selected).</b> Student R1-Distill-1.5B (DS-1.5B) unless noted; numbers as reported in text and Figure 1.</caption>
+        <caption class="t-ko"><b>Section 3–4, 6 (일부).</b> 별도 표기가 없으면 학생은 R1-Distill-1.5B(DS-1.5B). 수치는 본문과 Figure 1 기준.</caption>
+        <thead><tr><th><span class="t-en">Setting</span><span class="t-ko">설정</span></th><th><span class="t-en">Teacher</span><span class="t-ko">교사</span></th><th><span class="t-en">Outcome</span><span class="t-ko">결과</span></th></tr></thead>
+        <tbody>
+          <tr><td>OPD → DS-1.5B</td><td>JustRL-1.5B</td><td class="up">&gt;80% gap closed</td></tr>
+          <tr><td>OPD → DS-1.5B</td><td>R1-Distill-7B</td><td>no gain</td></tr>
+          <tr><td>Reverse: JustRL-1.5B student</td><td>R1-Distill-1.5B / 7B</td><td>both regress (AIME24 ≈ 0.3)</td></tr>
+          <tr><td>Overlap ratio, successful run</td><td>JustRL-1.5B</td><td class="up">72% → 91%</td></tr>
+          <tr><td>Reward AUROC (correct vs wrong)</td><td>JustRL / R1-7B</td><td>0.73 / 0.75</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The cost: reward fades with depth</span><span class="t-ko">대가: 깊어질수록 보상이 흐려진다</span></h2>
+    <p class="vlead t-en"><b>The teacher's edge nearly vanishes on long student prefixes.</b> Off its usual path, it scores worse.</p><p class="vlead t-ko"><b>학생의 접두어가 길어지면 교사의 우위는 거의 사라진다.</b> 자기 경로를 벗어나면 채점이 나빠진다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Teacher accuracy advantage after a student prefix</span><span class="t-ko">학생 접두어 뒤 교사의 정확도 우위</span></div>
+      <div class="cs"><span class="t-en">Section 6.1 · teacher continues from a truncated student rollout · axis 0–0.4</span><span class="t-ko">Section 6.1 · 잘린 학생 롤아웃을 교사가 이어 씀 · 축 0–0.4</span></div>
+      <div class="bars mono">
+        <div class="bar" title="1K prefix: +0.37"><span class="bl">1K prefix</span><span class="bt"><span class="bf" style="--w:92.5%"></span></span><span class="bv">+0.37</span></div>
+        <div class="bar" title="16K prefix: +0.02"><span class="bl">16K prefix</span><span class="bt"><span class="bf" style="--w:5%"></span></span><span class="bv">+0.02</span></div>
+      </div>
+      <figcaption class="t-en">Only these two endpoints are given in the text.</figcaption>
+      <figcaption class="t-ko">본문에는 이 두 끝점만 제시된다.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">72→91%</div><div class="l"><span class="t-en">top-k overlap in a successful run</span><span class="t-ko">성공한 실행의 top-k 겹침</span></div></div>
+      <div class="stat"><div class="n">97–99%</div><div class="l"><span class="t-en">probability mass on shared tokens</span><span class="t-ko">공통 토큰의 확률 질량</span></div></div>
+      <div class="stat"><div class="n">58.6%</div><div class="l"><span class="t-en">gap recovered by a post-RL teacher</span><span class="t-ko">RL 교사가 회복한 격차</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">Before distilling, log overlap and entropy gap early: flat overlap means stop and cold-start with SFT instead of adding steps. Choose teachers that learned something new, not just bigger ones.</span><span class="t-ko">증류 전에 겹침과 엔트로피 격차를 초반에 기록하자. 겹침이 평평하면 스텝을 늘리지 말고 SFT로 콜드스타트하자. 그냥 큰 모델이 아니라 새로 배운 교사를 고르자.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">Experiments are mostly math reasoning on 1.5B–7B models, and the local-geometry explanation for failure is an untested hypothesis. The Figure 1 recovery values are read from the figure, not a table.</span><span class="t-ko">실험은 대부분 1.5B–7B 모델의 수학 추론이고, 실패를 설명하는 국소 기하 가설은 검증되지 않았다. Figure 1의 회복률은 표가 아니라 그림에서 읽은 값이다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2604.13016">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2604.13016">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2604.13016">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2604.13016">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>top P1 wishlist item · Tsinghua (Zhiyuan Liu, Ning Ding) · ▲309 alphaXiv · preprint</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-09-30.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P1 위시리스트 1순위 · Tsinghua(Zhiyuan Liu, Ning Ding) · alphaXiv ▲309 · 프리프린트</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-09-30.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
