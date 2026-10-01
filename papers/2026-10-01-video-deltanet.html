@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Video DeltaNet: A Video-Native Hybrid Attention for Livestream Video Generation</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Video &amp; World Generation · Hybrid Linear Attention</span><span class="t-ko">Video &amp; World Generation · 하이브리드 선형 어텐션</span></span>
+      <span>2026.10.01</span>
+    </div>
+    <h1>Video DeltaNet: A Video-Native Hybrid Attention for Livestream Video Generation<br>
+      <span class="glow t-en">— exact attention for nearby frames, a once-per-frame memory for distant ones: a 14.3 s 768p clip denoised in 6.7 s</span>
+      <span class="glow t-ko">— 가까운 프레임엔 정확한 어텐션, 먼 프레임엔 프레임당 한 번 쓰는 메모리: 14.3초짜리 768p 영상을 6.7초에 디노이징</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge lab">🏛 UC Berkeley · Kurt Keutzer</span>
+      <span class="badge hot">▲ 43 alphaXiv · 53 HF · ★ 565 GitHub</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Haocheng Xi</b>, Yiming Xie, Hexu Zhao, Yiwen Zhang, Michael Liu, Thomas Creavin, Kurt Keutzer, Xiuyu Li, Zhaoyang Lv, Chenfeng Xu, Haiwen Feng <span class="t-en">(corresponding: not marked; last author Haiwen Feng)</span><span class="t-ko">(교신: 표기 없음, 마지막 저자 Haiwen Feng)</span></span>
+      <span>🏛 UC Berkeley · Impossible, Inc. · UT Austin</span>
+      <span>🗓 2026-09-17</span>
+      <span>📄 <a href="https://arxiv.org/abs/2609.20744">arXiv:2609.20744</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Softmax attention takes over 85% of a long video diffusion model's runtime; swapping in linear attention (a fixed-size running memory), as LLMs do, loses fine detail.</span><span class="t-ko">긴 영상 확산 모델에서 Softmax 어텐션이 실행 시간의 85% 이상을 차지한다. LLM처럼 선형 어텐션(고정 크기의 누적 메모리)으로 바꾸면 세밀한 디테일이 사라진다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">A frame's tokens arrive together, so LLM-style delta updates (write only what memory mispredicts), one token at a time, impose a fake order and let similar patches clash.</span><span class="t-ko">한 프레임의 토큰은 동시에 도착한다. 그래서 LLM식 델타 업데이트(메모리가 틀린 만큼만 고쳐 쓰기)를 토큰 하나씩 하면 가짜 순서가 생기고, 비슷한 패치끼리 서로 덮어쓴다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Exact Softmax for a 15-frame window plus first/last-frame anchors; a two-way delta-rule memory for distant frames, written once per frame by one joint solve.</b> Similar patches share one write, so old memory never gets amplified.</span><span class="t-ko"><b>15프레임 창과 첫·마지막 프레임 앵커는 정확한 Softmax로, 먼 프레임은 양방향 델타 규칙 메모리로 처리한다. 메모리는 프레임마다 한 번, 하나의 연립 풀이로 쓴다.</b> 비슷한 패치는 한 번의 쓰기를 나눠 가지므로 예전 메모리가 증폭되지 않는다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">MiniMax H3, 14.3 s 768p clip: 6.70 s of denoising on 8 B200s, 14.5× faster than dense H3 on the same GPUs, with matching quality scores.</span><span class="t-ko">MiniMax H3, 14.3초 768p 영상: B200 8장에서 디노이징 6.70초. 같은 GPU 수의 dense H3보다 14.5배 빠르고 품질 점수는 같은 수준이다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Picture an editor checking a long scene. Shots right next to the current one get <b>compared frame by frame</b>; everything farther away goes into <b>a running notebook</b>, updated <b>once per shot after viewing the whole frame</b>, so ten near-identical patches of sky become one note instead of ten clashing ones. The first and last shots stay pinned to the wall.</p>
+    <p class="t-ko">긴 장면을 검토하는 편집자를 떠올려 보자. 지금 컷 바로 옆의 컷들은 <b>한 장씩 직접 비교한다</b>. 더 먼 컷은 <b>누적 노트</b>에 적는데, <b>프레임 전체를 본 뒤 컷마다 한 번만</b> 고쳐 쓴다. 그래서 거의 똑같은 하늘 패치 열 개는 서로 부딪히는 메모 열 개가 아니라 메모 하나가 된다. 첫 컷과 마지막 컷은 벽에 붙여 둔다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: split attention by distance</span><span class="t-ko">작동 방식: 거리에 따라 어텐션을 나눈다</span></h2>
+    <p class="vlead t-en"><b>Each frame looks exactly at its neighbors and at the clip's two ends; everything else is read from memory.</b> The two regions never overlap, so no frame is counted twice.</p>
+    <p class="vlead t-ko"><b>각 프레임은 이웃 프레임과 영상의 양 끝만 정확히 보고, 나머지는 메모리에서 읽는다.</b> 두 영역은 겹치지 않아서 어떤 프레임도 두 번 세지 않는다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2609.20744/figure2.svg" target="_blank"><img src="fig/2609.20744/figure2.svg" alt="Two query-by-key grids for a toy sequence of one text token, twenty video tokens in ten two-frame chunks, and one audio token. (a) Softmax: a yellow band along the diagonal (local video), gold first and last rows and columns (boundary anchors), green text and purple audio edges. (b) Linear: the blue off-diagonal regions (distant video), with arrows showing a forward scan from the left and a reverse scan from the right; the text column is green."></a>
+      <figcaption class="t-en"><b>Figure 2.</b> Which query–key pairs each branch handles. (a) Softmax: local window, boundary anchors, text, audio. (b) Linear: distant video, scanned both ways.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> 각 가지가 맡는 쿼리–키 쌍. (a) Softmax: 지역 창, 경계 앵커, 텍스트, 오디오. (b) 선형: 먼 영상 구간을 양방향으로 스캔한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2609.20744</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Local window and anchors stay Softmax.</span><span class="t-ko">지역 창과 앵커는 Softmax로 둔다.</span></b><span class="t-en">Each 5-frame VAE chunk sees itself and both neighbors, plus the first and last frames. Text and audio stay Softmax.</span><span class="t-ko">5프레임짜리 VAE 청크마다 자기 자신과 양옆 청크, 그리고 첫·마지막 프레임을 본다. 텍스트와 오디오는 Softmax 그대로다.</span></li>
+      <li><b><span class="t-en">Distant frames go through two scans.</span><span class="t-ko">먼 프레임은 두 번의 스캔으로 처리한다.</span></b><span class="t-en">Forward and reverse memories each start from half the prompt's state, so the text is counted exactly once.</span><span class="t-ko">순방향·역방향 메모리가 각각 프롬프트 상태의 절반에서 출발하므로, 텍스트는 정확히 한 번만 더해진다.</span></li>
+      <li><b><span class="t-en">Retrofit, then distill.</span><span class="t-ko">기존 모델에 덧붙이고, 증류한다.</span></b><span class="t-en">Align the new branches to frozen H3 (700 steps), co-adapt with LoRA (small add-on weights, 2,000 steps), then distill 50 steps to 8.</span><span class="t-ko">새 가지를 얼려 둔 H3에 맞추고(700스텝), LoRA(작은 추가 가중치)로 함께 적응시킨 뒤(2,000스텝), 50스텝을 8스텝으로 증류한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key idea: write a whole frame at once</span><span class="t-ko">핵심: 프레임 전체를 한 번에 쓴다</span></h2>
+    <p class="vlead t-en"><b>Solving all patches jointly keeps old memory from blowing up without diluting distinct patches.</b> Plain parallel writes amplify memory when patches agree, and the usual fix shrinks every write.</p>
+    <p class="vlead t-ko"><b>모든 패치를 함께 풀면, 서로 다른 패치를 희석하지 않고도 예전 메모리가 폭주하지 않는다.</b> 그냥 병렬로 쓰면 패치들이 같은 방향일 때 메모리가 증폭되고, 흔한 해결책은 모든 쓰기를 줄여 버린다.</p>
+    <div class="vgrid">
+      <figure class="chart">
+        <div class="ct"><span class="t-en">Multiplier on old memory</span><span class="t-ko">예전 메모리에 곱해지는 배수</span></div>
+        <div class="cs"><span class="t-en">8 patches with the same key, write gate β = 0.5 · computed from Eq. 3c and A.3 · line = 1 (above it, memory grows)</span><span class="t-ko">같은 키를 가진 패치 8개, 쓰기 게이트 β = 0.5 · Eq. 3c와 A.3으로 계산 · 선 = 1 (넘으면 메모리가 커진다)</span></div>
+        <div class="bars" style="--x:33.3%">
+          <div class="bar hl" title="VDA: 0.2"><span class="bl">VDA</span><span class="bt"><span class="bf" style="--w:6.7%"></span></span><span class="bv">0.2</span></div>
+          <div class="bar" title="Plain parallel writes: 3.0"><span class="bl">Parallel</span><span class="bt"><span class="bf" style="--w:100%"></span></span><span class="bv">3.0</span></div>
+        </div>
+        <div class="legend"><span><i class="r"></i><span class="t-en">stable limit = 1</span><span class="t-ko">안정 한계 = 1</span></span></div>
+        <figcaption class="t-en">Parallel writes give |1 − 8β| = 3; VDA gives 1/(1 + 8β) = 0.2.</figcaption>
+        <figcaption class="t-ko">병렬 쓰기는 |1 − 8β| = 3, VDA는 1/(1 + 8β) = 0.2다.</figcaption>
+      </figure>
+      <figure class="chart">
+        <div class="ct"><span class="t-en">Write weight of one distinct patch</span><span class="t-ko">서로 다른 패치 하나의 쓰기 세기</span></div>
+        <div class="cs"><span class="t-en">8 patches with orthogonal keys, β = 0.5 · computed from Appendix A.2 · higher = more of the patch is kept</span><span class="t-ko">서로 직교하는 키를 가진 패치 8개, β = 0.5 · Appendix A.2로 계산 · 높을수록 패치 정보를 더 담는다</span></div>
+        <div class="bars">
+          <div class="bar hl" title="VDA: 0.33"><span class="bl">VDA</span><span class="bt"><span class="bf" style="--w:66.7%"></span></span><span class="bv">0.33</span></div>
+          <div class="bar" title="SANA-WM key scaling: 0.06"><span class="bl">SANA-WM</span><span class="bt"><span class="bf" style="--w:12.5%"></span></span><span class="bv">0.06</span></div>
+        </div>
+        <figcaption class="t-en">SANA-WM stabilizes by scaling keys with 1/√8, giving β/8; VDA keeps β/(1 + β).</figcaption>
+        <figcaption class="t-ko">SANA-WM은 키를 1/√8로 줄여 안정화하므로 β/8이 되고, VDA는 β/(1 + β)를 유지한다.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: 119× from three stacked gains</span><span class="t-ko">결과: 세 가지 이득을 쌓아 119배</span></h2>
+    <p class="vlead t-en"><b>The architecture alone gives 2.6×, and the win grows with clip length.</b> Step distillation and 8 GPUs then multiply it to 6.70 s.</p>
+    <p class="vlead t-ko"><b>구조만으로 2.6배 빨라지고, 영상이 길수록 이득이 커진다.</b> 여기에 스텝 증류와 GPU 8장을 곱해 6.70초가 된다.</p>
+    <div class="vgrid">
+      <figure class="chart">
+        <div class="ct"><span class="t-en">Denoising latency, 14.3 s 768p clip</span><span class="t-ko">디노이징 지연, 14.3초 768p 영상</span></div>
+        <div class="cs"><span class="t-en">Table 2 · B200 · seconds · lower is better · dense on 8 GPUs ≈ 6.70 × 14.5 (computed)</span><span class="t-ko">Table 2 · B200 · 초 · 낮을수록 좋음 · GPU 8장 dense ≈ 6.70 × 14.5 (계산)</span></div>
+        <div class="bars" style="--vw:64px">
+          <div class="bar" title="Dense H3, 50 steps, 1 GPU: 799.6 s"><span class="bl">Dense ·1</span><span class="bt"><span class="bf" style="--w:99.95%"></span></span><span class="bv">799.6 s</span></div>
+          <div class="bar" title="Dense H3, 50 steps, 8 GPUs: about 97 s (computed)"><span class="bl">Dense ·8</span><span class="bt"><span class="bf" style="--w:12.1%"></span></span><span class="bv">≈97 s</span></div>
+          <div class="bar hl" title="VDN-H3, 50 steps, 1 GPU: 307.9 s"><span class="bl">VDN ·1</span><span class="bt"><span class="bf" style="--w:38.5%"></span></span><span class="bv">307.9 s</span></div>
+          <div class="bar hl" title="VDN-H3, 8 steps, 1 GPU: 49.3 s"><span class="bl">+8 steps</span><span class="bt"><span class="bf" style="--w:6.2%"></span></span><span class="bv">49.3 s</span></div>
+          <div class="bar hl" title="VDN-H3, 8 steps, 8 GPUs: 6.70 s"><span class="bl">+8 GPUs</span><span class="bt"><span class="bf" style="--w:0.84%"></span></span><span class="bv">6.70 s</span></div>
+        </div>
+        <figcaption class="t-en">Gains: 2.6× (attention) · 6.3× (steps) · 7.4× (GPUs).</figcaption>
+        <figcaption class="t-ko">이득: 2.6배(어텐션) · 6.3배(스텝) · 7.4배(GPU).</figcaption>
+      </figure>
+      <figure class="chart">
+        <div class="ct"><span class="t-en">Attention speedup vs clip length</span><span class="t-ko">영상 길이별 어텐션 속도 향상</span></div>
+        <div class="cs"><span class="t-en">Table 2 · one B200 · latent frames · Softmax density falls 42% → 20%</span><span class="t-ko">Table 2 · B200 한 장 · 잠재 프레임 수 · Softmax 밀도 42% → 20%로 감소</span></div>
+        <div class="bars mono">
+          <div class="bar" title="42 frames: 1.7×"><span class="bl">42</span><span class="bt"><span class="bf" style="--w:42.5%"></span></span><span class="bv">1.7×</span></div>
+          <div class="bar" title="72 frames: 2.3×"><span class="bl">72</span><span class="bt"><span class="bf" style="--w:57.5%"></span></span><span class="bv">2.3×</span></div>
+          <div class="bar" title="87 frames: 2.7×"><span class="bl">87</span><span class="bt"><span class="bf" style="--w:67.5%"></span></span><span class="bv">2.7×</span></div>
+          <div class="bar" title="102 frames: 3.0×"><span class="bl">102</span><span class="bt"><span class="bf" style="--w:75%"></span></span><span class="bv">3.0×</span></div>
+        </div>
+        <figcaption class="t-en">Fixed window, growing clip: the Softmax share keeps shrinking (H200 reaches 4.0×).</figcaption>
+        <figcaption class="t-ko">창은 고정이고 영상은 길어지므로 Softmax 비중이 계속 줄어든다(H200은 4.0배).</figcaption>
+      </figure>
+    </div>
+    <p class="vlead gap t-en"><b>8-step VDN-H3 scores like 50-step dense and well above 4-step FastH3.</b> The small slips are world coherence and endpoint fidelity.</p>
+    <p class="vlead gap t-ko"><b>8스텝 VDN-H3는 50스텝 dense와 비슷한 점수를 내고, 4스텝 FastH3보다는 확실히 높다.</b> 작게 밀리는 곳은 세계 일관성과 양 끝 프레임 충실도다.</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Figure 5 values.</b> 103 fixed prompts; ·N = denoising steps. FastH3 = a 4-step sparse-distilled H3; Flow = RAFT motion magnitude; World coh. = FIRM-Video world coherence (1–5). Higher is better except LPIPS (perceptual distance to the given first/last frames).</caption>
+        <caption class="t-ko"><b>Figure 5 수치.</b> 고정 프롬프트 103개, ·N = 디노이징 스텝 수. FastH3 = 4스텝으로 희소 증류한 H3. Flow = RAFT 움직임 크기, World coh. = FIRM-Video 세계 일관성(1–5). LPIPS(주어진 첫·마지막 프레임과의 지각적 거리)만 낮을수록 좋고 나머지는 높을수록 좋다.</caption>
+        <thead><tr><th><span class="t-en">Metric</span><span class="t-ko">지표</span></th><th>VDN·8</th><th>Dense·50</th><th>Fast·4</th></tr></thead>
+        <tbody>
+          <tr><td>VQA-T</td><td class="up">89.20</td><td>88.20</td><td>75.46</td></tr>
+          <tr><td>Q-Align</td><td class="up">93.13</td><td>92.22</td><td>89.18</td></tr>
+          <tr><td>DOVER++</td><td class="up">3.28</td><td>3.22</td><td>0.52</td></tr>
+          <tr><td>Flow px</td><td class="up">11.71</td><td>11.55</td><td>9.19</td></tr>
+          <tr><td>World coh.</td><td>1.77</td><td class="up">1.84</td><td>1.65</td></tr>
+          <tr><td>FL2VA LPIPS ↓</td><td>0.116</td><td class="up">0.104</td><td>0.183</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">6.70 s</div><div class="l"><span class="t-en">denoising a 14.3 s 768p clip, 8 B200s</span><span class="t-ko">14.3초 768p 영상 디노이징, B200 8장</span></div></div>
+      <div class="stat"><div class="n">14.5×</div><div class="l"><span class="t-en">vs 50-step dense H3, same 8 GPUs</span><span class="t-ko">같은 GPU 8장의 50스텝 dense H3 대비</span></div></div>
+      <div class="stat"><div class="n">2.6×</div><div class="l"><span class="t-en">from the hybrid attention alone, one B200</span><span class="t-ko">하이브리드 어텐션만의 효과, B200 한 장</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">When a whole frame of tokens arrives together, write it to linear memory with one least-squares solve instead of per-token or summed updates: stability comes free and distinct tokens stay sharp. Keep exact attention only at neighbors and endpoints.</span><span class="t-ko">프레임 하나의 토큰이 한꺼번에 들어온다면, 선형 메모리에 토큰별·합산 업데이트 대신 최소제곱 풀이 한 번으로 써라. 안정성은 덤으로 얻고 서로 다른 토큰은 선명하게 남는다. 정확한 어텐션은 이웃 프레임과 양 끝에만 남겨라.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">No quality ablation tests the joint solve against parallel writes or removes the anchors, so its benefit is only theoretical; evidence is one backbone, 103 prompts and automatic metrics. "Livestream" is aspirational: it still denoises whole clips, and 6.70 s excludes VAE decoding.</span><span class="t-ko">연립 풀이를 병렬 쓰기와 비교하거나 앵커를 빼 보는 품질 ablation(구성 요소를 하나씩 빼 보는 실험)이 없어서 그 이점은 이론으로만 남는다. 근거도 백본 하나, 프롬프트 103개, 자동 지표뿐이다. 'Livestream'은 아직 목표다. 여전히 영상 전체를 한꺼번에 디노이징하고, 6.70초에는 VAE 디코딩이 빠져 있다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2609.20744">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2609.20744">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2609.20744">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2609.20744">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>top P2 wishlist item · UC Berkeley (Kurt Keutzer) · 43 alphaXiv votes · 53 HF upvotes · ★565 · score 8 (P2 +3, listed lab +3, hot +2)</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-10-01.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P2 위시리스트 1순위 · UC Berkeley(Kurt Keutzer) · alphaXiv 43표 · HF 추천 53 · ★565 · 점수 8 (P2 +3, 등록 연구실 +3, 화제성 +2)</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-10-01.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
