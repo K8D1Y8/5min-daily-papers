@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Quantization Inflates Reasoning: Token Inflation as a Hidden Cost of Low-Bit Reasoning Models</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Small–Large Alignment · Quantization &amp; Reasoning Length</span><span class="t-ko">Small–Large Alignment · 양자화와 추론 길이</span></span>
+      <span>2026.10.02</span>
+    </div>
+    <h1>Quantization Inflates Reasoning: Token Inflation as a Hidden Cost of Low-Bit Reasoning Models<br>
+      <span class="glow t-en">— a 4-bit model can keep its answers yet think far longer, eating the speedup it was supposed to buy</span>
+      <span class="glow t-ko">— 4비트 모델은 답을 지켜도 훨씬 길게 생각해서, 얻으려던 속도 이득을 스스로 까먹는다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge lab">🏛 UIUC · Minjia Zhang · Microsoft</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Xinyu Lian</b>, Walid Krichene, Beichen Huang, Masahiro Tanaka, Olatunji Ruwase, Li Zhang, Minjia Zhang <span class="t-en">(senior author: Minjia Zhang)</span><span class="t-ko">(책임 저자: Minjia Zhang)</span></span>
+      <span>🏛 UIUC · Microsoft · Anyscale · Snowflake</span>
+      <span>🗓 2026-06-24</span>
+      <span>📄 <a href="https://arxiv.org/abs/2606.25519">arXiv:2606.25519</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Quantization papers report accuracy and per-token speed, but a reasoning model's real cost also depends on how many thinking tokens it writes.</span><span class="t-ko">양자화 논문은 정확도와 토큰당 속도만 보고하지만, 추론 모델의 실제 비용은 생각 토큰을 얼마나 쓰는지에도 달려 있다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Across 4B–30B models and five weight-only PTQ (post-training quantization) methods, INT4/INT3 models keep most answers but write longer, more repetitive chains of thought.</span><span class="t-ko">4B–30B 모델과 가중치 전용 PTQ(학습 후 양자화) 5종에서, INT4/INT3 모델은 답을 대부분 지키지만 더 길고 반복적인 생각의 사슬을 쓴다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>CTIR (CoT Token Inflation Ratio): the % change in average reasoning length versus the BF16 model.</b> One number exposes the hidden cost; they then test prompts, penalties, calibration data and QAT as fixes.</span><span class="t-ko"><b>CTIR(CoT 토큰 팽창률): BF16 모델 대비 평균 추론 길이의 변화율(%).</b> 숨은 비용을 숫자 하나로 드러내고, 프롬프트·페널티·보정 데이터·QAT를 해결책으로 시험한다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">Qwen3-4B inflates up to +292% at INT3; Qwen3-30B up to +60%. Just 1.1× longer reasoning raises p90 first-token latency 33%.</span><span class="t-ko">Qwen3-4B는 INT3에서 최대 +292%, Qwen3-30B는 최대 +60% 팽창한다. 추론이 1.1배만 길어져도 p90 첫 토큰 지연이 33% 늘어난다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Give a hiker a slightly blurry map and a lighter backpack. Each step is quicker, and they still <b>reach the same summit</b>, but they keep stopping to re-read signs and retrace paths. The <b>detours</b> can cost more time than the lighter pack saved.</p>
+    <p class="t-ko">등산객에게 살짝 흐린 지도와 더 가벼운 배낭을 줬다고 하자. 한 걸음은 빨라지고 <b>같은 정상에 도착하지만</b>, 표지판을 다시 읽고 왔던 길을 되짚느라 자주 멈춘다. 이 <b>우회</b>가 가벼운 배낭으로 아낀 시간보다 더 클 수 있다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">The paper in one figure</span><span class="t-ko">한 장으로 보는 논문</span></h2>
+    <p class="vlead t-en"><b>Quantization pushes a model right (longer) and down (less accurate).</b> Calibrating on reasoning traces wins back most accuracy; only QAT (quantization-aware training) nearly returns to BF16.</p>
+    <p class="vlead t-ko"><b>양자화는 모델을 오른쪽(더 길게)과 아래(덜 정확하게)로 민다.</b> 추론 흔적으로 보정하면 정확도를 대부분 되찾고, QAT(양자화 인식 학습)만 BF16 근처로 돌아온다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2606.25519/comparision.png" target="_blank"><img src="fig/2606.25519/comparision.png" alt="Scatter of macro accuracy versus average CoT length on a log axis for Qwen3-4B at INT3. BF16 sits top-left near 73% and 8.5k tokens, QAT just right of it near 68%, GPTQ with Math-CoT and Code-CoT calibration near 63–65% and 13–14k tokens, Ultrachat near 52% and 19k, and C4 and Wikitext near 28–39% and 31–33k tokens. An arrow labeled Better points to the upper left."></a>
+      <figcaption class="t-en"><b>Figure 5.</b> Qwen3-4B at INT3: accuracy vs average CoT length for GPTQ with five calibration corpora, QAT, and BF16. Upper-left is better.</figcaption>
+      <figcaption class="t-ko"><b>Figure 5.</b> INT3 Qwen3-4B: 보정 코퍼스 5종의 GPTQ, QAT, BF16의 정확도 대 평균 CoT 길이. 왼쪽 위가 좋다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2606.25519</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Quantize and decode greedily.</span><span class="t-ko">양자화하고 탐욕적으로 생성한다.</span></b><span class="t-en">Three reasoning models, five PTQ methods at INT4/INT3, temperature 0 on math, code, science and tool-use tasks.</span><span class="t-ko">추론 모델 3개, PTQ 5종(INT4/INT3), 온도 0으로 수학·코드·과학·도구 사용 과제를 푼다.</span></li>
+      <li><b><span class="t-en">Count thinking, not just answers.</span><span class="t-ko">답뿐 아니라 생각을 센다.</span></b><span class="t-en">CTIR compares CoT length to BF16; step counts and embedding-based repetition show where extra tokens go.</span><span class="t-ko">CTIR로 CoT 길이를 BF16과 비교하고, 단계 수와 임베딩 기반 반복도로 늘어난 토큰의 정체를 본다.</span></li>
+      <li><b><span class="t-en">Price it, then try fixes.</span><span class="t-ko">비용을 재고, 해결책을 시험한다.</span></b><span class="t-en">Measure latency and throughput in vLLM, then compare decoding penalties, prompts, calibration data and QAT.</span><span class="t-ko">vLLM에서 지연과 처리량을 재고, 디코딩 페널티·프롬프트·보정 데이터·QAT를 비교한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Same answers, many more tokens</span><span class="t-ko">같은 답, 훨씬 많은 토큰</span></h2>
+    <p class="vlead t-en"><b>Inflation grows as bits drop and as models shrink.</b> The 4B model's worst INT3 settings nearly quadruple its reasoning; the 30B model is sturdier but never immune.</p>
+    <p class="vlead t-ko"><b>비트가 줄수록, 모델이 작을수록 팽창이 커진다.</b> 4B 모델의 최악 INT3 설정은 추론을 거의 4배로 늘리고, 30B 모델은 더 튼튼하지만 면역은 아니다.</p>
+    <div class="vgrid">
+      <figure class="chart">
+        <div class="ct"><span class="t-en">Average CTIR, Qwen3-4B</span><span class="t-ko">평균 CTIR, Qwen3-4B</span></div>
+        <div class="cs"><span class="t-en">Table 2 · % more CoT tokens than BF16 · axis 0–300%</span><span class="t-ko">Table 2 · BF16 대비 CoT 토큰 증가율 · 축 0–300%</span></div>
+        <div class="bars" style="--vw:64px">
+          <div class="bar" title="INT4 GPTQ: +12.0%"><span class="bl">INT4 GPTQ</span><span class="bt"><span class="bf" style="--w:4%"></span></span><span class="bv">+12.0%</span></div>
+          <div class="bar" title="INT4 RTN: +42.5%"><span class="bl">INT4 RTN</span><span class="bt"><span class="bf" style="--w:14.2%"></span></span><span class="bv">+42.5%</span></div>
+          <div class="bar hl" title="INT3 GPTQ: +48.7%"><span class="bl">INT3 GPTQ</span><span class="bt"><span class="bf" style="--w:16.2%"></span></span><span class="bv">+48.7%</span></div>
+          <div class="bar hl" title="INT3 AWQ: +276.1%"><span class="bl">INT3 AWQ</span><span class="bt"><span class="bf" style="--w:92%"></span></span><span class="bv">+276.1%</span></div>
+          <div class="bar hl" title="INT3 HQQ: +292.1%"><span class="bl">INT3 HQQ</span><span class="bt"><span class="bf" style="--w:97.4%"></span></span><span class="bv">+292.1%</span></div>
+        </div>
+        <figcaption class="t-en">INT3 bars in accent; INT4 in gray.</figcaption>
+        <figcaption class="t-ko">INT3은 강조색, INT4는 회색.</figcaption>
+      </figure>
+      <figure class="chart">
+        <div class="ct"><span class="t-en">Average CTIR, Qwen3-30B (MoE)</span><span class="t-ko">평균 CTIR, Qwen3-30B (MoE)</span></div>
+        <div class="cs"><span class="t-en">Table 2 · % more CoT tokens than BF16 · axis 0–100%</span><span class="t-ko">Table 2 · BF16 대비 CoT 토큰 증가율 · 축 0–100%</span></div>
+        <div class="bars" style="--vw:64px">
+          <div class="bar" title="INT4 GPTQ: +3.7%"><span class="bl">INT4 GPTQ</span><span class="bt"><span class="bf" style="--w:3.7%"></span></span><span class="bv">+3.7%</span></div>
+          <div class="bar" title="INT4 RTN: +43.0%"><span class="bl">INT4 RTN</span><span class="bt"><span class="bf" style="--w:43%"></span></span><span class="bv">+43.0%</span></div>
+          <div class="bar hl" title="INT3 GPTQ: +19.0%"><span class="bl">INT3 GPTQ</span><span class="bt"><span class="bf" style="--w:19%"></span></span><span class="bv">+19.0%</span></div>
+          <div class="bar hl" title="INT3 AWQ: +32.8%"><span class="bl">INT3 AWQ</span><span class="bt"><span class="bf" style="--w:32.8%"></span></span><span class="bv">+32.8%</span></div>
+          <div class="bar hl" title="INT3 HQQ: +60.1%"><span class="bl">INT3 HQQ</span><span class="bt"><span class="bf" style="--w:60.1%"></span></span><span class="bv">+60.1%</span></div>
+        </div>
+        <figcaption class="t-en">Note the smaller axis. GPTQ inflates least at each width.</figcaption>
+        <figcaption class="t-ko">축이 더 작다는 점에 주의. 같은 비트에서 GPTQ가 가장 덜 팽창한다.</figcaption>
+      </figure>
+    </div>
+    <p class="vlead gap t-en"><b>Accuracy barely moves while length climbs.</b> An accuracy-only report would call the GPTQ rows lossless.</p>
+    <p class="vlead gap t-ko"><b>정확도는 거의 그대로인데 길이는 오른다.</b> 정확도만 보면 GPTQ 행들은 손실이 없다고 판정된다.</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Tables 1–2 (selected), Qwen3 models.</b> Avg-R = mean accuracy over six reasoning tasks (BF16 → quantized); CTIR lower is better.</caption>
+        <caption class="t-ko"><b>Table 1–2 (일부), Qwen3 모델.</b> Avg-R = 추론 과제 6개 평균 정확도(BF16 → 양자화). CTIR은 낮을수록 좋다.</caption>
+        <thead><tr><th><span class="t-en">Model · setting</span><span class="t-ko">모델 · 설정</span></th><th>Avg-R</th><th>CTIR</th></tr></thead>
+        <tbody>
+          <tr><td>4B INT4 GPTQ</td><td class="up">72.5 → 71.6</td><td>+12.0%</td></tr>
+          <tr><td>4B INT4 AWQ</td><td class="up">72.5 → 73.2</td><td>+8.2%</td></tr>
+          <tr><td>4B INT3 HQQ</td><td>72.5 → 55.4</td><td>+292.1%</td></tr>
+          <tr><td>30B INT4 GPTQ</td><td class="up">74.8 → 74.6</td><td class="up">+3.7%</td></tr>
+          <tr><td>30B INT3 GPTQ</td><td class="up">74.8 → 74.7</td><td>+19.0%</td></tr>
+          <tr><td>30B INT3 HQQ</td><td>74.8 → 64.4</td><td>+60.1%</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Where the extra tokens go</span><span class="t-ko">늘어난 토큰은 어디로 가나</span></h2>
+    <p class="vlead t-en"><b>Quantized models take more steps, and more of them repeat earlier steps.</b> Traces fill with "wait", "let me verify" and retries, without better answers.</p>
+    <p class="vlead t-ko"><b>양자화 모델은 단계가 더 많고, 그중 앞 단계를 되풀이하는 비율도 높다.</b> "wait", "let me verify", 재시도가 늘지만 답은 나아지지 않는다.</p>
+    <figure class="fig narrow">
+      <a class="zoom" href="fig/2606.25519/cot_steps.png" target="_blank"><img src="fig/2606.25519/cot_steps.png" alt="Two scatter plots of per-instance reasoning steps on MBPP, BF16 on the x-axis and INT3 GPTQ on the y-axis, for Qwen3-4B and Qwen3-30B-A3B. Most points lie above the dashed parity line, many at two to five times the BF16 step count."></a>
+      <figcaption class="t-en"><b>Figure 1.</b> Per-question reasoning steps on MBPP, BF16 (x) vs INT3 GPTQ (y). Points above the dashed line took more steps when quantized.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> MBPP 문제별 추론 단계 수, BF16(x) 대 INT3 GPTQ(y). 점선 위의 점은 양자화 후 단계가 늘어난 문제다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2606.25519</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The bill, and which fixes work</span><span class="t-ko">청구서, 그리고 통하는 해결책</span></h2>
+    <p class="vlead t-en"><b>Small inflation already hurts serving; only retraining fixes both length and accuracy.</b> Concise prompts shorten traces but cost 5–11 accuracy points at INT3; repetition penalties trade accuracy too.</p>
+    <p class="vlead t-ko"><b>작은 팽창도 서빙을 해치고, 길이와 정확도를 함께 고치는 건 재학습뿐이다.</b> 간결 프롬프트는 추론을 줄이지만 INT3에서 정확도를 5–11점 깎고, 반복 페널티도 정확도를 내준다.</p>
+    <div class="vgrid">
+      <figure class="chart">
+        <div class="ct"><span class="t-en">Serving cost of longer reasoning</span><span class="t-ko">길어진 추론의 서빙 비용</span></div>
+        <div class="cs"><span class="t-en">§6 text · Qwen3-30B-A3B, H100, batch 64 · p90 time to first visible token (s) · axis 0–1500</span><span class="t-ko">§6 본문 · Qwen3-30B-A3B, H100, 배치 64 · p90 첫 노출 토큰 시간(초) · 축 0–1500</span></div>
+        <div class="bars" style="--vw:64px">
+          <div class="bar" title="CTIR 1.0×: 1050 s"><span class="bl">1.0× length</span><span class="bt"><span class="bf" style="--w:70%"></span></span><span class="bv">1050 s</span></div>
+          <div class="bar hl" title="CTIR 1.1×: 1400 s"><span class="bl">1.1× length</span><span class="bt"><span class="bf" style="--w:93.3%"></span></span><span class="bv">1400 s</span></div>
+        </div>
+        <figcaption class="t-en">Throughput falls from 0.055 to 0.047 requests/s in the same run.</figcaption>
+        <figcaption class="t-ko">같은 실험에서 처리량은 초당 0.055에서 0.047 요청으로 떨어진다.</figcaption>
+      </figure>
+      <figure class="chart">
+        <div class="ct"><span class="t-en">Fixes: average CoT tokens (accuracy)</span><span class="t-ko">해결책: 평균 CoT 토큰(정확도)</span></div>
+        <div class="cs"><span class="t-en">§7.2–7.3 text · Qwen3-4B INT3 · axis 0–30k · lower is better</span><span class="t-ko">§7.2–7.3 본문 · Qwen3-4B INT3 · 축 0–30k · 낮을수록 좋음</span></div>
+        <div class="bars" style="--vw:96px">
+          <div class="bar" title="BF16: 8.5k, 73%"><span class="bl">BF16</span><span class="bt"><span class="bf" style="--w:28.3%"></span></span><span class="bv">8.5k · 73%</span></div>
+          <div class="bar hl" title="QAT: 9.5k, 68%"><span class="bl">QAT</span><span class="bt"><span class="bf" style="--w:31.7%"></span></span><span class="bv">9.5k · 68%</span></div>
+          <div class="bar" title="GPTQ, Math-CoT calib: 12k, 65%"><span class="bl">Math-CoT calib</span><span class="bt"><span class="bf" style="--w:40%"></span></span><span class="bv">12k · 65%</span></div>
+          <div class="bar" title="GPTQ, Wikitext calib: 30k, 28%"><span class="bl">Wikitext calib</span><span class="bt"><span class="bf" style="--w:100%"></span></span><span class="bv">30k · 28%</span></div>
+        </div>
+        <figcaption class="t-en">Rounded values as stated in the text; calibration rows use GPTQ.</figcaption>
+        <figcaption class="t-ko">본문에 적힌 반올림 값. 보정 데이터 행은 GPTQ 기준.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">+292%</div><div class="l"><span class="t-en">CoT tokens, Qwen3-4B HQQ-INT3 vs BF16</span><span class="t-ko">CoT 토큰, Qwen3-4B HQQ-INT3 대 BF16</span></div></div>
+      <div class="stat"><div class="n">+33%</div><div class="l"><span class="t-en">p90 first-token latency at 1.1× length</span><span class="t-ko">1.1배 길이에서 p90 첫 토큰 지연</span></div></div>
+      <div class="stat"><div class="n">30k→12k</div><div class="l"><span class="t-en">CoT tokens, Wikitext → Math-CoT calibration</span><span class="t-ko">CoT 토큰, Wikitext → Math-CoT 보정</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">When you compress a reasoning model, log reasoning length next to accuracy, and calibrate on the model's own reasoning traces. Matching the full-precision model's trajectory, not only its final answer, is what keeps the small model cheap.</span><span class="t-ko">추론 모델을 압축할 때는 정확도 옆에 추론 길이를 함께 기록하고, 모델 자신의 추론 흔적으로 보정하자. 최종 답만이 아니라 원본의 궤적을 맞춰야 작은 모델이 실제로 싸진다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">Each benchmark uses only 100 questions (AIME25: 30) with one greedy run, and the QAT result is a single DiscQuant point on one model. The serving test sets the CoT budget by hand rather than timing real quantized models.</span><span class="t-ko">벤치마크마다 100문항(AIME25는 30문항)에 탐욕적 1회 실행뿐이고, QAT 결과는 한 모델의 DiscQuant 한 점이다. 서빙 실험은 실제 양자화 모델을 잰 게 아니라 CoT 예산을 고정해 측정했다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2606.25519">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2606.25519">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2606.25519">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2606.25519">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>top P1 wishlist item · UIUC (Minjia Zhang) · Microsoft · preprint</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-10-02.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P1 위시리스트 1순위 · UIUC(Minjia Zhang) · Microsoft · 프리프린트</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-10-02.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
