@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Semigroup-JEPA: Latent Dynamics Consistency for Zero-Shot Physics Generalization</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">World Models · JEPA · Physics Generalization</span><span class="t-ko">World Models · JEPA · 물리 일반화</span></span>
+      <span>2026.10.03</span>
+    </div>
+    <h1>Semigroup-JEPA: Latent Dynamics Consistency for Zero-Shot Physics Generalization<br>
+      <span class="glow t-en">— train a latent world model on its own multi-step rollouts and it keeps tracking physics at gravities it never saw</span>
+      <span class="glow t-ko">— 잠재 월드 모델을 자기 자신의 다단계 롤아웃으로 학습시키면, 본 적 없는 중력에서도 물리를 따라간다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge lab">🏛 Brown · Randall Balestriero · Yale</span>
+      <span class="badge hot">▲ 103 alphaXiv · 2.8k views</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Andy Zeyi Liu</b>, Haoran Sun, Lucas Baker, Randall Balestriero, John Sous <span class="t-en">(corresponding: John Sous)</span><span class="t-ko">(교신: John Sous)</span></span>
+      <span>🏛 Yale · Jump Trading · Brown</span>
+      <span>🗓 2026-09-09</span>
+      <span>📄 <a href="https://arxiv.org/abs/2609.10464">arXiv:2609.10464</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">JEPA (joint-embedding predictive architecture) world models plan well under one fixed physics law; nobody had tested whether their dynamics survive out-of-distribution (OOD) gravity.</span><span class="t-ko">JEPA(픽셀 대신 잠재 표현을 예측하는 구조) 월드 모델은 고정된 물리 법칙 하나에서는 계획을 잘 하지만, 학습 분포 밖(OOD) 중력에서도 동역학이 유지되는지는 아무도 시험하지 않았다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">A linear model splits rollout error into a one-step defect plus its amplification; probes show the gain sits in the encoder (−32% far-OOD one-step error).</span><span class="t-ko">선형 모델로 롤아웃 오차를 한 단계 결함과 그 증폭으로 나눈다. 탐침 실험은 이득이 인코더에 있음을 보인다(먼 OOD 한 단계 오차 −32%).</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Feed gravity in as part of the action, and train encoder and predictor together on a 5-step autoregressive latent rollout loss plus SIGReg (a Gaussian-shape regularizer).</b> Penalizing compounded error makes the encoder keep features the predictor can carry forward.</span><span class="t-ko"><b>중력을 행동(action)의 한 성분으로 넣고, 인코더와 예측기를 5단계 자기회귀 잠재 롤아웃 손실 + SIGReg(잠재를 가우시안 모양으로 맞추는 정규화)로 함께 학습한다.</b> 누적 오차를 벌주니 인코더가 예측기가 앞으로 끌고 갈 수 있는 특징을 남긴다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">Against DINO-WM: about 2× lower 44-step position error on 2D squares, 30% lower on 3D projectiles, robot catch success 9.5% → 23.3%.</span><span class="t-ko">DINO-WM 대비: 2D 사각형의 44단계 위치 오차 약 2배 감소, 3D 포물선 운동 30% 감소, 로봇 공 잡기 성공률 9.5% → 23.3%.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">A forecaster graded only on tomorrow can keep sloppy notes that drop slow-moving details. Graded on the whole week, small slips compound, so they must <b>write down every variable that drives the weather</b>. SG-JEPA grades its world model on <b>its own five-step forecast</b>, and the lesson lands mostly in what the encoder writes down, not in the forecasting rules.</p>
+    <p class="t-ko">내일 예보만으로 평가받는 예보관은 천천히 변하는 요소를 빼먹은 허술한 노트로도 버틸 수 있다. 일주일 전체로 평가받으면 작은 실수가 쌓이므로 <b>날씨를 움직이는 변수를 빠짐없이 적어야</b> 한다. SG-JEPA는 월드 모델을 <b>자기 자신의 5단계 예보</b>로 채점하고, 그 교훈은 예보 규칙보다 주로 인코더가 무엇을 적어 두는지에 남는다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">The paper in one figure</span><span class="t-ko">한 장으로 보는 논문</span></h2>
+    <p class="vlead t-en"><b>Two changes to LeWorldModel: gravity enters as an action, and training scores multi-step rollouts.</b> The frozen encoder then serves a diffusion policy for control.</p>
+    <p class="vlead t-ko"><b>LeWorldModel에 두 가지를 바꾼다: 중력을 행동으로 넣고, 학습은 다단계 롤아웃을 채점한다.</b> 이후 고정한 인코더 위에 확산 정책을 올려 제어한다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2609.10464/sg-jepa-overview.svg" target="_blank"><img src="fig/2609.10464/sg-jepa-overview.svg" alt="Two-panel schematic. (a) Training: a history of frames goes through a shared encoder into a predictor conditioned on action and gravity, which rolls out K future latents; a rollout loss compares them with encoded future frames, plus a SIGReg term. (b) Control: the frozen encoder feeds a gravity-conditioned diffusion policy that outputs an action chunk, executes part of it in the environment, and observes again."></a>
+      <figcaption class="t-en"><b>Figure 1.</b> (a) Encoder and gravity-conditioned predictor trained jointly with a discounted K-step rollout loss plus SIGReg; targets use the same encoder. (b) A diffusion policy on the frozen encoder replans every E steps.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> (a) 인코더와 중력 조건 예측기를 할인된 K단계 롤아웃 손실 + SIGReg로 함께 학습하며, 정답 잠재도 같은 인코더에서 나온다. (b) 고정된 인코더 위의 확산 정책이 E단계마다 다시 계획한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2609.10464</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Encode a 20-frame history.</span><span class="t-ko">20프레임 기록을 인코딩한다.</span></b><span class="t-en">A ViT-Tiny maps each frame to a 256-d latent; gravity g joins the action as one normalized scalar.</span><span class="t-ko">ViT-Tiny가 각 프레임을 256차원 잠재로 바꾸고, 중력 g는 정규화한 스칼라 하나로 행동에 붙는다.</span></li>
+      <li><b><span class="t-en">Roll out 5 steps on its own predictions.</span><span class="t-ko">자기 예측으로 5단계를 굴린다.</span></b><span class="t-en">A GRU or Mamba-style SSM predictor feeds each guess back in; later steps weigh less (γ = 0.95).</span><span class="t-ko">GRU 또는 Mamba식 SSM(상태공간 모델) 예측기가 매 예측을 다시 입력으로 넣고, 뒤 단계일수록 가중치가 작다(γ = 0.95).</span></li>
+      <li><b><span class="t-en">Test far from the training gravity.</span><span class="t-ko">학습 중력에서 멀리 떨어져 시험한다.</span></b><span class="t-en">Train near g = 4 (2D) or 9.8 (3D); probe 44-step rollouts over 25 test gravities, then train control policies.</span><span class="t-ko">g = 4(2D) 또는 9.8(3D) 근처에서 학습하고, 시험 중력 25개에서 44단계 롤아웃을 탐침한 뒤 제어 정책을 학습한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">The payoff comes late in the rollout</span><span class="t-ko">이득은 롤아웃 후반에 나온다</span></h2>
+    <p class="vlead t-en"><b>On squares SG-JEPA halves 44-step error; on triangles DINO-WM wins early but loses by step 44.</b> That pattern points to less error compounding, not a better one-step fit.</p>
+    <p class="vlead t-ko"><b>사각형에서 SG-JEPA는 44단계 오차를 절반으로 줄이고, 삼각형에서는 DINO-WM이 초반엔 앞서다 44단계에서 뒤진다.</b> 한 단계 정확도보다 오차 누적이 줄었다는 신호다.</p>
+    <div class="vgrid">
+      <figure class="chart">
+        <div class="ct"><span class="t-en">2D square: position error at step 44</span><span class="t-ko">2D 사각형: 44단계 위치 오차</span></div>
+        <div class="cs"><span class="t-en">Table 8 · L2 error (m) · axis 0–2.5 · lower is better</span><span class="t-ko">Table 8 · L2 오차(m) · 축 0–2.5 · 낮을수록 좋음</span></div>
+        <div class="bars" style="--vw:52px">
+          <div class="bar" title="Original LeWM: 2.074"><span class="bl">Original LeWM</span><span class="bt"><span class="bf" style="--w:83%"></span></span><span class="bv">2.074</span></div>
+          <div class="bar" title="DINO-WM: 2.006"><span class="bl">DINO-WM</span><span class="bt"><span class="bf" style="--w:80.2%"></span></span><span class="bv">2.006</span></div>
+          <div class="bar hl" title="SG-JEPA (SSM): 1.148"><span class="bl">SG-JEPA (SSM)</span><span class="bt"><span class="bf" style="--w:45.9%"></span></span><span class="bv">1.148</span></div>
+          <div class="bar hl" title="SG-JEPA (GRU): 1.034"><span class="bl">SG-JEPA (GRU)</span><span class="bt"><span class="bf" style="--w:41.4%"></span></span><span class="bv">1.034</span></div>
+        </div>
+        <figcaption class="t-en">Averaged over 25 test gravities from −2 to 10.</figcaption>
+        <figcaption class="t-ko">−2부터 10까지 시험 중력 25개의 평균.</figcaption>
+      </figure>
+      <figure class="chart">
+        <div class="ct"><span class="t-en">2D triangle: short vs long horizon</span><span class="t-ko">2D 삼각형: 짧은 vs 긴 구간</span></div>
+        <div class="cs"><span class="t-en">Table 8 · position L2 error (m) · axis 0–3 · lower is better</span><span class="t-ko">Table 8 · 위치 L2 오차(m) · 축 0–3 · 낮을수록 좋음</span></div>
+        <div class="bars" style="--vw:52px">
+          <div class="bar" title="step 5, DINO-WM: 0.532"><span class="bl">h5 · DINO-WM</span><span class="bt"><span class="bf" style="--w:17.7%"></span></span><span class="bv">0.532</span></div>
+          <div class="bar hl" title="step 5, SG-JEPA (GRU): 0.968"><span class="bl">h5 · SG-JEPA</span><span class="bt"><span class="bf" style="--w:32.3%"></span></span><span class="bv">0.968</span></div>
+          <div class="bar" title="step 44, DINO-WM: 2.764"><span class="bl">h44 · DINO-WM</span><span class="bt"><span class="bf" style="--w:92.1%"></span></span><span class="bv">2.764</span></div>
+          <div class="bar hl" title="step 44, SG-JEPA (GRU): 2.529"><span class="bl">h44 · SG-JEPA</span><span class="bt"><span class="bf" style="--w:84.3%"></span></span><span class="bv">2.529</span></div>
+        </div>
+        <figcaption class="t-en">SG-JEPA = GRU variant. Contacts make triangles harder.</figcaption>
+        <figcaption class="t-ko">SG-JEPA = GRU 버전. 비대칭 충돌 때문에 삼각형이 더 어렵다.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Control and 3D prediction</span><span class="t-ko">제어와 3D 예측</span></h2>
+    <p class="vlead t-en"><b>The same frozen features make better robot policies on all three tasks.</b> The biggest jump is catching a bouncing ball.</p>
+    <p class="vlead t-ko"><b>같은 고정 특징이 세 과제 모두에서 더 나은 로봇 정책을 만든다.</b> 가장 큰 향상은 튀는 공 잡기다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Closed-loop success rate, diffusion policy on frozen features</span><span class="t-ko">폐루프 성공률, 고정 특징 위의 확산 정책</span></div>
+      <div class="cs"><span class="t-en">§3 text · 5 rollout seeds, held-out gravities · axis 0–40% · higher is better</span><span class="t-ko">§3 본문 · 롤아웃 시드 5개, 시험 중력 · 축 0–40% · 높을수록 좋음</span></div>
+      <div class="bars" style="--vw:52px">
+        <div class="bar" title="Arm Catcher Ball, DINO-WM: 9.5%"><span class="bl">Catcher · DINO-WM</span><span class="bt"><span class="bf" style="--w:23.8%"></span></span><span class="bv">9.5%</span></div>
+        <div class="bar hl" title="Arm Catcher Ball, SG-JEPA (GRU): 23.3%"><span class="bl">Catcher · SG-JEPA</span><span class="bt"><span class="bf" style="--w:58.3%"></span></span><span class="bv">23.3%</span></div>
+        <div class="bar" title="Arm Paddle Ball, DINO-WM: 17.7%"><span class="bl">Paddle · DINO-WM</span><span class="bt"><span class="bf" style="--w:44.3%"></span></span><span class="bv">17.7%</span></div>
+        <div class="bar hl" title="Arm Paddle Ball, SG-JEPA (GRU): 23.8%"><span class="bl">Paddle · SG-JEPA</span><span class="bt"><span class="bf" style="--w:59.5%"></span></span><span class="bv">23.8%</span></div>
+        <div class="bar" title="Franka Paddle-to-Basket, DINO-WM: 27.4%"><span class="bl">Basket · DINO-WM</span><span class="bt"><span class="bf" style="--w:68.5%"></span></span><span class="bv">27.4%</span></div>
+        <div class="bar hl" title="Franka Paddle-to-Basket, SG-JEPA (GRU): 30.5%"><span class="bl">Basket · SG-JEPA</span><span class="bt"><span class="bf" style="--w:76.3%"></span></span><span class="bv">30.5%</span></div>
+      </div>
+      <figcaption class="t-en">At the training gravity, catch success is 42.3% vs 16.0%.</figcaption>
+      <figcaption class="t-ko">학습 중력에서는 잡기 성공률이 42.3% 대 16.0%다.</figcaption>
+    </figure>
+    <p class="vlead gap t-en"><b>Position is a clear win; velocity is not.</b> On 3D projectile flight DINO-WM keeps the lowest 44-step velocity error.</p>
+    <p class="vlead gap t-ko"><b>위치는 확실히 이기지만 속도는 아니다.</b> 3D 포물선 비행에서 44단계 속도 오차는 DINO-WM이 가장 낮다.</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 10, Approach Ball.</b> 1,600 held-out episodes; mean over steps 1–44 and at step 44; lower is better.</caption>
+        <caption class="t-ko"><b>Table 10, Approach Ball.</b> 시험 에피소드 1,600개. 1–44단계 평균과 44단계 값. 낮을수록 좋다.</caption>
+        <thead><tr><th><span class="t-en">Model</span><span class="t-ko">모델</span></th><th>Pos. mean (m)</th><th>Pos. h44</th><th>Vel. mean (m/s)</th><th>Vel. h44</th></tr></thead>
+        <tbody>
+          <tr><td>Original LeWM</td><td>0.0986</td><td>0.1229</td><td>1.1361</td><td>1.1400</td></tr>
+          <tr><td>DINO-WM</td><td>0.0705</td><td>0.1152</td><td>0.5672</td><td class="up">0.7411</td></tr>
+          <tr><td>SG-JEPA (SSM)</td><td>0.0495</td><td>0.0785</td><td>0.5664</td><td>0.8861</td></tr>
+          <tr><td>SG-JEPA (GRU)</td><td class="up">0.0491</td><td class="up">0.0764</td><td class="up">0.5391</td><td>0.7829</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Where the advantage comes from</span><span class="t-ko">이득은 어디서 오나</span></h2>
+    <p class="vlead t-en"><b>The gain lives in the encoder, and rollout amplifies it.</b> The one-step gap stays under 0.06; the free-rollout gap peaks near 0.38.</p>
+    <p class="vlead t-ko"><b>이득은 인코더에 있고, 롤아웃이 그것을 키운다.</b> 한 단계 격차는 0.06 미만인데 자유 롤아웃 격차는 0.38 근처까지 커진다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2609.10464/theory_claim_compact_3panel.png" target="_blank"><img src="fig/2609.10464/theory_claim_compact_3panel.png" alt="Three line plots. (a) Mean rollout error versus gravity for four encoder and fresh-predictor pairings: GRU-trained encoders (blue) sit below Transformer-trained encoders (orange) whichever fresh predictor is used. (b) Teacher-forced one-step error versus gravity: the SG-JEPA encoder curve lies below the DINO encoder curve everywhere, with the gap widening at extreme gravities. (c) DINO minus SG-JEPA error versus rollout horizon: the teacher-forced gap stays near 0.04 while the free-rollout gap rises to about 0.38 near horizon 20 and falls to about 0.19 by 44."></a>
+      <figcaption class="t-en"><b>Figure 5.</b> 2D squares. (a) Frozen encoders with fresh predictors. (b) One-step error with true context, by gravity. (c) DINO-minus-SG-JEPA gap: teacher-forced vs free rollout.</figcaption>
+      <figcaption class="t-ko"><b>Figure 5.</b> 2D 사각형. (a) 고정 인코더 + 새 예측기. (b) 참 문맥에서의 한 단계 오차, 중력별. (c) DINO − SG-JEPA 격차: 교사 강제 대 자유 롤아웃.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2609.10464</div>
+    </figure>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">1.9×</div><div class="l"><span class="t-en">lower 44-step square error vs DINO-WM (computed, Table 8)</span><span class="t-ko">DINO-WM 대비 44단계 사각형 오차 감소(Table 8로 계산)</span></div></div>
+      <div class="stat"><div class="n">2.45×</div><div class="l"><span class="t-en">catch success vs DINO-WM (9.5 → 23.3%)</span><span class="t-ko">DINO-WM 대비 공 잡기 성공률(9.5 → 23.3%)</span></div></div>
+      <div class="stat"><div class="n">−32%</div><div class="l"><span class="t-en">far-OOD one-step error, SG-JEPA vs DINO encoder</span><span class="t-ko">먼 OOD 한 단계 오차, SG-JEPA 대 DINO 인코더</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">If a world model will be rolled out for planning, train it on its own multi-step rollouts and let that loss reach the encoder; the payoff shows up as better features. To find where a gain lives, refit fresh predictors on frozen encoders.</span><span class="t-ko">월드 모델을 계획용으로 여러 단계 굴릴 거라면, 자기 롤아웃으로 학습시키고 그 손실이 인코더까지 흐르게 하자. 이득은 더 좋은 특징으로 나타난다. 이득이 어디에 있는지 알려면 고정 인코더에 새 예측기를 다시 맞춰 보면 된다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">Gravity is handed to the model, not inferred, and SG-JEPA changes several things at once versus LeWM (loss, predictor, SIGReg weight) with one training seed per world model. The intro even says retraining the predictor hurts while §4 credits the encoder, so the mechanism needs a cleaner ablation.</span><span class="t-ko">중력은 추론하지 않고 모델에 그냥 주어지며, SG-JEPA는 LeWM 대비 손실·예측기·SIGReg 가중치를 한꺼번에 바꾸고 월드 모델마다 학습 시드가 하나뿐이다. 서론은 예측기를 재학습하면 나빠진다고 쓰고 §4는 인코더 덕분이라 하니, 메커니즘은 더 깔끔한 절제 실험이 필요하다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2609.10464">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2609.10464">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2609.10464">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2609.10464">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>legacy slot (world models) · score 9 · Randall Balestriero (Brown) · ▲103 alphaXiv, very hot · preprint</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-10-03.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>legacy 슬롯(월드 모델) · 점수 9 · Randall Balestriero(Brown) · alphaXiv ▲103, 매우 화제 · 프리프린트</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-10-03.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
