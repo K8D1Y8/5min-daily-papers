@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Context-Matched Distillation: Teacher Causality for Autoregressive Video Distillation</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Video &amp; World Generation · AR Diffusion Distillation</span><span class="t-ko">Video &amp; World Generation · AR 확산 증류</span></span>
+      <span>2026.10.04</span>
+    </div>
+    <h1>Context-Matched Distillation: Teacher Causality for Autoregressive Video Distillation<br>
+      <span class="glow t-en">— the teacher grades each frame seeing only what the student saw: camera-motion score 76.1 vs 42.5 for the best AR baseline</span>
+      <span class="glow t-ko">— 교사가 학생이 본 것만 보고 각 프레임을 채점한다: 카메라 움직임 점수 76.1, 최고 AR 기준선은 42.5</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge lab">🏛 NVIDIA · Sanja Fidler</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Hmrishav Bandyopadhyay</b>, Xuanchi Ren, Zijian Huang, Jay Zhangjie Wu, Tianshi Cao, Ruilong Li, Bryan Chu, Sanja Fidler, Yi-Zhe Song, Zian Wang <span class="t-en">(corresponding: not marked; last author Zian Wang)</span><span class="t-ko">(교신: 표기 없음, 마지막 저자 Zian Wang)</span></span>
+      <span>🏛 NVIDIA · University of Surrey (SketchX, CVSSP)</span>
+      <span>🗓 2026-08-13</span>
+      <span>📄 <a href="https://arxiv.org/abs/2608.13391">arXiv:2608.13391</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Few-step AR (frame-by-frame) video students learn from bidirectional teachers that grade each frame while seeing future frames and camera commands the student never had.</span><span class="t-ko">몇 스텝짜리 AR(프레임을 하나씩 생성하는) 비디오 학생은 양방향 교사에게 배운다. 그런데 이 교사는 학생이 가진 적 없는 미래 프레임과 카메라 명령까지 보면서 각 프레임을 채점한다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">That mismatch matters: swapping only the teacher for a causal one lifts VBench-I2V Total from 82.65 to 88.33 and camera motion from 36.2 to 60.7.</span><span class="t-ko">이 불일치가 핵심이다. 교사만 인과(과거만 보는) 교사로 바꿔도 VBench-I2V Total이 82.65에서 88.33으로, 카메라 움직임 점수가 36.2에서 60.7로 오른다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Make the teacher causal, start the student from it, and score each student frame under the exact prefix that produced it, lightly noised.</b> The grader sees what the student saw, no more.</span><span class="t-ko"><b>교사를 인과 모델로 만들고, 학생을 그 가중치에서 시작하고, 학생의 각 프레임을 그것을 만든 바로 그 앞부분(살짝 노이즈를 넣은)을 조건으로 채점한다.</b> 채점자는 학생이 본 만큼만 본다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">Best AR VBench-I2V Total (88.47); camera motion 76.1 vs 42.5; lowest camera-pose errors on SANA-WM, e.g. 1.27° vs 2.05° rotation on the Hard split.</span><span class="t-ko">AR 방법 중 VBench-I2V Total 최고(88.47). 카메라 움직임 76.1 대 42.5. SANA-WM에서 카메라 자세 오차 최저, 예를 들어 Hard 분할 회전 오차 1.27° 대 2.05°.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Picture a driving examiner. The usual one holds <b>the whole route map</b> and grades your turn at block 3 by where you must be at block 5, which you couldn't know. CMD's examiner <b>looks through your own windshield</b>, smudges included, and grades <b>one turn at a time</b> from the road you actually drove.</p>
+    <p class="t-ko">운전 시험관을 떠올려 보자. 보통의 시험관은 <b>전체 경로 지도</b>를 들고, 3번 블록에서의 회전을 5번 블록에 어디 있어야 하는지로 채점한다. 운전자는 그걸 알 수 없었는데도. CMD의 시험관은 <b>운전자의 앞유리로</b>, 얼룩까지 그대로 보며, 실제로 지나온 길만 가지고 <b>회전 하나씩</b> 채점한다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: give the teacher the student's view</span><span class="t-ko">작동 방식: 교사에게 학생의 시야만 준다</span></h2>
+    <p class="vlead t-en"><b>The change from Self-Forcing is only what the teacher may see when it scores block 3.</b> Self-Forcing's teacher also sees block 4; CMD's sees the input image and blocks 1–2.</p>
+    <p class="vlead t-ko"><b>Self-Forcing과 다른 점은 블록 3을 채점할 때 교사가 무엇을 볼 수 있느냐뿐이다.</b> Self-Forcing의 교사는 블록 4도 보지만, CMD의 교사는 입력 이미지와 블록 1–2만 본다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2608.13391/concept_v5.jpg" target="_blank"><img src="fig/2608.13391/concept_v5.jpg" alt="Left: a causal student DiT generates blocks B1 to B4 from the input image, each block conditioned on earlier ones, then the blocks are noised for DMD. Top right: Self-Forcing feeds all four noised blocks to a bidirectional teacher, so the score for B3 includes future block B4. Bottom right: CMD feeds a causal teacher the noisy target B3 with one of three contexts: noisy past blocks (Base CMD), the clean cached prefix (Prefix Scoring), or a corrupted prefix (Prefix Corruption)."></a>
+      <figcaption class="t-en"><b>Figure 2.</b> Top: Self-Forcing scores all blocks jointly, so block 3's score uses block 4. Bottom: CMD's causal teacher scores block 3 from noisy past, clean prefix, or corrupted prefix.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> 위: Self-Forcing은 모든 블록을 한꺼번에 채점하므로 블록 3의 점수에 블록 4가 섞인다. 아래: CMD의 인과 교사는 노이즈 낀 과거, 깨끗한 앞부분, 또는 오염시킨 앞부분을 조건으로 블록 3을 채점한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2608.13391</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Make the teacher causal.</span><span class="t-ko">교사를 인과 모델로 만든다.</span></b><span class="t-en">Fine-tune Cosmos-Predict2.5-2B with Diffusion Forcing (each past frame noised independently); the student starts from these weights, no ODE or consistency warm-up.</span><span class="t-ko">Cosmos-Predict2.5-2B를 Diffusion Forcing(과거 프레임마다 따로 노이즈를 넣는 학습)으로 미세조정한다. 학생은 이 가중치에서 바로 시작하고, ODE·일관성 사전 단계는 없다.</span></li>
+      <li><b><span class="t-en">Roll out the student and cache its prefixes.</span><span class="t-ko">학생을 굴리고 앞부분을 저장한다.</span></b><span class="t-en">The student generates frames exactly as at inference; each frame's clean history and camera commands are saved.</span><span class="t-ko">학생은 추론 때와 똑같이 프레임을 생성하고, 각 프레임의 깨끗한 과거와 카메라 명령을 저장해 둔다.</span></li>
+      <li><b><span class="t-en">Score every frame in one masked pass.</span><span class="t-ko">마스크 한 번으로 모든 프레임을 채점한다.</span></b><span class="t-en">A block-causal mask pairs each noised target with its own prefix, corrupted at noise step 256; real-minus-fake scores give the gradient.</span><span class="t-ko">블록 인과 마스크가 노이즈 낀 각 목표를 자기 앞부분(노이즈 스텝 256으로 오염)과 짝짓는다. real 점수에서 fake 점수를 뺀 값이 기울기가 된다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key idea: matched context, but not too clean</span><span class="t-ko">핵심: 맥락은 맞추되, 너무 깨끗하게는 말 것</span></h2>
+    <p class="vlead t-en"><b>The causal teacher does most of the work; clean prefixes alone hurt, and moderate noise on them wins.</b> An early student's frames carry drift artifacts the teacher never saw in training.</p>
+    <p class="vlead t-ko"><b>대부분의 이득은 인과 교사에서 나온다. 깨끗한 앞부분만 쓰면 오히려 나빠지고, 적당한 노이즈를 넣어야 이긴다.</b> 학습 초기 학생의 프레임에는 교사가 학습 중 본 적 없는 드리프트(누적 왜곡) 흔적이 있기 때문이다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Camera Motion score by teacher setup</span><span class="t-ko">교사 설정별 카메라 움직임 점수</span></div>
+      <div class="cs"><span class="t-en">Table 4 · VBench-I2V · chunk 1 · higher is better · PC = prefix noise step</span><span class="t-ko">Table 4 · VBench-I2V · 청크 1 · 높을수록 좋음 · PC = 앞부분 노이즈 스텝</span></div>
+      <div class="bars">
+        <div class="bar" title="Bidirectional teacher: 36.23"><span class="bl">Bidir.</span><span class="bt"><span class="bf" style="--w:45.3%"></span></span><span class="bv">36.23</span></div>
+        <div class="bar" title="Base CMD: 60.66"><span class="bl">Base CMD</span><span class="bt"><span class="bf" style="--w:75.8%"></span></span><span class="bv">60.66</span></div>
+        <div class="bar" title="+ Prefix Scoring, clean: 55.49"><span class="bl">+PS clean</span><span class="bt"><span class="bf" style="--w:69.4%"></span></span><span class="bv">55.49</span></div>
+        <div class="bar" title="+ PS, PC128: 56.15"><span class="bl">PC 128</span><span class="bt"><span class="bf" style="--w:70.2%"></span></span><span class="bv">56.15</span></div>
+        <div class="bar hl" title="Full CMD, PC256: 63.64"><span class="bl">PC 256</span><span class="bt"><span class="bf" style="--w:79.6%"></span></span><span class="bv">63.64</span></div>
+        <div class="bar" title="+ PS, PC512: 55.75"><span class="bl">PC 512</span><span class="bt"><span class="bf" style="--w:69.7%"></span></span><span class="bv">55.75</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–80. Total follows the same shape: 82.65 → 88.33 (Base) → 87.25 (clean) → 88.46 (PC 256).</figcaption>
+      <figcaption class="t-ko">축 0–80. Total도 같은 모양이다: 82.65 → 88.33(Base) → 87.25(clean) → 88.46(PC 256).</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: control follows, and long videos move</span><span class="t-ko">결과: 명령을 따르고, 긴 영상도 움직인다</span></h2>
+    <p class="vlead t-en"><b>CMD executes camera commands far better than other AR systems.</b> Chunk-4's Hard-split rotation error is 38% below SANA-WM, the best baseline.</p>
+    <p class="vlead t-ko"><b>CMD는 다른 AR 시스템보다 카메라 명령을 훨씬 잘 수행한다.</b> 청크 4 모델의 Hard 분할 회전 오차는 최고 기준선 SANA-WM보다 38% 낮다.</p>
+    <div class="vgrid">
+      <figure class="chart">
+        <div class="ct"><span class="t-en">Camera rotation error, Hard split</span><span class="t-ko">카메라 회전 오차, Hard 분할</span></div>
+        <div class="cs"><span class="t-en">Table 3 · SANA-WM · degrees · lower is better · c = chunk size</span><span class="t-ko">Table 3 · SANA-WM · 도 · 낮을수록 좋음 · c = 청크 크기</span></div>
+        <div class="bars">
+          <div class="bar" title="HY-WorldPlay: 6.60"><span class="bl">HY-WP</span><span class="bt"><span class="bf" style="--w:82.5%"></span></span><span class="bv">6.60°</span></div>
+          <div class="bar" title="LingBot-World: 6.23"><span class="bl">LingBot</span><span class="bt"><span class="bf" style="--w:77.9%"></span></span><span class="bv">6.23°</span></div>
+          <div class="bar" title="minWM: 6.91"><span class="bl">minWM</span><span class="bt"><span class="bf" style="--w:86.4%"></span></span><span class="bv">6.91°</span></div>
+          <div class="bar" title="SANA-WM: 2.05"><span class="bl">SANA-WM</span><span class="bt"><span class="bf" style="--w:25.6%"></span></span><span class="bv">2.05°</span></div>
+          <div class="bar hl" title="CMD chunk 1: 2.56"><span class="bl">CMD c1</span><span class="bt"><span class="bf" style="--w:32%"></span></span><span class="bv">2.56°</span></div>
+          <div class="bar hl" title="CMD chunk 4: 1.27"><span class="bl">CMD c4</span><span class="bt"><span class="bf" style="--w:15.9%"></span></span><span class="bv">1.27°</span></div>
+        </div>
+        <figcaption class="t-en">Axis 0–8°. 38% = 1 − 1.27 / 2.05 (computed).</figcaption>
+        <figcaption class="t-ko">축 0–8°. 38% = 1 − 1.27 / 2.05 (계산).</figcaption>
+      </figure>
+      <figure class="chart">
+        <div class="ct"><span class="t-en">Camera Motion score vs AR baselines</span><span class="t-ko">AR 기준선 대비 카메라 움직임 점수</span></div>
+        <div class="cs"><span class="t-en">Table 1 · VBench-I2V · higher is better · CF = Causal Forcing</span><span class="t-ko">Table 1 · VBench-I2V · 높을수록 좋음 · CF = Causal Forcing</span></div>
+        <div class="bars">
+          <div class="bar" title="Self-Forcing: 26.13"><span class="bl">Self-F.</span><span class="bt"><span class="bf" style="--w:32.7%"></span></span><span class="bv">26.13</span></div>
+          <div class="bar" title="Causal Forcing: 34.47"><span class="bl">CF</span><span class="bt"><span class="bf" style="--w:43.1%"></span></span><span class="bv">34.47</span></div>
+          <div class="bar" title="Causal Forcing++: 27.34"><span class="bl">CF++</span><span class="bt"><span class="bf" style="--w:34.2%"></span></span><span class="bv">27.34</span></div>
+          <div class="bar" title="LingBot-World: 42.54"><span class="bl">LingBot</span><span class="bt"><span class="bf" style="--w:53.2%"></span></span><span class="bv">42.54</span></div>
+          <div class="bar hl" title="CMD chunk 1: 63.64"><span class="bl">CMD c1</span><span class="bt"><span class="bf" style="--w:79.6%"></span></span><span class="bv">63.64</span></div>
+          <div class="bar hl" title="CMD chunk 4: 76.12"><span class="bl">CMD c4</span><span class="bt"><span class="bf" style="--w:95.2%"></span></span><span class="bv">76.12</span></div>
+        </div>
+        <figcaption class="t-en">Axis 0–80. Camera motion is requested in the prompt.</figcaption>
+        <figcaption class="t-ko">축 0–80. 카메라 움직임은 프롬프트로 요청한다.</figcaption>
+      </figure>
+    </div>
+    <p class="vlead gap t-en"><b>On 30-second rollouts CMD has the best Total, but it trades steadiness for motion.</b> LongLive and Rolling Forcing look steadier mainly because they barely move.</p>
+    <p class="vlead gap t-ko"><b>30초 생성에서 CMD는 Total이 가장 높지만, 안정성을 내주고 움직임을 얻는다.</b> LongLive와 Rolling Forcing의 일관성 점수가 높은 건 대체로 화면이 거의 움직이지 않기 때문이다.</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 2 (subset).</b> SANA-WM Simple split, 501 frames at 16 fps, 480×832, no camera input. c = chunk size; SC = subject consistency; DD = dynamic degree (how much moves). Higher is better.</caption>
+        <caption class="t-ko"><b>Table 2 (일부).</b> SANA-WM Simple 분할, 501프레임·16 fps, 480×832, 카메라 입력 없음. c = 청크 크기, SC = 피사체 일관성, DD = 동적 정도(얼마나 움직이는지). 높을수록 좋음.</caption>
+        <thead><tr><th><span class="t-en">Method</span><span class="t-ko">방법</span></th><th>Total</th><th>SC</th><th>DD</th></tr></thead>
+        <tbody>
+          <tr><td>LingBot-World</td><td>69.03</td><td>91.00</td><td>51.25</td></tr>
+          <tr><td>LongLive</td><td>68.80</td><td>95.43</td><td>8.75</td></tr>
+          <tr><td>Rolling Forcing</td><td>68.77</td><td class="up">96.09</td><td>3.75</td></tr>
+          <tr><td>Context Forcing</td><td>69.25</td><td>91.72</td><td>32.50</td></tr>
+          <tr><td>CMD c1</td><td class="up">70.02</td><td>88.59</td><td>67.50</td></tr>
+          <tr><td>CMD c4</td><td>69.57</td><td>86.97</td><td class="up">77.50</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">88.47</div><div class="l"><span class="t-en">VBench-I2V Total, best among AR methods</span><span class="t-ko">VBench-I2V Total, AR 방법 중 최고</span></div></div>
+      <div class="stat"><div class="n">+5.68</div><div class="l"><span class="t-en">Total from the causal teacher alone</span><span class="t-ko">인과 교사로 바꾸기만 해서 오른 Total</span></div></div>
+      <div class="stat"><div class="n">4.2×</div><div class="l"><span class="t-en">lower rotation error than a bidirectional teacher, Simple split (Table 6, computed)</span><span class="t-ko">양방향 교사 대비 낮은 회전 오차, Simple 분할 (Table 6, 계산)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">When distilling any sequential generator, score the student on its own rollout with a teacher limited to the student's information set: the same lesson as on-policy distillation for LLMs. Lightly noise the student's history so early drift doesn't corrupt the grade.</span><span class="t-ko">순차 생성 모델을 증류할 때는, 학생이 직접 생성한 결과를 학생이 가진 정보만 보는 교사로 채점하라. LLM의 온폴리시 증류(학생 자신의 출력으로 배우는 증류)와 같은 교훈이다. 학생의 과거에는 살짝 노이즈를 넣어 초기 드리프트가 채점을 망치지 않게 하라.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">Prefix Scoring adds little over Base CMD (88.33 → 88.46) and depends on the noise level; Base CMD has lower camera errors on Hard. Most baselines are T2V pipelines adapted by swapping in the input image; the perceptual study is a Gemini judge, and no latency is reported.</span><span class="t-ko">Prefix Scoring은 Base CMD보다 이득이 작고(88.33 → 88.46) 노이즈 수준에 민감하며, Hard 분할에서는 Base CMD의 카메라 오차가 더 낮다. 기준선 대부분은 T2V(텍스트→비디오) 파이프라인에 입력 이미지를 끼워 넣어 I2V(이미지→비디오)로 바꾼 것이다. 지각 품질 평가는 사람이 아니라 Gemini 판정이고, 지연 시간은 보고하지 않는다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2608.13391">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2608.13391">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2608.13391">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2608.13391">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>top P2 wishlist item (bridges P1: teacher–student information mismatch) · NVIDIA (Sanja Fidler) · 20 HF upvotes · score 6 (P2 +3, listed lab +3)</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-10-04.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P2 위시리스트 1순위 (P1과 연결: 교사–학생 정보 불일치) · NVIDIA(Sanja Fidler) · HF 추천 20 · 점수 6 (P2 +3, 등록 연구실 +3)</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-10-04.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
