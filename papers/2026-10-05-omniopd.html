@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · OmniOPD: Logit-Free On-Policy Distillation via Speculative Verification</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Small–Large Alignment · Logit-Free OPD</span><span class="t-ko">Small–Large Alignment · logit 없는 온폴리시 증류</span></span>
+      <span>2026.10.05</span>
+    </div>
+    <h1>OmniOPD: Logit-Free On-Policy Distillation via Speculative Verification<br>
+      <span class="glow t-en">— grade the student's uncertain 50-token chunks against sampled teacher text: no logits needed, and it beats logit OPD on math</span>
+      <span class="glow t-ko">— 학생이 망설인 50토큰 구간을 교사가 직접 쓴 텍스트와 비교해 채점한다: logit 없이도 수학에서 logit 기반 OPD를 이긴다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge lab">🏛 Meta AI</span>
+      <span class="badge hot">▲ 96 alphaXiv · 7 HF</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Yuhang Zhou</b>, Lizhu Zhang, Yifan Wu, Mingyi Wang, Peng Bo, Jiayi Liu, Xiangjun Fan, Zhuokai Zhao <span class="t-en">(corresponding: Yuhang Zhou, Zhuokai Zhao)</span><span class="t-ko">(교신: Yuhang Zhou, Zhuokai Zhao)</span></span>
+      <span>🏛 Meta AI</span>
+      <span>🗓 2026-05-31</span>
+      <span>📄 <a href="https://arxiv.org/abs/2606.01476">arXiv:2606.01476</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">On-policy distillation (OPD: the student learns from teacher feedback on its own outputs) needs the teacher's token logits, so text-only API models can't teach.</span><span class="t-ko">온폴리시 증류(OPD: 학생이 직접 쓴 답에 교사가 피드백을 주는 증류)는 교사의 토큰별 logit(다음 토큰 점수)이 필요하다. 그래서 텍스트만 돌려주는 API 모델은 교사가 될 수 없다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Token logits are also brittle (prior work). But 10 sampled teacher continuations per chunk already track the teacher's exact chunk probability (Pearson 0.72).</span><span class="t-ko">토큰 logit 신호는 원래도 불안정하다(선행 연구). 그런데 구간마다 교사가 이어 쓴 샘플 10개만으로도 교사의 실제 구간 확률을 꽤 따라간다(Pearson 상관 0.72).</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>At the student's highest-entropy spots, the teacher writes 10 continuations; the student's 50-token chunk is reinforced in proportion to how much it resembles them.</b> Teacher-like choices at forks get the biggest push.</span><span class="t-ko"><b>학생의 엔트로피(불확실성)가 가장 높은 지점마다 교사가 이어 쓰기를 10번 하고, 학생의 50토큰 구간은 그 텍스트와 닮은 만큼 강화된다.</b> 갈림길에서 교사다운 선택일수록 가장 크게 밀어 준다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">Qwen3-4B math average: 69.08 vs 64.16 for logit OPD (Qwen3-32B teacher); 72.32 vs 56.22 with an instruct teacher; 75.67 from Gemini-2.5-Flash, past GRPO's 70.24.</span><span class="t-ko">Qwen3-4B 수학 평균: logit OPD 64.16 대비 69.08(Qwen3-32B 교사), instruct 교사로는 56.22 대비 72.32. Gemini-2.5-Flash 교사로 75.67, GRPO(70.24)를 넘는다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">A chess coach who never explains their thinking can still play. At the moves where you hesitate most, they <b>play on from your position several times</b>; the more your next few moves look like theirs, <b>the harder you drill them</b>. Between those moments, a leash keeps you <b>playing as you used to</b>.</p>
+    <p class="t-ko">생각을 설명해 주지 않는 체스 코치도 직접 둘 수는 있다. 내가 가장 망설인 수에서 코치가 <b>내 국면을 이어받아 여러 번 둬 본다</b>. 내 다음 몇 수가 코치의 수와 닮을수록 <b>그 수를 더 세게 연습한다</b>. 그 사이 구간에서는 목줄이 나를 <b>원래 두던 방식대로</b> 붙잡아 둔다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: audit the forks, not every token</span><span class="t-ko">작동 방식: 모든 토큰이 아니라 갈림길만 검사한다</span></h2>
+    <p class="vlead t-en"><b>The teacher never shows a probability; it only writes text.</b> Similarity between its text and the student's chunk stands in for the logit.</p>
+    <p class="vlead t-ko"><b>교사는 확률을 보여 주지 않고 텍스트만 쓴다.</b> 교사의 텍스트와 학생 구간의 유사도가 logit을 대신한다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2606.01476/omniopd_diagram.png" target="_blank"><img src="fig/2606.01476/omniopd_diagram.png" alt="Left: the student generates a trajectory and entropy peaks mark which token chunks to audit. Middle: for each chunk, the teacher receives the prefix and samples several rollouts, each compared to the student's chunk by semantic similarity (e.g. 0.42, 0.51, 0.38). Right: audited tokens get the chunk distillation loss and unaudited tokens get a reference KL anchor."></a>
+      <figcaption class="t-en"><b>Figure 1.</b> Left: entropy peaks in the student's rollout pick the chunks to audit. Middle: the teacher continues each prefix N times and similarity scores the chunk. Right: audited chunks get the distillation loss, the rest a KL anchor.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> 왼쪽: 학생 생성문의 엔트로피 봉우리가 검사할 구간을 고른다. 가운데: 교사가 각 앞부분을 N번 이어 쓰고, 유사도로 구간을 채점한다. 오른쪽: 검사한 구간엔 증류 손실, 나머지엔 KL 닻을 건다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2606.01476</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Find the forks.</span><span class="t-ko">갈림길을 찾는다.</span></b><span class="t-en">The student writes a full answer; its M=10 highest-entropy tokens each anchor a C=50-token chunk to audit.</span><span class="t-ko">학생이 답 전체를 쓰고, 엔트로피가 가장 높은 토큰 M=10개가 각각 검사할 50토큰(C=50) 구간의 기준점이 된다.</span></li>
+      <li><b><span class="t-en">Let the teacher continue.</span><span class="t-ko">교사에게 이어 쓰게 한다.</span></b><span class="t-en">From each prefix the teacher writes N=10 continuations; summed similarity, blended with the student's own chunk probability, gives a weight.</span><span class="t-ko">각 앞부분에서 교사가 N=10번 이어 쓴다. 유사도 합을 학생 자신의 구간 확률과 섞으면(베이즈 평활) 가중치가 된다.</span></li>
+      <li><b><span class="t-en">Reinforce and anchor.</span><span class="t-ko">강화하고 붙잡는다.</span></b><span class="t-en">Each audited chunk's log-likelihood is scaled by its weight; all other tokens are held near the starting model by a KL penalty (β=0.1).</span><span class="t-ko">검사한 구간의 로그우도에 가중치를 곱해 키우고, 나머지 토큰은 KL 페널티(β=0.1)로 시작 모델 근처에 묶어 둔다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key idea: a coarse signal that ignores token-level style</span><span class="t-ko">핵심: 토큰 단위 말투를 무시하는 거친 신호</span></h2>
+    <p class="vlead t-en"><b>The gap to logit OPD is widest when the teacher writes in a different style.</b> OPD must match the instruct teacher token by token; OmniOPD only scores 50-token chunks.</p>
+    <p class="vlead t-ko"><b>logit OPD와의 차이는 교사의 말투가 다를 때 가장 크다.</b> OPD는 instruct 교사를 토큰 하나하나 따라 해야 하지만, OmniOPD는 50토큰 구간만 채점한다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Qwen3-4B math average by teacher and method</span><span class="t-ko">교사·방법별 Qwen3-4B 수학 평균</span></div>
+      <div class="cs"><span class="t-en">Table 1 · Pass@1 % over 5 benchmarks · higher is better · 30B-I = Qwen3-30B-A3B-Instruct</span><span class="t-ko">Table 1 · 벤치마크 5개 Pass@1 % · 높을수록 좋음 · 30B-I = Qwen3-30B-A3B-Instruct</span></div>
+      <div class="bars">
+        <div class="bar" title="SFT, Qwen3-32B teacher: 63.80"><span class="bl">SFT · 32B</span><span class="bt"><span class="bf" style="--w:79.75%"></span></span><span class="bv">63.80</span></div>
+        <div class="bar" title="OPD, Qwen3-32B teacher: 64.16"><span class="bl">OPD · 32B</span><span class="bt"><span class="bf" style="--w:80.2%"></span></span><span class="bv">64.16</span></div>
+        <div class="bar hl" title="OmniOPD, Qwen3-32B teacher: 69.08"><span class="bl">OmniOPD · 32B</span><span class="bt"><span class="bf" style="--w:86.35%"></span></span><span class="bv">69.08</span></div>
+        <div class="bar" title="SFT, Qwen3-30B-A3B-Instruct teacher: 49.77"><span class="bl">SFT · 30B-I</span><span class="bt"><span class="bf" style="--w:62.21%"></span></span><span class="bv">49.77</span></div>
+        <div class="bar" title="OPD, Qwen3-30B-A3B-Instruct teacher: 56.22"><span class="bl">OPD · 30B-I</span><span class="bt"><span class="bf" style="--w:70.28%"></span></span><span class="bv">56.22</span></div>
+        <div class="bar hl" title="OmniOPD, Qwen3-30B-A3B-Instruct teacher: 72.32"><span class="bl">OmniOPD · 30B-I</span><span class="bt"><span class="bf" style="--w:90.4%"></span></span><span class="bv">72.32</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–80. OPD uses full teacher logits (0.5 forward + 0.5 reverse KL).</figcaption>
+      <figcaption class="t-ko">축 0–80. OPD는 교사 logit 전체를 쓴다(forward KL 0.5 + reverse KL 0.5).</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: API teachers help, two knobs are make-or-break</span><span class="t-ko">결과: API 교사가 통하고, 두 설정이 성패를 가른다</span></h2>
+    <p class="vlead t-en"><b>Black-box teachers lift the 4B student past self-taught RL, but stability rests on the KL anchor and chunk length.</b> Entropy selection and smoothing each add at most 0.63 points.</p>
+    <p class="vlead t-ko"><b>블랙박스 교사가 4B 학생을 스스로 배우는 RL보다 높이 올리지만, 안정성은 KL 닻과 구간 길이에 달려 있다.</b> 엔트로피 선택과 평활은 각각 많아야 0.63점을 보탠다.</p>
+    <div class="vgrid">
+      <figure class="chart">
+        <div class="ct"><span class="t-en">Qwen3-4B math average, stronger teachers</span><span class="t-ko">더 강한 교사를 쓴 Qwen3-4B 수학 평균</span></div>
+        <div class="cs"><span class="t-en">Table 1 · Pass@1 % · higher is better · GRPO uses no teacher</span><span class="t-ko">Table 1 · Pass@1 % · 높을수록 좋음 · GRPO는 교사 없음</span></div>
+        <div class="bars">
+          <div class="bar" title="Base Qwen3-4B: 54.01"><span class="bl">Base</span><span class="bt"><span class="bf" style="--w:67.51%"></span></span><span class="bv">54.01</span></div>
+          <div class="bar" title="GRPO: 70.24"><span class="bl">GRPO</span><span class="bt"><span class="bf" style="--w:87.8%"></span></span><span class="bv">70.24</span></div>
+          <div class="bar" title="SFT from Gemini-2.5-Flash: 73.51"><span class="bl">SFT · Gemini</span><span class="bt"><span class="bf" style="--w:91.89%"></span></span><span class="bv">73.51</span></div>
+          <div class="bar hl" title="OmniOPD, Qwen3-32B teacher: 69.08"><span class="bl">Omni · 32B</span><span class="bt"><span class="bf" style="--w:86.35%"></span></span><span class="bv">69.08</span></div>
+          <div class="bar hl" title="OmniOPD, Claude-4.5-Haiku teacher: 74.92"><span class="bl">Omni · Haiku</span><span class="bt"><span class="bf" style="--w:93.65%"></span></span><span class="bv">74.92</span></div>
+          <div class="bar hl" title="OmniOPD, Gemini-2.5-Flash teacher: 75.67"><span class="bl">Omni · Gemini</span><span class="bt"><span class="bf" style="--w:94.59%"></span></span><span class="bv">75.67</span></div>
+        </div>
+        <figcaption class="t-en">Axis 0–80. API-teacher runs are capped at 50 steps for SFT and OmniOPD alike.</figcaption>
+        <figcaption class="t-ko">축 0–80. API 교사 실험은 SFT와 OmniOPD 모두 50스텝으로 제한했다.</figcaption>
+      </figure>
+      <figure class="chart">
+        <div class="ct"><span class="t-en">Ablations, Qwen3-4B ← Qwen3-32B</span><span class="t-ko">구성 요소 제거 실험, Qwen3-4B ← Qwen3-32B</span></div>
+        <div class="cs"><span class="t-en">Tables 4 and 6 · math average % · higher is better · C = chunk length</span><span class="t-ko">Table 4·6 · 수학 평균 % · 높을수록 좋음 · C = 구간 길이</span></div>
+        <div class="bars">
+          <div class="bar hl" title="Full OmniOPD (C=50): 69.08"><span class="bl">Full (C=50)</span><span class="bt"><span class="bf" style="--w:86.35%"></span></span><span class="bv">69.08</span></div>
+          <div class="bar" title="without entropy selection: 68.45"><span class="bl">− entropy</span><span class="bt"><span class="bf" style="--w:85.56%"></span></span><span class="bv">68.45</span></div>
+          <div class="bar" title="without Bayesian smoothing: 68.63"><span class="bl">− smoothing</span><span class="bt"><span class="bf" style="--w:85.79%"></span></span><span class="bv">68.63</span></div>
+          <div class="bar" title="without KL anchor: 8.28"><span class="bl">− KL anchor</span><span class="bt"><span class="bf" style="--w:10.35%"></span></span><span class="bv">8.28</span></div>
+          <div class="bar" title="chunk length 25: 24.48"><span class="bl">C = 25</span><span class="bt"><span class="bf" style="--w:30.6%"></span></span><span class="bv">24.48</span></div>
+          <div class="bar" title="chunk length 100: 71.58"><span class="bl">C = 100</span><span class="bt"><span class="bf" style="--w:89.48%"></span></span><span class="bv">71.58</span></div>
+        </div>
+        <figcaption class="t-en">Axis 0–80. Without the anchor the student exploits the sparse audits and its fluency collapses.</figcaption>
+        <figcaption class="t-ko">축 0–80. 닻이 없으면 학생이 듬성듬성한 검사를 악용하고 문장 자체가 무너진다.</figcaption>
+      </figure>
+    </div>
+    <p class="vlead gap t-en"><b>The sparse setting needs less teacher compute than plain SFT and keeps 99% of the accuracy.</b> The teacher mostly reads the student's text (cheap prefill) and writes only short bursts.</p>
+    <p class="vlead gap t-ko"><b>듬성한 설정은 일반 SFT보다 교사 연산이 적게 들면서 정확도의 99%를 지킨다.</b> 교사는 주로 학생의 글을 읽고(값싼 prefill), 짧게만 이어 쓴다.</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 8 + Tables 1, 4.</b> Teacher tokens per sample; effort vs SFT assumes decode costs 8.3× prefill. Default M=10, C=50, N=10; math average for Qwen3-4B ← Qwen3-32B.</caption>
+        <caption class="t-ko"><b>Table 8 + Table 1, 4.</b> 샘플당 교사 토큰 수. SFT 대비 비용은 생성 토큰이 읽기 토큰보다 8.3배 비싸다고 가정. 기본값 M=10, C=50, N=10. 수학 평균은 Qwen3-4B ← Qwen3-32B.</caption>
+        <thead><tr><th><span class="t-en">Setting</span><span class="t-ko">설정</span></th><th><span class="t-en">Teacher in / out</span><span class="t-ko">교사 입력 / 출력</span></th><th><span class="t-en">Effort</span><span class="t-ko">비용</span></th><th><span class="t-en">Math avg</span><span class="t-ko">수학 평균</span></th></tr></thead>
+        <tbody>
+          <tr><td>SFT</td><td>200 / 8,000</td><td>1.00×</td><td>63.80</td></tr>
+          <tr><td>Omni M=5</td><td>16,850 / 5,000</td><td class="up">0.88×</td><td>68.38</td></tr>
+          <tr><td>Omni default</td><td>33,700 / 10,000</td><td>1.75×</td><td>69.08</td></tr>
+          <tr><td>Omni C=100</td><td>33,700 / 20,000</td><td>3.00×</td><td class="up">71.58</td></tr>
+          <tr><td>Omni M=20</td><td>67,400 / 20,000</td><td>3.50×</td><td>70.96</td></tr>
+          <tr><td>Omni C=25</td><td>33,700 / 5,000</td><td>1.13×</td><td>24.48</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">+28.64%</div><div class="l"><span class="t-en">relative over logit OPD, instruct teacher</span><span class="t-ko">instruct 교사에서 logit OPD 대비 상대 향상</span></div></div>
+      <div class="stat"><div class="n">0.88×</div><div class="l"><span class="t-en">teacher cost of SFT at M=5</span><span class="t-ko">M=5일 때 SFT 대비 교사 비용</span></div></div>
+      <div class="stat"><div class="n">8.28</div><div class="l"><span class="t-en">math average without the KL anchor (from 69.08)</span><span class="t-ko">KL 닻을 뺐을 때 수학 평균 (원래 69.08)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">"Would the teacher write something like this here?" can be estimated from a few sampled continuations, so any text-only model can grade a small model's own rollouts. Auditing only high-entropy forks is a cheap default worth reusing.</span><span class="t-ko">"교사라면 여기서 이런 걸 쓸까?"는 교사가 이어 쓴 샘플 몇 개로 추정할 수 있다. 그래서 텍스트만 내는 모델도 소형 모델이 직접 쓴 답을 채점할 수 있다. 엔트로피 높은 갈림길만 검사하는 방식은 다시 써 볼 만한 값싼 기본값이다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">The weight is always positive, so every audited chunk is reinforced, only by different amounts; without the KL anchor training collapses. The "semantic" score is edit distance, the default 1.7B run and 4B code trail OPD, and only accuracy is reported, with no check of how close the student's distribution gets to the teacher's.</span><span class="t-ko">가중치가 항상 양수라서 검사한 구간은 모두 강화되고, 그 정도만 다르다. KL 닻이 없으면 학습이 무너진다. "의미" 점수의 기본값은 편집 거리(edit distance)이고, 기본 설정의 1.7B 실험과 4B 코드 실험은 OPD보다 낮다. 정확도만 보고할 뿐, 학생 분포가 교사 분포에 얼마나 가까워졌는지는 재지 않는다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2606.01476">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2606.01476">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2606.01476">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2606.01476">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>top P1 wishlist item · Meta AI (listed lab) · ▲96 alphaXiv · score 8 (P1 +3, listed lab +3, hot +2)</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-10-05.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P1 위시리스트 1순위 · Meta AI(등록 연구실) · alphaXiv ▲96 · 점수 8 (P1 +3, 등록 연구실 +3, 화제성 +2)</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-10-05.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
