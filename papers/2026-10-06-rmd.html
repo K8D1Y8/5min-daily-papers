@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Rollout-Marginal Distillation for Long-Horizon Autoregressive Video Generation</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Video & World Generation · AR Diffusion Distillation</span><span class="t-ko">Video & World Generation · AR 확산 증류</span></span>
+      <span>2026.10.06</span>
+    </div>
+    <h1>Rollout-Marginal Distillation for Long-Horizon Autoregressive Video Generation<br>
+      <span class="glow t-en">— let the teacher grade each chunk alone, so it stops copying past artifacts: 5-second training holds up for a minute</span>
+      <span class="glow t-ko">— 교사가 각 구간을 따로 채점하게 하자 과거의 결함을 따라 하지 않는다: 5초로 학습해 1분을 버틴다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge lab">🏛 CUHK MMLab · Tencent AIPD</span>
+      <span class="badge hot">▲ 18 HF</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Chenjian Gao</b>, Zhihao Hu, Jianqi Ma, Jun Zhang, Weidong Zhang, Tianfan Xue <span class="t-en">(corresponding: Jun Zhang, Tianfan Xue)</span><span class="t-ko">(교신: Jun Zhang, Tianfan Xue)</span></span>
+      <span>🏛 CUHK MMLab · Tencent AIPD</span>
+      <span>🗓 2026-09-29</span>
+      <span>📄 <a href="https://arxiv.org/abs/2609.37925">arXiv:2609.37925</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Autoregressive (AR, chunk-by-chunk) video generators trained on 5-second clips decay over long rollouts: small errors become the context for every later chunk.</span><span class="t-ko">5초 클립으로 학습한 자기회귀(AR, 구간을 하나씩 이어 만드는) 비디오 생성기는 길게 굴리면 무너진다. 작은 오류가 이후 모든 구간의 맥락이 되기 때문이다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Video-level DMD (distribution matching distillation) scores the whole rollout jointly, so the teacher keeps past artifacts in its target to stay temporally consistent.</span><span class="t-ko">비디오 단위 DMD(분포 매칭 증류)는 생성 영상 전체를 한꺼번에 채점한다. 그래서 교사는 시간 일관성을 지키려고 과거 결함을 목표에 그대로 남긴다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>The student still generates from its own history, but a chunk teacher scores each chunk alone; a short video-level DMD stage then restores smooth motion.</b> Quality and coherence get separate signals.</span><span class="t-ko"><b>학생은 여전히 자기 과거를 보고 생성하지만, 구간 교사는 각 구간을 따로 채점한다. 이어서 짧은 비디오 단위 DMD 단계가 움직임의 매끄러움을 되살린다.</b> 화질과 일관성이 각자의 신호를 받는다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">On 1-minute VBench-Long videos (chunk size 1): total 81.26 vs 70.94 for Self Forcing and 69.88 for Causal Forcing, at no extra inference cost.</span><span class="t-ko">1분 VBench-Long 영상(구간 크기 1): 총점 81.26, Self Forcing 70.94·Causal Forcing 69.88. 추론 비용은 그대로다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Picture an art teacher grading the next panel of a comic. If they always look at the whole strip, a smudged earlier panel makes them say <b>"keep the smudge, or it won't match."</b> RMD first has the teacher <b>cover the earlier panels and grade each one alone</b>, so the smudge never spreads. Afterwards, a quick pass with the whole strip in view <b>smooths the joins</b>.</p>
+    <p class="t-ko">만화의 다음 칸을 채점하는 미술 선생님을 떠올려 보자. 늘 만화 전체를 함께 보면, 앞 칸이 번져 있을 때 <b>"어울리려면 번진 것도 따라 그려"</b>라고 말하게 된다. RMD는 먼저 선생님이 <b>앞 칸을 가리고 각 칸만 따로 채점하게</b> 해서 번짐이 퍼지지 않게 한다. 그다음 만화 전체를 보며 한 번 더 손봐 <b>칸 사이 이음새를 다듬는다</b>.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: generate with history, grade without it</span><span class="t-ko">작동 방식: 과거를 보고 만들고, 과거 없이 채점한다</span></h2>
+    <p class="vlead t-en"><b>Only the grading changes; the generator and its sliding window stay as they are.</b> Each chunk gets its own clean target, whatever happened before it.</p>
+    <p class="vlead t-ko"><b>바뀌는 것은 채점뿐이다. 생성기와 슬라이딩 윈도우는 그대로다.</b> 각 구간은 앞에서 무슨 일이 있었든 자기만의 깨끗한 목표를 받는다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2609.37925/fig_method.png" target="_blank"><img src="fig/2609.37925/fig_method.png" alt="The AR generator produces a causal rollout of chunks x1 to xT. The first chunk is supervised at a random denoising step, later chunks at the last step. Adapted score networks evaluate each chunk independently without temporal context, and the gradients g1 to gT flow back through a differentiable causal replay."></a>
+      <figcaption class="t-en"><b>Figure 3.</b> The AR generator rolls out chunks causally. Adapted score networks grade each chunk with no temporal context; the gradients return through a differentiable replay of the rollout.</figcaption>
+      <figcaption class="t-ko"><b>Figure 3.</b> AR 생성기가 구간을 차례로 만든다. 조정된 점수 네트워크가 시간 맥락 없이 각 구간을 채점하고, 그 기울기는 생성 과정을 미분 가능하게 다시 돌려(replay) 생성기로 돌아간다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2609.37925</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Roll out on-policy.</span><span class="t-ko">자기 생성으로 굴린다.</span></b><span class="t-en">A 1.3B causal Wan student writes an 81-frame video chunk by chunk, 4 denoising steps each, feeding on its own output.</span><span class="t-ko">1.3B 인과(causal) Wan 학생이 81프레임 영상을 구간마다 4번의 노이즈 제거로 만들며, 자기 출력을 다시 맥락으로 쓴다.</span></li>
+      <li><b><span class="t-en">Grade chunks alone.</span><span class="t-ko">구간을 따로 채점한다.</span></b><span class="t-en">A LoRA-adapted Wan 14B teacher scores each later chunk at the final step only; the first chunk at a random step.</span><span class="t-ko">LoRA로 조정한 Wan 14B 교사가 이후 구간은 마지막 단계에서만, 첫 구간은 무작위 단계에서 채점한다.</span></li>
+      <li><b><span class="t-en">Refine jointly.</span><span class="t-ko">함께 다듬는다.</span></b><span class="t-en">A short, low-learning-rate stage of ordinary video-level DMD fixes jitter between chunks.</span><span class="t-ko">학습률을 낮춘 짧은 일반 비디오 단위 DMD 단계가 구간 사이의 떨림을 바로잡는다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key idea: each piece is needed for a different failure</span><span class="t-ko">핵심: 각 요소가 서로 다른 실패를 막는다</span></h2>
+    <p class="vlead t-en"><b>Chunk-alone grading delivers most of the gain; the joint refinement adds the last bit.</b> Video DMD alone collapses into color artifacts, and grading every chunk at random steps causes jitter.</p>
+    <p class="vlead t-ko"><b>구간별 따로 채점이 향상의 대부분을 만들고, 함께 다듬는 단계가 마지막 몫을 더한다.</b> 비디오 DMD만 쓰면 색 결함으로 무너지고, 모든 구간을 무작위 단계에서 채점하면 화면이 떨린다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Ablation: VBench-Long total, 1-minute videos</span><span class="t-ko">구성 요소 제거 실험: 1분 영상 VBench-Long 총점</span></div>
+      <div class="cs"><span class="t-en">Table 2(a) · chunk size 1 · higher is better</span><span class="t-ko">Table 2(a) · 구간 크기 1 · 높을수록 좋음</span></div>
+      <div class="bars">
+        <div class="bar" title="video DMD only: 72.44"><span class="bl">video DMD only</span><span class="bt"><span class="bf" style="--w:72.44%"></span></span><span class="bv">72.44</span></div>
+        <div class="bar" title="random exits: 78.29"><span class="bl">random exits</span><span class="bt"><span class="bf" style="--w:78.29%"></span></span><span class="bv">78.29</span></div>
+        <div class="bar" title="marginal only: 80.64"><span class="bl">marginal only</span><span class="bt"><span class="bf" style="--w:80.64%"></span></span><span class="bv">80.64</span></div>
+        <div class="bar hl" title="RMD (full): 81.26"><span class="bl">RMD (full)</span><span class="bt"><span class="bf" style="--w:81.26%"></span></span><span class="bv">81.26</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–100. "Marginal only" has the best quality score (84.90) but more flicker; refinement lifts every temporal metric.</figcaption>
+      <figcaption class="t-ko">축 0–100. "marginal only"는 화질 점수가 가장 높지만(84.90) 깜빡임이 더 많다. 함께 다듬는 단계가 시간 지표를 모두 올린다.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: the gap opens past the training horizon</span><span class="t-ko">결과: 학습 길이를 넘어서면서 격차가 벌어진다</span></h2>
+    <p class="vlead t-en"><b>At one minute, 12× the training length, RMD leads both forcing baselines on every score.</b> The margin is largest on the semantic score, where baselines lose the prompt.</p>
+    <p class="vlead t-ko"><b>학습 길이의 12배인 1분에서 RMD는 두 forcing 기준선을 모든 점수에서 앞선다.</b> 격차는 의미 점수에서 가장 크다. 기준선은 프롬프트 내용을 잃어 간다.</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1.</b> VBench-Long, 944 prompts × 5 videos, ~60 s at 832×480, 16 FPS. Higher is better.</caption>
+        <caption class="t-ko"><b>Table 1.</b> VBench-Long, 프롬프트 944개 × 영상 5개, 약 60초, 832×480, 16 FPS. 높을수록 좋음.</caption>
+        <thead><tr><th><span class="t-en">Chunk</span><span class="t-ko">구간</span></th><th><span class="t-en">Method</span><span class="t-ko">방법</span></th><th>Total</th><th>Quality</th><th>Semantic</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>Self Forcing</td><td>70.94</td><td>77.89</td><td>43.17</td></tr>
+          <tr><td>1</td><td>Causal Forcing</td><td>69.88</td><td>78.34</td><td>36.03</td></tr>
+          <tr><td>1</td><td>RMD</td><td class="up">81.26</td><td class="up">84.52</td><td class="up">68.24</td></tr>
+          <tr><td>3</td><td>Self Forcing</td><td>77.44</td><td>81.99</td><td>59.22</td></tr>
+          <tr><td>3</td><td>Causal Forcing</td><td>74.88</td><td>80.53</td><td>52.27</td></tr>
+          <tr><td>3</td><td>RMD</td><td class="up">81.48</td><td class="up">85.03</td><td class="up">67.24</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">+10.32</div><div class="l"><span class="t-en">total over Self Forcing at 1 min</span><span class="t-ko">1분 영상에서 Self Forcing 대비 총점</span></div></div>
+      <div class="stat"><div class="n">84.68 → 84.52</div><div class="l"><span class="t-en">RMD quality, 10 s → 60 s</span><span class="t-ko">RMD 화질 점수, 10초 → 60초</span></div></div>
+      <div class="stat"><div class="n">100×</div><div class="l"><span class="t-en">training horizon in the 500 s demo</span><span class="t-ko">500초 시연 영상의 학습 길이 대비 배수</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">When a student learns from its own rollouts, a teacher that sees the student's flawed context can end up endorsing the flaws. Splitting "is this piece good?" from "does it fit?" is a cheap fix worth trying in any on-policy distillation.</span><span class="t-ko">학생이 자기 생성물로 배울 때, 학생의 결함 있는 맥락을 보는 교사는 그 결함을 승인해 버릴 수 있다. "이 조각이 좋은가?"와 "앞뒤와 맞는가?"를 나눠 채점하는 것은 어떤 온폴리시 증류에서도 시도해 볼 만한 값싼 처방이다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">The only baselines are Self Forcing and Causal Forcing; long-video methods such as LongLive, Rolling Sink and Context-Matched Distillation are discussed but not compared. The 500-second result is a single qualitative example, and there are no seeds or user studies.</span><span class="t-ko">기준선은 Self Forcing과 Causal Forcing뿐이다. LongLive, Rolling Sink, Context-Matched Distillation 같은 긴 영상 방법은 언급만 하고 비교하지 않는다. 500초 결과는 정성적 예시 하나뿐이고, 시드 반복이나 사용자 평가도 없다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2609.37925">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2609.37925">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2609.37925">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2609.37925">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>P2 slot · no P2 wishlist item · HF daily ▲18 · score 3 (P2 +3) · follow-up to 10-04's Context-Matched Distillation (alphaXiv offline today)</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-10-06.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P2 슬롯 · P2 위시리스트 없음 · HF 데일리 ▲18 · 점수 3 (P2 +3) · 10-04 Context-Matched Distillation의 후속 비교 대상 (오늘 alphaXiv 연결 불가)</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-10-06.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
