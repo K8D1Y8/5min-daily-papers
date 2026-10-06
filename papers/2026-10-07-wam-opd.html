@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · WAM-OPD: Joint Video–Action Supervision for World Action Model Post-Training with On-Policy Distillation</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Small–Large Alignment · On-Policy Distillation</span><span class="t-ko">Small–Large Alignment · 온폴리시 증류</span></span>
+      <span>2026.10.07</span>
+    </div>
+    <h1>WAM-OPD: Joint Video–Action Supervision for World Action Model Post-Training with On-Policy Distillation<br>
+      <span class="glow t-en">— the one-step student drives, the slow teacher labels both its video plan and its action, and success nearly doubles</span>
+      <span class="glow t-ko">— 한 단계 학생이 직접 움직이고 느린 교사가 영상 계획과 행동을 함께 채점하자 성공률이 거의 두 배가 됐다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge lab">🏛 UCL</span>
+      <span class="badge hot">▲ 35 alphaXiv</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Liuhaichen Yang</b>, Zhengyang Zhong, Hanshang Zhu, Ningwei Bai, Qichen Yin, … , Yi Dong, Zezhi Tang <span class="t-en">(16 authors · corresponding: Zezhi Tang)</span><span class="t-ko">(저자 16명 · 교신: Zezhi Tang)</span></span>
+      <span>🏛 UCL · SJTU · Manchester · CAS Nanjing · SUAT · Liverpool</span>
+      <span>🗓 2026-08-23 (v2 2026-10-01)</span>
+      <span>📄 <a href="https://arxiv.org/abs/2608.22364">arXiv:2608.22364</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Flash-WAM, a one-step distilled world action model (WAM), is fast but weak: 33.8% average success on 12 RoboTwin tasks versus 89.6% for its teacher.</span><span class="t-ko">한 단계로 증류된 월드 액션 모델(WAM, 미래 영상과 로봇 행동을 함께 만드는 모델) Flash-WAM은 빠르지만 약하다. RoboTwin 12개 과제 평균 성공률이 33.8%로 교사의 89.6%에 크게 못 미친다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Offline distillation only sees demonstration histories. Once deployed, the student visits its own states and conditions every action on its own predicted video.</span><span class="t-ko">오프라인 증류는 시연 데이터의 이력만 본다. 실제로 배치되면 학생은 자기가 만든 상태를 지나가고, 모든 행동을 자기가 예측한 영상에 기대어 만든다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Let the student roll out, have a frozen teacher label each visited history with a video target and an action target, and train the student's own one-step video→action path on both.</b> An instructor reviewing your own drive.</span><span class="t-ko"><b>학생이 환경에서 직접 실행하고, 고정된 교사가 학생이 지나간 이력마다 영상 목표와 행동 목표를 함께 달아 준다. 학생은 배치 때와 같은 한 단계 영상→행동 경로로 둘 다 배운다.</b> 강사가 내가 직접 운전한 길을 돌려 보며 짚어 주는 셈이다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">12 RoboTwin 2.0 tasks: 33.8% → 65.7% average success. 4 real-robot tasks: 51.4% → 64.6%. Deployment still uses one video step and one action step.</span><span class="t-ko">RoboTwin 2.0 12개 과제 평균 성공률 33.8% → 65.7%, 실로봇 4개 과제 51.4% → 64.6%. 배치 때는 여전히 영상 1단계와 행동 1단계만 쓴다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Think of a learner driver. Plain distillation has them study the instructor's own recorded drives; WAM-OPD lets them <b>drive their own route</b>, then the instructor replays that footage and says at each moment both <b>"here is what you should see next"</b> and <b>"here is what you should do."</b> On test day the learner still drives alone, at full speed.</p>
+    <p class="t-ko">운전 연수생을 떠올려 보자. 일반 증류는 강사가 직접 운전한 녹화 영상으로 공부시킨다. WAM-OPD는 연수생이 <b>자기 길을 직접 달리게</b> 한 뒤, 강사가 그 영상을 돌려 보며 매 순간 <b>"다음엔 이런 장면이 보여야 해"</b>와 <b>"여기선 이렇게 움직여야 해"</b>를 함께 짚어 준다. 시험 날에는 연수생이 혼자, 원래 속도 그대로 운전한다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: the student drives, the teacher labels</span><span class="t-ko">작동 방식은 학생이 움직이고 교사가 채점하는 것</span></h2>
+    <p class="vlead t-en"><b>The teacher never touches the robot; it only labels states the student actually reached.</b> So the training contexts match what the deployed policy will see.</p>
+    <p class="vlead t-ko"><b>교사는 로봇을 직접 움직이지 않고, 학생이 실제로 도달한 상태에만 정답을 단다.</b> 그래서 학습 데이터가 배치된 정책이 보게 될 상황과 맞아떨어진다.</p>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">1 · student rolls out</span><span class="t-ko">1 · 학생이 실행</span></div>
+          <div class="sub"><span class="t-en">Flash-WAM, 1 video + 1 action step</span><span class="t-ko">Flash-WAM, 영상 1단계 + 행동 1단계</span></div>
+          <div class="latent">h<sub>S,i</sub> = (O<sub>≤i</sub>, A<sub>&lt;i</sub>, ℓ)</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">2 · teacher labels</span><span class="t-ko">2 · 교사가 정답 표시</span></div>
+          <div class="sub"><span class="t-en">LingBot-VA, frozen, 25 + 50 steps</span><span class="t-ko">LingBot-VA, 고정, 25 + 50단계</span></div>
+          <div class="latent">Ô<sup>T</sup> → Â<sup>T</sup>(h<sub>S</sub>, Ô<sup>T</sup>)</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">3 · student learns</span><span class="t-ko">3 · 학생이 학습</span></div>
+          <div class="sub"><span class="t-en">same video → action path as deployment</span><span class="t-ko">배치 때와 같은 영상 → 행동 경로</span></div>
+          <div class="latent">d<sub>PH</sub>(video) + d<sub>PH</sub>(action) + 0.2‖v − v̂<sup>T</sup>‖²</div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Redrawn from the paper's Figure 2.</b> Rollouts are collected once, then training runs offline for three epochs.</div>
+      <div class="cap t-ko"><b>논문 Figure 2를 다시 그린 도식.</b> 실행 데이터는 한 번만 모으고, 학습은 환경 밖에서 3 epoch 동안 진행한다.</div>
+    </div>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Collect on-policy histories.</span><span class="t-ko">온폴리시 이력을 모은다.</span></b><span class="t-en">The student runs 36 rollouts per task: 24 for training, 12 held out for calibration.</span><span class="t-ko">학생이 과제마다 36번 실행한다. 24개는 학습용, 12개는 보정용으로 따로 둔다.</span></li>
+      <li><b><span class="t-en">Label with the frozen teacher.</span><span class="t-ko">고정된 교사가 정답을 단다.</span></b><span class="t-en">For each history, LingBot-VA predicts a video, then an action chunk from its own video.</span><span class="t-ko">이력마다 LingBot-VA가 영상을 예측하고, 그 자기 영상을 보고 행동 묶음을 만든다.</span></li>
+      <li><b><span class="t-en">Train the deployed path.</span><span class="t-ko">배치 경로 그대로 학습한다.</span></b><span class="t-en">The student predicts video, then action from its stop-gradient video; only rank-8 LoRA adapters update.</span><span class="t-ko">학생은 영상을 예측한 뒤, 기울기를 끊은 그 영상을 보고 행동을 만든다. 업데이트는 rank-8 LoRA 어댑터에만 일어난다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key idea: supervise the plan, not just the move</span><span class="t-ko">핵심은 행동뿐 아니라 계획도 가르치는 것</span></h2>
+    <p class="vlead t-en"><b>Video targets alone lift success more than action targets alone, and both together do best.</b> The action branch reads the predicted video, so a better plan already means a better action.</p>
+    <p class="vlead t-ko"><b>영상 목표만 써도 행동 목표만 쓸 때보다 성공률이 더 오르고, 둘을 함께 쓰면 가장 좋다.</b> 행동 가지가 예측된 영상을 읽기 때문에 계획이 좋아지면 행동도 좋아진다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Supervision ablation: mean success over 3 RoboTwin tasks</span><span class="t-ko">감독 신호 소거 실험: RoboTwin 3개 과제 평균 성공률</span></div>
+      <div class="cs"><span class="t-en">Computed as the mean of Figure 4 and Table 4 · 60 trials per task · % · higher is better</span><span class="t-ko">Figure 4와 Table 4 값의 평균으로 계산 · 과제당 60회 · % · 높을수록 좋음</span></div>
+      <div class="bars">
+        <div class="bar" title="Flash-WAM (no post-training): 38.3"><span class="bl">Flash-WAM</span><span class="bt"><span class="bf" style="--w:38.3%"></span></span><span class="bv">38.3</span></div>
+        <div class="bar" title="action-only: 62.8"><span class="bl">action-only</span><span class="bt"><span class="bf" style="--w:62.8%"></span></span><span class="bv">62.8</span></div>
+        <div class="bar" title="video-only: 68.9"><span class="bl">video-only</span><span class="bt"><span class="bf" style="--w:68.9%"></span></span><span class="bv">68.9</span></div>
+        <div class="bar hl" title="joint (WAM-OPD): 75.0"><span class="bl">joint</span><span class="bt"><span class="bf" style="--w:75%"></span></span><span class="bv">75.0</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–100. Per task the single-modality order flips (action-only wins Bread Basket), but joint is best on all three.</figcaption>
+      <figcaption class="t-ko">축 0–100. 과제별로는 단일 신호의 순위가 바뀌지만(Bread Basket은 행동만 쓴 쪽이 앞선다) 세 과제 모두 함께 쓴 쪽이 가장 높다.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: twice the success at the student's speed</span><span class="t-ko">학생 속도 그대로 성공률이 거의 두 배</span></h2>
+    <p class="vlead t-en"><b>WAM-OPD closes 57% of the student–teacher gap in simulation and 73% on the real robot.</b> It does so at the student's one-step cost.</p>
+    <p class="vlead t-ko"><b>WAM-OPD는 학생과 교사 사이 격차를 시뮬레이션에서 57%, 실로봇에서 73% 메운다.</b> 그러면서도 학생의 한 단계 비용은 그대로다.</p>
+    <div class="vgrid">
+      <figure class="chart">
+        <div class="ct"><span class="t-en">Simulation · 12 RoboTwin 2.0 tasks</span><span class="t-ko">시뮬레이션 · RoboTwin 2.0 12개 과제</span></div>
+        <div class="cs"><span class="t-en">Table 2 · average success % · 60 trials per task</span><span class="t-ko">Table 2 · 평균 성공률 % · 과제당 60회</span></div>
+        <div class="bars">
+          <div class="bar" title="Flash-WAM: 33.8"><span class="bl">Flash-WAM</span><span class="bt"><span class="bf" style="--w:33.8%"></span></span><span class="bv">33.8</span></div>
+          <div class="bar hl" title="WAM-OPD: 65.7"><span class="bl">WAM-OPD</span><span class="bt"><span class="bf" style="--w:65.7%"></span></span><span class="bv">65.7</span></div>
+          <div class="bar" title="Teacher reference: 89.6"><span class="bl">Teacher (ref)</span><span class="bt"><span class="bf" style="--w:89.6%"></span></span><span class="bv">89.6</span></div>
+        </div>
+        <figcaption class="t-en">Gap closed 31.9 / 55.8 = 57% (computed).</figcaption>
+        <figcaption class="t-ko">메운 격차 31.9 / 55.8 = 57% (계산값).</figcaption>
+      </figure>
+      <figure class="chart">
+        <div class="ct"><span class="t-en">Real robot · 4 tasks</span><span class="t-ko">실로봇 · 4개 과제</span></div>
+        <div class="cs"><span class="t-en">Table 3 · average success % · 36 rollouts per task</span><span class="t-ko">Table 3 · 평균 성공률 % · 과제당 36회</span></div>
+        <div class="bars">
+          <div class="bar" title="Flash-WAM: 51.4"><span class="bl">Flash-WAM</span><span class="bt"><span class="bf" style="--w:51.4%"></span></span><span class="bv">51.4</span></div>
+          <div class="bar hl" title="WAM-OPD: 64.6"><span class="bl">WAM-OPD</span><span class="bt"><span class="bf" style="--w:64.6%"></span></span><span class="bv">64.6</span></div>
+          <div class="bar" title="Teacher reference: 69.4"><span class="bl">Teacher (ref)</span><span class="bt"><span class="bf" style="--w:69.4%"></span></span><span class="bv">69.4</span></div>
+        </div>
+        <figcaption class="t-en">Gap closed 13.2 / 18.0 = 73% (computed).</figcaption>
+        <figcaption class="t-ko">메운 격차 13.2 / 18.0 = 73% (계산값).</figcaption>
+      </figure>
+    </div>
+    <p class="vlead gap t-en"><b>All 16 tasks improve, but by very different amounts.</b> Insert Screw Driver Tape even passes its teacher, while bimanual Put Gripper Parts stays near zero.</p>
+    <p class="vlead gap t-ko"><b>16개 과제가 모두 좋아지지만 폭은 제각각이다.</b> Insert Screw Driver Tape는 교사까지 넘어서고, 두 팔을 쓰는 Put Gripper Parts는 거의 0에 머문다.</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Tables 2–3 (selected rows).</b> Success rate (%). Simulation 60 trials, real robot 36 rollouts per policy and task. Higher is better.</caption>
+        <caption class="t-ko"><b>Tables 2–3 (일부 행).</b> 성공률(%). 시뮬레이션은 60회, 실로봇은 정책·과제당 36회. 높을수록 좋음.</caption>
+        <thead><tr><th><span class="t-en">Task</span><span class="t-ko">과제</span></th><th>Teacher</th><th>Flash-WAM</th><th>WAM-OPD</th><th>Δ (PP)</th></tr></thead>
+        <tbody>
+          <tr><td>Stamp Seal</td><td>96.7</td><td>16.7</td><td class="up">81.7</td><td class="up">+65.0</td></tr>
+          <tr><td>Place A2B Right</td><td>90.0</td><td>16.7</td><td class="up">65.0</td><td class="up">+48.3</td></tr>
+          <tr><td>Handover Mic</td><td>80.0</td><td>1.7</td><td class="up">35.0</td><td class="up">+33.3</td></tr>
+          <tr><td>Place Container Plate</td><td>98.3</td><td>93.3</td><td class="up">98.3</td><td>+5.0</td></tr>
+          <tr><td>Insert Screw Driver Tape (real)</td><td>66.7</td><td>52.8</td><td class="up">83.3</td><td class="up">+30.6</td></tr>
+          <tr><td>Put Gripper Parts (real)</td><td>36.1</td><td>5.6</td><td>8.3</td><td>+2.8</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">+31.9 pp</div><div class="l"><span class="t-en">average success gain, 12 sim tasks</span><span class="t-ko">시뮬레이션 12개 과제 평균 성공률 상승</span></div></div>
+      <div class="stat"><div class="n">16 / 16</div><div class="l"><span class="t-en">tasks improved, sim plus real robot</span><span class="t-ko">성공률이 오른 과제, 시뮬레이션과 실로봇 합계</span></div></div>
+      <div class="stat"><div class="n">1 + 1</div><div class="l"><span class="t-en">video + action steps kept (teacher 25 + 50)</span><span class="t-ko">유지한 영상 + 행동 단계 수 (교사 25 + 50)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">When a model's action depends on its own intermediate output, such as a video plan or a chain of thought, distill that output too, through the deployed computation. Here video targets alone beat action targets.</span><span class="t-ko">모델의 행동이 자기 중간 출력(영상 계획이나 생각의 사슬 같은 것)에 기대어 만들어진다면, 그 중간 출력도 배치 때와 같은 계산 경로로 함께 증류하자. 이 논문에서는 영상 목표만 쓴 쪽이 행동 목표만 쓴 쪽보다 나았다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">The only baselines are the untrained student and, on 3 tasks, the same recipe on teacher rollouts, which wins one; RL and action-only OPD (VLA-OPD) are missing. All results come from one fixed batch of 36 rollouts per task, without repeated seeds or error bars.</span><span class="t-ko">기준선은 후처리 전 학생과, 3개 과제에서 같은 방법을 교사 실행 이력에 적용한 것뿐이다. 그마저도 세 과제 중 하나에서는 교사 이력 쪽이 낫다. RL이나 행동만 쓰는 OPD(VLA-OPD)와는 비교하지 않았고, 모든 결과가 과제당 36회 실행을 한 번 모은 데이터에서 나왔으며 시드 반복이나 오차 막대도 없다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2608.22364">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2608.22364">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2608.22364">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2608.22364">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>P1 slot · top [P1] wishlist item · alphaXiv ▲35 · 243 views · score 5 (P1 +3, hot +2) · bridges P1 and P2</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-10-07.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P1 슬롯 · 위시리스트 [P1] 맨 위 항목 · alphaXiv ▲35 · 조회 243 · 점수 5 (P1 +3, 화제성 +2) · P1·P2 교차점</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-10-07.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
