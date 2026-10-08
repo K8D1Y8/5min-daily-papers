@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · GRACE: Generation-Aware Latent Compression for Efficient Video Generation</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Video & World Generation · Latent Compression</span><span class="t-ko">Video & World Generation · 잠재 공간 압축</span></span>
+      <span>2026.10.08</span>
+    </div>
+    <h1>GRACE: Generation-Aware Latent Compression for Efficient Video Generation<br>
+      <span class="glow t-en">— shrink Wan2.1's latent 8× in space and time, keep its VBench score, and run 11–15× faster</span>
+      <span class="glow t-ko">— Wan2.1의 잠재 공간을 시공간으로 8배 줄이고도 VBench 점수는 그대로, 속도는 11–15배 빨라진다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge lab">🏛 KAIST AI · Kakao</span>
+      <span class="badge hot">▲ 55 HF · ★ 12 GitHub</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Jiyoung Kim</b>, Paul Hyunbin Cho, Jisu Nam, Donghoon Lee, Hyunsung Go, Yeonkyeong Lee, Hansaem Kim, Seungryong Kim <span class="t-en">(senior author: Seungryong Kim · no corresponding mark in the PDF)</span><span class="t-ko">(마지막 저자: Seungryong Kim · PDF에 교신 표시 없음)</span></span>
+      <span>🏛 KAIST AI · Kakao Corp.</span>
+      <span>🗓 2026-10-07</span>
+      <span>📄 <a href="https://arxiv.org/abs/2610.10524">arXiv:2610.10524</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Fewer latent tokens make video DiTs fast, but a new high-compression autoencoder forces costly DiT retraining and usually hurts quality.</span><span class="t-ko">잠재 토큰이 적으면 비디오 DiT(확산 트랜스포머)가 빨라지지만, 새 고압축 오토인코더를 쓰면 DiT를 비싸게 다시 학습해야 하고 품질도 대개 떨어진다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Reconstruction does not predict generation: their single-latent baseline reconstructs 1.13 dB better than GRACE yet scores 1.46 lower on VBench-I2V.</span><span class="t-ko">복원 품질이 생성 품질을 말해 주지 않는다. 단일 잠재 기준선은 GRACE보다 복원이 1.13 dB 좋지만 VBench-I2V 점수는 1.46 낮다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Keep the frozen encoder's latent of a downsampled video as a base, learn a residual for what it misses, align both inside the frozen DiT, and denoise the base ahead.</b> The old pipeline guides its own compression.</span><span class="t-ko"><b>줄인 영상을 고정된 원래 인코더에 넣은 잠재를 기반으로 두고, 빠진 정보는 잔차 잠재로 배운다. 둘을 고정된 DiT 특징 공간에서 맞추고, 생성할 때는 기반을 먼저 디노이즈한다.</b> 기존 파이프라인이 스스로의 압축을 이끄는 셈이다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">Wan2.1-14B at 480p: 32.8k → 4.3k tokens, 11.1× faster I2V, VBench-I2V 87.90 vs 87.92; 15.5× faster at 736p.</span><span class="t-ko">Wan2.1-14B 480p에서 토큰 32.8k → 4.3k, I2V 11.1배 가속, VBench-I2V 87.90 대 87.92. 736p에서는 15.5배 빠르다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Think of an editor who already reads a writer's full drafts fluently. Instead of inventing a new shorthand, you hand the editor a <b>short summary in the writer's own style</b> plus a <b>margin note with the missing details</b>. You check the shorthand by <b>whether the editor understands it</b>, not by whether it copies the draft word for word, and the editor reads the summary first, then the notes.</p>
+    <p class="t-ko">작가의 원고를 이미 술술 읽는 편집자가 있다고 하자. 새 약어 체계를 만드는 대신 <b>작가 문체 그대로 쓴 짧은 요약</b>과 <b>빠진 내용을 적은 여백 메모</b>를 건넨다. 이 요약이 좋은지는 원고를 글자 그대로 옮겼는지가 아니라 <b>편집자가 알아듣는지</b>로 판단하고, 편집자는 요약을 먼저 읽은 뒤 메모를 읽는다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: base, residual, and the DiT as judge</span><span class="t-ko">작동 방식은 기반 잠재, 잔차 잠재, 그리고 심판 역할의 DiT</span></h2>
+    <p class="vlead t-en"><b>Most of the pipeline stays frozen; only the residual path, decoder, and light DiT adapters train.</b> That is why adaptation costs 38.5 GPU days instead of a retrain.</p>
+    <p class="vlead t-ko"><b>파이프라인 대부분은 고정되고 잔차 경로, 디코더, 가벼운 DiT 어댑터만 학습한다.</b> 그래서 처음부터 다시 학습하지 않고 GPU 38.5일로 적응이 끝난다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2610.10524/main_architecture_v10.png" target="_blank"><img src="fig/2610.10524/main_architecture_v10.png" alt="GRACE two-stage architecture: frozen encoder on downsampled video gives z_base, residual encoder gives z_res, alignment loss inside frozen DiT; stage 2 LoRA DiT with separate timesteps"></a>
+      <figcaption class="t-en"><b>Figure 2.</b> Stage 1 trains the residual encoder and decoder with an alignment loss inside the frozen DiT (blue = frozen). Stage 2 adapts the DiT with LoRA and separate base and residual timesteps.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> 1단계는 고정된 DiT 안의 정렬 손실로 잔차 인코더와 디코더를 학습한다(파란색이 고정). 2단계는 기반과 잔차에 서로 다른 시점을 주며 LoRA로 DiT를 적응시킨다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2610.10524</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Split the latent in two.</span><span class="t-ko">잠재를 둘로 나눈다.</span></b><span class="t-en">The frozen Wan2.1 encoder sees a 2× smaller, 2× sparser video; a residual encoder adds the lost detail and motion.</span><span class="t-ko">고정된 Wan2.1 인코더는 2배 작고 2배 성긴 영상을 보고, 잔차 인코더가 잃어버린 세부와 움직임을 채운다.</span></li>
+      <li><b><span class="t-en">Align inside the DiT.</span><span class="t-ko">DiT 안에서 맞춘다.</span></b><span class="t-en">Noised old and new latents pass through the frozen DiT; the first 10 of 40 blocks must match.</span><span class="t-ko">노이즈를 섞은 기존 잠재와 새 잠재를 고정된 DiT에 넣고, 40개 블록 중 앞 10개의 특징이 같아지게 한다.</span></li>
+      <li><b><span class="t-en">Denoise the base first.</span><span class="t-ko">기반을 먼저 디노이즈한다.</span></b><span class="t-en">The base runs at a lower noise level in the same forward pass, so sampling cost does not change.</span><span class="t-ko">같은 순전파 안에서 기반을 더 낮은 노이즈 수준으로 돌리므로 샘플링 비용은 그대로다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key idea: judge the latent by the generator, not the pixels</span><span class="t-ko">핵심은 픽셀이 아니라 생성기로 잠재를 평가하는 것</span></h2>
+    <p class="vlead t-en"><b>DiT-feature alignment adds the biggest jump in prompt following.</b> The semantic score passes the uncompressed model once the new latent speaks the DiT's language.</p>
+    <p class="vlead t-ko"><b>DiT 특징 정렬이 프롬프트 반영 점수를 가장 크게 끌어올린다.</b> 새 잠재가 DiT의 언어로 말하게 되자 의미 점수가 압축 전 모델을 넘는다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Ablation: VBench-T2V semantic score at 480p</span><span class="t-ko">소거 실험: 480p VBench-T2V 의미 점수</span></div>
+      <div class="cs"><span class="t-en">Table 4 · all at 4.3k tokens · line = uncompressed Wan2.1-14B (78.70) · higher is better</span><span class="t-ko">Table 4 · 모두 4.3k 토큰 · 세로선 = 압축 전 Wan2.1-14B (78.70) · 높을수록 좋음</span></div>
+      <div class="bars" style="--x:78.7%">
+        <div class="bar" title="single latent: 77.75"><span class="bl">single latent</span><span class="bt"><span class="bf" style="--w:77.75%"></span></span><span class="bv">77.75</span></div>
+        <div class="bar" title="+ dual latent: 78.65"><span class="bl">+ dual latent</span><span class="bt"><span class="bf" style="--w:78.65%"></span></span><span class="bv">78.65</span></div>
+        <div class="bar" title="+ DiT alignment: 82.55"><span class="bl">+ DiT align</span><span class="bt"><span class="bf" style="--w:82.55%"></span></span><span class="bv">82.55</span></div>
+        <div class="bar hl" title="+ base-ahead (GRACE): 84.98"><span class="bl">+ base-ahead</span><span class="bt"><span class="bf" style="--w:84.98%"></span></span><span class="bv">84.98</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–100. Aligning to V-JEPA 2.1 features instead reaches only 80.04 (Table 5).</figcaption>
+      <figcaption class="t-ko">축 0–100. 정렬 대상을 V-JEPA 2.1 특징으로 바꾸면 80.04에 그친다(Table 5).</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: same score, a fraction of the time</span><span class="t-ko">같은 점수를 훨씬 짧은 시간에</span></h2>
+    <p class="vlead t-en"><b>GRACE is the fastest Wan-based pipeline at 480p.</b> It needs half the tokens of DC-Gen, which adapts the same DiT.</p>
+    <p class="vlead t-ko"><b>GRACE는 480p에서 Wan 기반 파이프라인 중 가장 빠르다.</b> 같은 DiT를 적응시킨 DC-Gen보다 토큰이 절반이다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">End-to-end I2V latency, 480p, 81 frames</span><span class="t-ko">I2V 전체 생성 시간, 480p, 81프레임</span></div>
+      <div class="cs"><span class="t-en">Table 2 · seconds on one A100 · 50 steps · lower is better</span><span class="t-ko">Table 2 · A100 한 장 기준 초 · 50단계 · 낮을수록 좋음</span></div>
+      <div class="bars">
+        <div class="bar" title="Wan2.1-14B: 863.2 s"><span class="bl">Wan2.1-14B</span><span class="bt"><span class="bf" style="--w:95.9%"></span></span><span class="bv">863.2</span></div>
+        <div class="bar" title="DC-Gen: 165.0 s"><span class="bl">DC-Gen</span><span class="bt"><span class="bf" style="--w:18.3%"></span></span><span class="bv">165.0</span></div>
+        <div class="bar" title="LTX-Video: 104.1 s"><span class="bl">LTX-Video</span><span class="bt"><span class="bf" style="--w:11.6%"></span></span><span class="bv">104.1</span></div>
+        <div class="bar hl" title="GRACE: 77.7 s"><span class="bl">GRACE</span><span class="bt"><span class="bf" style="--w:8.6%"></span></span><span class="bv">77.7</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–900 s. LTX-Video uses its own 13B generator with a third guidance branch.</figcaption>
+      <figcaption class="t-ko">축 0–900초. LTX-Video는 자체 13B 생성기에 세 번째 가이던스 가지까지 쓴다.</figcaption>
+    </figure>
+    <p class="vlead gap t-en"><b>The best reconstruction is not the best generator.</b> GRACE ranks fourth on PSNR but first on VBench-I2V among the compressed latents.</p>
+    <p class="vlead gap t-ko"><b>복원을 가장 잘하는 쪽이 생성도 가장 잘하지는 않는다.</b> GRACE는 압축 잠재 중 PSNR이 4위지만 VBench-I2V는 1위다.</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1.</b> Every latent adapted to Wan2.1-I2V-14B with the same 38.5 H200 GPU-day budget. Higher is better.</caption>
+        <caption class="t-ko"><b>Table 1.</b> 모든 잠재를 같은 H200 GPU 38.5일 예산으로 Wan2.1-I2V-14B에 적응시켰다. 높을수록 좋음.</caption>
+        <thead><tr><th>Autoencoder</th><th>Tokens</th><th>PSNR</th><th>VBench-I2V</th></tr></thead>
+        <tbody>
+          <tr><td>Wan2.1-VAE (before)</td><td>32.8k</td><td>35.15</td><td>87.92</td></tr>
+          <tr><td>Step-Video-VAE</td><td>17.2k</td><td>33.88</td><td>84.05</td></tr>
+          <tr><td>Video DC-AE</td><td>8.2k</td><td class="up">34.61</td><td>84.94</td></tr>
+          <tr><td>LTX-VAE</td><td>4.3k</td><td>31.97</td><td>87.06</td></tr>
+          <tr><td>Single-latent baseline</td><td>4.3k</td><td>33.76</td><td>86.44</td></tr>
+          <tr><td>GRACE-VAE</td><td>4.3k</td><td>32.63</td><td class="up">87.90</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">7.6×</div><div class="l"><span class="t-en">fewer tokens, 32.8k → 4.3k</span><span class="t-ko">토큰 감소, 32.8k → 4.3k</span></div></div>
+      <div class="stat"><div class="n">15.5×</div><div class="l"><span class="t-en">faster I2V at 736p vs Wan2.1</span><span class="t-ko">736p I2V 가속, Wan2.1 대비</span></div></div>
+      <div class="stat"><div class="n">−0.02</div><div class="l"><span class="t-en">VBench-I2V gap to uncompressed at 480p</span><span class="t-ko">480p VBench-I2V 압축 전 대비 차이</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">When you compress anything that feeds a frozen pretrained model, measure the loss in that model's feature space rather than in pixels. The consumer's view of the distribution matters more than raw fidelity.</span><span class="t-ko">고정된 사전학습 모델에 들어갈 입력을 압축할 때는 픽셀이 아니라 그 모델의 특징 공간에서 손실을 재자. 원본 충실도보다 받아쓰는 모델이 보는 분포가 더 중요하다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">Small faces, sign text, and thin structures often break at 480p, which a VBench total does not isolate. All evidence comes from one model family (Wan2.1) and one main benchmark, and each new pipeline needs its own 8.5 GPU-day autoencoder run.</span><span class="t-ko">480p에서는 작은 얼굴, 간판 글씨, 얇은 구조가 자주 깨지는데 VBench 총점만으로는 이를 따로 볼 수 없다. 근거가 모두 모델 한 계열(Wan2.1)과 주요 벤치마크 하나에서 나왔고, 새 파이프라인마다 오토인코더를 GPU 8.5일씩 다시 학습해야 한다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2610.10524">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2610.10524">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2610.10524">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2610.10524">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>P2 slot · wishlist exhausted · HF ▲55 (hottest of three score-5 P2 candidates) · score 5 (P2 +3, hot +2)</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-10-08.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P2 슬롯 · 위시리스트 소진 · HF ▲55 (점수 5인 P2 후보 셋 중 가장 화제) · 점수 5 (P2 +3, 화제성 +2)</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-10-08.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
