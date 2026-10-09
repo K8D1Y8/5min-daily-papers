@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · When Do We Need On-Policy Distillation? Distilling on Offline Student Rollouts Is Often Better</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Small–Large Alignment · On-Policy Distillation</span><span class="t-ko">Small–Large Alignment · 온폴리시 증류</span></span>
+      <span>2026.10.09</span>
+    </div>
+    <h1>When Do We Need On-Policy Distillation? Distilling on Offline Student Rollouts Is Often Better<br>
+      <span class="glow t-en">— sample the student once, freeze the rollouts, and beat OPD on 14 of 17 teacher–student pairs</span>
+      <span class="glow t-ko">— 학생 답안을 한 번만 뽑아 고정해 두는 쪽이 17개 교사–학생 쌍 중 14개에서 OPD를 이긴다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge lab">🏛 NVIDIA · Pavlo Molchanov</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Siyan Zhao</b>, Yonggan Fu, Jindong Jiang, Shih-Yang Liu, Song Bian, Byung-Kwan Lee, Sharath Turuvekere Sreenivas, Wenliang Dai, Hanrong Ye, Aditya Grover, Pavlo Molchanov <span class="t-en">(equal contribution: Siyan Zhao, Yonggan Fu · senior author: Pavlo Molchanov)</span><span class="t-ko">(공동 1저자: Siyan Zhao, Yonggan Fu · 마지막 저자: Pavlo Molchanov)</span></span>
+      <span>🏛 NVIDIA · UCLA</span>
+      <span>🗓 2026-10-08</span>
+      <span>📄 <a href="https://arxiv.org/abs/2610.11291">arXiv:2610.11291</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">On-policy distillation (OPD) is the default post-training step, yet its rollouts often grow long, loop on self-correction, and sometimes collapse.</span><span class="t-ko">온폴리시 증류(OPD, 학생이 직접 만든 답에 교사가 토큰마다 점수를 매기는 방식)는 이제 기본 후처리 단계지만, 답이 길어지고 자기 수정을 반복하다 무너지는 일이 잦다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Across 17 pairs, Semi-OPD's gain over OPD tracks how little the teacher's and student's top-64 tokens overlap at the start (Pearson r = −0.73).</span><span class="t-ko">17개 쌍에서 Semi-OPD가 OPD보다 나은 정도는 시작 시점에 교사와 학생의 상위 64개 토큰이 얼마나 안 겹치는지와 함께 움직인다(Pearson r = −0.73).</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Semi-OPD: sample rollouts once from the initial student, score them with the teacher once, then train with OPD's own objective on that frozen set.</b> Short early answers stay close to what the teacher would write.</span><span class="t-ko"><b>Semi-OPD는 처음 학생에게서 답을 한 번만 뽑고, 교사가 한 번만 채점한 뒤, 그 고정된 묶음으로 OPD와 똑같은 목표를 학습한다.</b> 짧은 초기 답안이 교사가 쓸 법한 글에서 덜 벗어나기 때문이다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">Wins 14 of 17 pairs (1.5B–235B), up to +13.6% accuracy and 11.4× faster training; Qwen3-1.7B math average 39.8 vs OPD 26.2.</span><span class="t-ko">17개 쌍(1.5B–235B) 중 14개에서 이기고, 정확도는 최대 +13.6%, 학습은 최대 11.4배 빠르다. Qwen3-1.7B 수학 평균은 39.8로 OPD의 26.2를 크게 앞선다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">A tutor grading a weak student's essays line by line. If the student keeps rewriting and each draft wanders further from anything the tutor would write, the tutor's red ink stops making sense. Semi-OPD <b>keeps the student's first drafts</b> and has the tutor <b>mark them once</b>, then the student <b>studies those marked drafts over and over</b>.</p>
+    <p class="t-ko">실력이 아직 부족한 학생의 글을 선생님이 한 줄씩 첨삭한다고 하자. 학생이 계속 다시 쓰면서 원고가 선생님이라면 절대 안 쓸 방향으로 흘러가면, 빨간 펜 첨삭도 점점 의미를 잃는다. Semi-OPD는 <b>학생의 첫 원고를 그대로 두고</b> 선생님이 <b>한 번만 첨삭한</b> 뒤, 학생이 <b>그 첨삭본을 되풀이해 공부하게</b> 한다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: same loss, frozen data</span><span class="t-ko">작동 방식은 같은 손실, 고정된 데이터</span></h2>
+    <p class="vlead t-en"><b>Only the rollout source changes; the loss and the per-step student log-probs stay live.</b> So the signal still moves as the student learns, but the expensive parts run once.</p>
+    <p class="vlead t-ko"><b>바뀌는 것은 답안의 출처뿐이고, 손실과 매 단계 학생 로그확률 계산은 그대로 살아 있다.</b> 그래서 학생이 배우는 만큼 신호는 계속 바뀌지만, 비싼 단계는 한 번만 돈다.</p>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">1 · sample once</span><span class="t-ko">1 · 한 번만 생성</span></div>
+          <div class="sub"><span class="t-en">initial student π<sub>0</sub>, before any training</span><span class="t-ko">학습 전 처음 학생 π<sub>0</sub></span></div>
+          <div class="latent">D<sub>0</sub> = {(x, y)}, y ~ π<sub>0</sub>(·|x)</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">2 · teacher scores once</span><span class="t-ko">2 · 교사가 한 번만 채점</span></div>
+          <div class="sub"><span class="t-en">cache log π<sub>T</sub>(y<sub>t</sub>|s<sub>t</sub>)</span><span class="t-ko">log π<sub>T</sub>(y<sub>t</sub>|s<sub>t</sub>)를 저장</span></div>
+          <div class="latent">no teacher in the training loop</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">3 · train with OPD's loss</span><span class="t-ko">3 · OPD 손실로 학습</span></div>
+          <div class="sub"><span class="t-en">advantage recomputed with current θ</span><span class="t-ko">현재 θ로 이득을 다시 계산</span></div>
+          <div class="latent">A<sub>t</sub> = log π<sub>T</sub> − log π<sub>θ</sub></div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Drawn from Section 2.2.</b> OPD instead regenerates y from the current student and calls the teacher at every step.</div>
+      <div class="cap t-ko"><b>2.2절을 바탕으로 그린 도식.</b> OPD는 매 단계 현재 학생으로 y를 새로 만들고 교사도 매번 부른다.</div>
+    </div>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Measure overlap first.</span><span class="t-ko">먼저 겹침 비율을 잰다.</span></b><span class="t-en">Compare student and teacher top-64 tokens on the initial rollouts; low overlap points to Semi-OPD.</span><span class="t-ko">초기 답안에서 학생과 교사의 상위 64개 토큰을 비교한다. 겹침이 낮으면 Semi-OPD 쪽이다.</span></li>
+      <li><b><span class="t-en">Cache rollouts and teacher log-probs.</span><span class="t-ko">답안과 교사 로그확률을 저장한다.</span></b><span class="t-en">Each phase uses the whole cluster instead of sharing GPUs between generation, teacher, and trainer.</span><span class="t-ko">생성, 교사, 학습이 GPU를 나눠 쓰지 않고 단계마다 클러스터 전체를 쓴다.</span></li>
+      <li><b><span class="t-en">Train on full trajectories.</span><span class="t-ko">답안 전체로 학습한다.</span></b><span class="t-en">Truncating to the first quarter hurts, so every reasoning stage stays supervised.</span><span class="t-ko">앞 1/4만 남기면 성능이 떨어지므로 추론의 모든 단계를 감독한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key idea: OPD needs an aligned pair</span><span class="t-ko">핵심은 OPD에 잘 맞는 쌍이 따로 있다는 것</span></h2>
+    <p class="vlead t-en"><b>The lower the starting overlap, the more Semi-OPD wins; only above roughly 70% overlap does OPD match or edge ahead.</b> Misaligned students drift off the teacher's distribution as their rollouts grow.</p>
+    <p class="vlead t-ko"><b>시작 겹침이 낮을수록 Semi-OPD가 더 크게 이기고, 겹침이 대략 70%를 넘을 때만 OPD가 비슷하거나 조금 앞선다.</b> 교사와 안 맞는 학생은 답이 길어질수록 교사 분포에서 멀어지기 때문이다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2610.11291/fig_overlap_combo.svg" target="_blank"><img src="fig/2610.11291/fig_overlap_combo.svg" alt="Scatter of Semi-OPD minus OPD accuracy gain versus initial top-64 overlap for 17 pairs, Pearson r = -0.73, plus three training curves"></a>
+      <figcaption class="t-en"><b>Figure 1.</b> (a) Gain of Semi-OPD over OPD vs. initial top-64 overlap, 17 pairs. (b) Training curves at 58.9%, 62.5%, and 86.8% overlap.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> (a) 17개 쌍의 초기 상위 64 토큰 겹침 대비 Semi-OPD의 OPD 대비 이득. (b) 겹침 58.9%, 62.5%, 86.8%에서의 학습 곡선.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2610.11291</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: simplest variant, best score</span><span class="t-ko">가장 단순한 변형이 가장 높은 점수</span></h2>
+    <p class="vlead t-en"><b>On a low-overlap pair, Semi-OPD beats every recent OPD fix.</b> It needs no truncation, teacher intervention, or SFT warm start.</p>
+    <p class="vlead t-ko"><b>겹침이 낮은 쌍에서 Semi-OPD는 최근 나온 OPD 개선안을 모두 이긴다.</b> 답안 자르기, 교사 개입, SFT 예열 같은 장치가 필요 없다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Qwen3-1.7B ← Qwen3-4B-Instruct (non-thinking), overlap 62.5%</span><span class="t-ko">Qwen3-1.7B ← Qwen3-4B-Instruct (비사고 모드), 겹침 62.5%</span></div>
+      <div class="cs"><span class="t-en">Table 1 · avg@32 over AIME 24/25/26 + HMMT Feb 26 · line = teacher (47.5) · higher is better</span><span class="t-ko">Table 1 · AIME 24/25/26 + HMMT Feb 26 avg@32 · 세로선 = 교사 (47.5) · 높을수록 좋음</span></div>
+      <div class="bars" style="--x:95%">
+        <div class="bar" title="untrained student: 9.0"><span class="bl">student</span><span class="bt"><span class="bf" style="--w:18%"></span></span><span class="bv">9.0</span></div>
+        <div class="bar" title="standard OPD: 26.2"><span class="bl">OPD</span><span class="bt"><span class="bf" style="--w:52.4%"></span></span><span class="bv">26.2</span></div>
+        <div class="bar" title="Lightning OPD: 30.0"><span class="bl">Lightning OPD</span><span class="bt"><span class="bf" style="--w:60%"></span></span><span class="bv">30.0</span></div>
+        <div class="bar" title="FastOPD: 30.7"><span class="bl">FastOPD</span><span class="bt"><span class="bf" style="--w:61.4%"></span></span><span class="bv">30.7</span></div>
+        <div class="bar" title="Relay-OPD: 32.7"><span class="bl">Relay-OPD</span><span class="bt"><span class="bf" style="--w:65.4%"></span></span><span class="bv">32.7</span></div>
+        <div class="bar hl" title="Semi-OPD: 39.8"><span class="bl">Semi-OPD</span><span class="bt"><span class="bf" style="--w:79.6%"></span></span><span class="bv">39.8</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–50. Semi-OPD also needs 35× less training time than Relay-OPD here.</figcaption>
+      <figcaption class="t-ko">축 0–50. 이 쌍에서 Semi-OPD는 Relay-OPD보다 학습 시간도 35배 적게 든다.</figcaption>
+    </figure>
+    <p class="vlead gap t-en"><b>The advantage shrinks to zero once teacher and student already agree.</b> At 89% overlap, all methods land within a point of the teacher.</p>
+    <p class="vlead gap t-ko"><b>교사와 학생이 이미 비슷하면 이점은 사라진다.</b> 겹침 89%에서는 모든 방법이 교사와 1점 안쪽에 모인다.</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1.</b> avg@32 averaged over AIME 24/25/26 and HMMT Feb 26, checkpoints at steps 60/80/100. Best variant = best of FastOPD, Lightning OPD, Relay-OPD. Higher is better.</caption>
+        <caption class="t-ko"><b>Table 1.</b> AIME 24/25/26과 HMMT Feb 26의 avg@32 평균, 60/80/100단계 체크포인트 평균. 최고 변형 = FastOPD, Lightning OPD, Relay-OPD 중 최고값. 높을수록 좋음.</caption>
+        <thead><tr><th>Pair (overlap)</th><th>Teacher</th><th>OPD</th><th>Best variant</th><th>Semi-OPD</th></tr></thead>
+        <tbody>
+          <tr><td>Qwen3-1.7B ← 4B-Instruct (62.5%)</td><td>47.5</td><td>26.2</td><td>32.7</td><td class="up">39.8</td></tr>
+          <tr><td>Qwen3-4B ← 30B-A3B-Instruct (62.5%)</td><td>62.1</td><td>44.9</td><td>52.5</td><td class="up">57.4</td></tr>
+          <tr><td>NM-Cascade-2-30B-A3B ← Math-Expert (89.3%)</td><td>74.4</td><td>74.1</td><td class="up">74.8</td><td>74.1</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">14 / 17</div><div class="l"><span class="t-en">teacher–student pairs where Semi-OPD wins</span><span class="t-ko">Semi-OPD가 이긴 교사–학생 쌍</span></div></div>
+      <div class="stat"><div class="n">11.4×</div><div class="l"><span class="t-en">training speedup over standard OPD</span><span class="t-ko">표준 OPD 대비 학습 가속</span></div></div>
+      <div class="stat"><div class="n">r = −0.73</div><div class="l"><span class="t-en">gain vs. initial top-64 overlap</span><span class="t-ko">이득과 초기 상위 64 토큰 겹침의 상관</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">Before running OPD on a small student, measure its top-k overlap with the teacher on a few rollouts. If it sits near 60%, a frozen first-pass rollout set is cheaper and likely better than chasing the student online.</span><span class="t-ko">작은 학생에 OPD를 돌리기 전에 답안 몇 개로 교사와의 상위 k 토큰 겹침부터 재자. 60% 근처라면 학생을 계속 따라가며 생성하는 것보다 처음 답안을 고정해 쓰는 편이 싸고 성능도 나을 가능성이 크다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">All training is on one math dataset with math benchmarks plus HumanEval, and Semi-OPD fails from a base student whose first rollouts are too weak. The overlap threshold is read off a scatter plot, not a tested decision rule.</span><span class="t-ko">학습은 수학 데이터셋 하나로만 했고 평가는 수학 벤치마크와 HumanEval뿐이다. 첫 답안이 너무 약한 베이스 학생에서는 Semi-OPD가 OPD에 진다. 겹침 기준선도 산점도에서 읽어 낸 것이지 따로 검증한 판단 규칙은 아니다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2610.11291">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2610.11291">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2610.11291">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2610.11291">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>P1 slot · wishlist exhausted · listed author Pavlo Molchanov (NVIDIA) · score 6 (P1 +3, author +3), top of 11 P1 candidates</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-10-09.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P1 슬롯 · 위시리스트 소진 · 관심 저자 Pavlo Molchanov (NVIDIA) · 점수 6 (P1 +3, 저자 +3), P1 후보 11편 중 1위</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-10-09.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
