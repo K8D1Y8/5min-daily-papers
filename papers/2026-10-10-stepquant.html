@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · STEPQuant: When and Where Errors Matter in Delta-Rule Recurrent State Quantization</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · Quantization · Recurrent State</span><span class="t-ko">Model Compression · 양자화 · 순환 상태</span></span>
+      <span>2026.10.10</span>
+    </div>
+    <h1>STEPQuant: When and Where Errors Matter in Delta-Rule Recurrent State Quantization<br>
+      <span class="glow t-en">— give more bits to the memory that lives longest and the rows that the output reads hardest, and 4-bit states match FP32</span>
+      <span class="glow t-ko">— 오래 남는 기억과 출력에 크게 읽히는 행에 비트를 더 주자 4비트 상태가 FP32와 같은 정확도를 낸다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge hot">▲ 107 HF · ★ 94 GitHub</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Bingchen Yao</b>, Haobo Xu, Haokun Lin, Yichen Wu, Ziyu Guo, Renrui Zhang, Zhichao Lu, Zhenan Sun, Ying Wei <span class="t-en">(equal contribution: Bingchen Yao, Haobo Xu · corresponding: Haokun Lin, Ying Wei)</span><span class="t-ko">(공동 1저자: Bingchen Yao, Haobo Xu · 교신: Haokun Lin, Ying Wei)</span></span>
+      <span>🏛 Zhejiang Univ. · CASIA · Tsinghua · CityU HK · Harvard · CUHK</span>
+      <span>🗓 2026-09-29</span>
+      <span>📄 <a href="https://arxiv.org/abs/2609.38169">arXiv:2609.38169</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Linear attention keeps a fixed-size state per request, but at high concurrency Qwen's FP32 state pool outgrows its BF16 weights. Uniform INT6 states collapse reasoning accuracy.</span><span class="t-ko">선형 어텐션은 요청마다 크기가 고정된 상태를 들고 있지만, 동시 요청이 많아지면 Qwen의 FP32 상태 풀이 BF16 가중치보다 커진다. 그렇다고 상태를 일괄 INT6로 줄이면 추론 정확도가 무너진다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Error is requantized every step and survives as long as the gate retains memory: long-lived heads accumulate more error (Spearman ρ ≈ 0.80), and some key rows hurt the output far more.</span><span class="t-ko">오차는 매 단계 다시 양자화되며 게이트가 기억을 붙잡는 동안 살아남는다. 오래 기억하는 헤드일수록 오차가 더 쌓이고(Spearman ρ ≈ 0.80), 일부 키 행은 출력을 훨씬 크게 망가뜨린다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Allocate bits by error × memory lifetime, keep the riskiest 1.39% of heads in FP16, and scale each state with separate key-row and value-column factors weighted by readout impact.</b> Spend precision where the error stays and shows.</span><span class="t-ko"><b>오차 크기와 기억 수명을 곱한 값으로 비트를 나누고, 가장 위험한 1.39% 헤드는 FP16으로 두며, 상태마다 출력 영향으로 가중한 키 행 스케일과 값 열 스케일을 따로 둔다.</b> 오차가 오래 남고 잘 드러나는 곳에 정밀도를 쓰는 셈이다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">Qwen3.8-27B 7-task average: FP32 80.60, INT8 71.86, STEPQuant 6-bit 80.59 and 4-bit 80.51. In SGLang, total serving memory drops 68.7%.</span><span class="t-ko">Qwen3.8-27B 7개 과제 평균: FP32 80.60, INT8 71.86, STEPQuant 6비트 80.59, 4비트 80.51. SGLang 서빙 전체 메모리는 68.7% 줄어든다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Picture a notebook that you <b>recopy every minute</b> in slightly blurry handwriting. Notes you erase soon barely suffer, but notes you keep for an hour get recopied sixty times. STEPQuant <b>writes the long-kept notes more carefully</b> and <b>adds a magnifier to the lines you read aloud most</b>.</p>
+    <p class="t-ko">매 분마다 조금 흐린 글씨로 <b>다시 베껴 쓰는 공책</b>을 떠올려 보자. 금방 지울 메모는 별 탈이 없지만, 한 시간 동안 남겨 둘 메모는 예순 번 베껴진다. STEPQuant는 <b>오래 남길 메모를 더 또박또박 쓰고</b>, <b>가장 자주 소리 내어 읽는 줄에는 돋보기를 댄다</b>.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">The problem: state memory grows with users, error grows with time</span><span class="t-ko">문제는 사용자 수만큼 늘어나는 상태 메모리, 시간만큼 쌓이는 오차</span></h2>
+    <p class="vlead t-en"><b>Long-lived heads carry orders of magnitude more error, and naive low-bit states fail.</b> Uniform quantization ignores both when and where the error lands.</p>
+    <p class="vlead t-ko"><b>오래 기억하는 헤드는 오차가 몇 자릿수나 더 크고, 단순한 저비트 상태는 실패한다.</b> 일괄 양자화는 오차가 언제, 어디에 생기는지를 모두 무시하기 때문이다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2609.38169/Z_Figure1.svg" target="_blank"><img src="fig/2609.38169/Z_Figure1.svg" alt="Three panels: state memory vs concurrent requests crossing model weight memory; accumulated INT6 error vs gate half-life across 2304 heads; 7-task accuracy vs bits for uniform and STEPQuant"></a>
+      <figcaption class="t-en"><b>Figure 1.</b> (a) Qwen state memory vs. concurrent requests. (b) Accumulated INT6 state error vs. gate half-life, 2304 heads. (c) 7-task accuracy vs. state bits.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> (a) 동시 요청 수에 따른 Qwen 상태 메모리. (b) 2304개 헤드의 게이트 반감기 대비 누적 INT6 상태 오차. (c) 상태 비트 수에 따른 7개 과제 정확도.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2609.38169</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Calibrate once, offline.</span><span class="t-ko">한 번만, 오프라인으로 보정한다.</span></b><span class="t-en">32 WikiText-2 segments give each unit's distortion per bit width, gate retention, and row impact.</span><span class="t-ko">WikiText-2 32조각으로 단위마다 비트별 왜곡, 게이트 유지율, 행 영향도를 잰다.</span></li>
+      <li><b><span class="t-en">Temporal: lifetime-aware bits.</span><span class="t-ko">시간 축: 수명을 반영한 비트 배분.</span></b><span class="t-en">Minimize lifetime-weighted distortion under the bit budget; the highest-risk units stay FP16.</span><span class="t-ko">비트 예산 안에서 수명으로 가중한 왜곡을 최소화하고, 가장 위험한 단위는 FP16으로 남긴다.</span></li>
+      <li><b><span class="t-en">Spatial: dual-axis scales.</span><span class="t-ko">공간 축: 두 축 스케일.</span></b><span class="t-en">Row scales follow magnitude and readout impact; column scales are fitted with impact weights, every step.</span><span class="t-ko">행 스케일은 크기와 출력 영향을 따르고, 열 스케일은 영향 가중치로 매 단계 맞춘다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key idea: time and space are both needed</span><span class="t-ko">핵심은 시간 축과 공간 축이 모두 필요하다는 것</span></h2>
+    <p class="vlead t-en"><b>At 4 bits, either half alone fails; together they slightly pass FP32.</b> Temporal allocation without good scales still collapses, and spatial scales alone leave a 10-point gap.</p>
+    <p class="vlead t-ko"><b>4비트에서는 한쪽만으로는 실패하고, 둘을 합치면 FP32를 살짝 넘는다.</b> 좋은 스케일 없이 시간 배분만 하면 여전히 무너지고, 공간 스케일만으로는 10점 차이가 남는다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Ablation at a 4-bit state budget, Qwen3.8-27B</span><span class="t-ko">4비트 상태 예산 소거 실험, Qwen3.8-27B</span></div>
+      <div class="cs"><span class="t-en">Table 4 · mean of AIME 26, GPQA-D, LCB v6 · % · line = FP32 state (84.61) · higher is better</span><span class="t-ko">Table 4 · AIME 26, GPQA-D, LCB v6 평균 · % · 세로선 = FP32 상태 (84.61) · 높을수록 좋음</span></div>
+      <div class="bars" style="--x:84.61%">
+        <div class="bar" title="uniform INT4: 3.97"><span class="bl">INT4</span><span class="bt"><span class="bf" style="--w:3.97%"></span></span><span class="bv">3.97</span></div>
+        <div class="bar" title="Q-Mamba DSQ 4-bit: 7.64"><span class="bl">Q-Mamba</span><span class="bt"><span class="bf" style="--w:7.64%"></span></span><span class="bv">7.64</span></div>
+        <div class="bar" title="temporal only: 12.87"><span class="bl">temporal only</span><span class="bt"><span class="bf" style="--w:12.87%"></span></span><span class="bv">12.87</span></div>
+        <div class="bar" title="spatial only: 73.95"><span class="bl">spatial only</span><span class="bt"><span class="bf" style="--w:73.95%"></span></span><span class="bv">73.95</span></div>
+        <div class="bar hl" title="STEPQuant 4-bit: 84.72"><span class="bl">STEPQuant</span><span class="bt"><span class="bf" style="--w:84.72%"></span></span><span class="bv">84.72</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–100. At 6 bits the same order holds: 75.63 temporal, 80.19 spatial, 84.51 combined.</figcaption>
+      <figcaption class="t-ko">축 0–100. 6비트에서도 순서는 같다. 시간 축만 75.63, 공간 축만 80.19, 둘 다 84.51.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: FP32 accuracy, a third of the memory</span><span class="t-ko">FP32 정확도를 메모리 3분의 1로</span></h2>
+    <p class="vlead t-en"><b>STEPQuant at 4 bits beats uniform INT8 on both models.</b> On Qwen it matches FP32; on Kimi a 3-point gap remains at 4 bits.</p>
+    <p class="vlead t-ko"><b>4비트 STEPQuant가 두 모델 모두에서 일괄 INT8을 이긴다.</b> Qwen에서는 FP32와 같고, Kimi는 4비트에서 3점 차이가 남는다.</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1.</b> Mean accuracy over 7 long-generation tasks (LCB v6, EvalPlus, AIME 26, MATH-500, HMMT, GPQA-D, IFBench), BF16 weights, %. Higher is better.</caption>
+        <caption class="t-ko"><b>Table 1.</b> 긴 생성 과제 7개(LCB v6, EvalPlus, AIME 26, MATH-500, HMMT, GPQA-D, IFBench) 평균 정확도, BF16 가중치, %. 높을수록 좋음.</caption>
+        <thead><tr><th>State</th><th>Qwen3.8-27B</th><th>Kimi-Linear-48B-A3B</th></tr></thead>
+        <tbody>
+          <tr><td>FP32</td><td>80.60</td><td>61.52</td></tr>
+          <tr><td>INT8</td><td>71.86</td><td>56.02</td></tr>
+          <tr><td>INT6</td><td>45.04</td><td>45.70</td></tr>
+          <tr><td>INT4</td><td>12.73</td><td>21.63</td></tr>
+          <tr><td>STEPQuant@6bit</td><td class="up">80.59</td><td class="up">61.47</td></tr>
+          <tr><td>STEPQuant@4bit</td><td class="up">80.51</td><td>58.52</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="vlead gap t-en"><b>At batch 512 the whole server shrinks by more than two thirds.</b> With 4-bit weights, the state pool is most of the memory, so compressing it pays off directly.</p>
+    <p class="vlead gap t-ko"><b>배치 512에서 서버 전체 메모리가 3분의 2 넘게 줄어든다.</b> 가중치가 4비트면 메모리 대부분을 상태 풀이 차지하므로 이를 압축한 효과가 그대로 드러난다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Total serving memory, Qwen3.8-27B with W4 weights, batch 512</span><span class="t-ko">전체 서빙 메모리, W4 가중치 Qwen3.8-27B, 배치 512</span></div>
+      <div class="cs"><span class="t-en">Section 5.6 · GiB on A800 · SGLang · lower is better</span><span class="t-ko">5.6절 · A800 기준 GiB · SGLang · 낮을수록 좋음</span></div>
+      <div class="bars">
+        <div class="bar" title="FP32 state: 419.73 GiB"><span class="bl">FP32 state</span><span class="bt"><span class="bf" style="--w:93.3%"></span></span><span class="bv">419.7</span></div>
+        <div class="bar hl" title="STEPQuant 6-bit: 131.18 GiB"><span class="bl">STEPQuant 6-bit</span><span class="bt"><span class="bf" style="--w:29.2%"></span></span><span class="bv">131.2</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–450 GiB. State updates also run 2.91× faster.</figcaption>
+      <figcaption class="t-ko">축 0–450 GiB. 상태 업데이트도 2.91배 빨라진다.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">5.03×</div><div class="l"><span class="t-en">recurrent-state compression at 6 bits</span><span class="t-ko">6비트에서 순환 상태 압축률</span></div></div>
+      <div class="stat"><div class="n">−68.7%</div><div class="l"><span class="t-en">total serving memory, batch 512</span><span class="t-ko">배치 512 전체 서빙 메모리</span></div></div>
+      <div class="stat"><div class="n">80.59</div><div class="l"><span class="t-en">Qwen 6-bit accuracy vs FP32 80.60</span><span class="t-ko">Qwen 6비트 정확도, FP32는 80.60</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">When compressing anything that is rewritten every step, such as a recurrent state or a reused cache, weight the error by how long it survives, not just by its size. A cheap gate-retention statistic was enough to predict risk here.</span><span class="t-ko">순환 상태나 재사용 캐시처럼 매 단계 다시 쓰이는 것을 압축할 때는 오차를 크기만이 아니라 얼마나 오래 살아남는지로 가중하자. 이 논문에서는 값싼 게이트 유지율 통계만으로도 위험도를 충분히 예측했다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">Only two GDN/KDA models on fixed hardware are tested, and calibration is on WikiText-2 alone. The lifetime weight ignores key-dependent transitions, and at 4 bits Kimi loses 3 points while Qwen writes longer answers.</span><span class="t-ko">시험한 모델은 고정된 하드웨어 위의 GDN/KDA 모델 둘뿐이고, 보정도 WikiText-2만 썼다. 수명 가중치는 키에 따라 바뀌는 상태 전이를 반영하지 않으며, 4비트에서 Kimi는 3점을 잃고 Qwen은 답을 더 길게 쓴다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2609.38169">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2609.38169">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2609.38169">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2609.38169">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>legacy slot (7th card) · KV/state compression + efficient sequence models · HF ▲107 (very hot) · score 3 (hot +3), top legacy candidate of 15</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-10-10.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>legacy 슬롯 (7번째 카드) · KV/상태 압축 + 효율 시퀀스 모델 · HF ▲107 (매우 화제) · 점수 3 (화제성 +3), 후보 15편 중 legacy 1위</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-10-10.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
