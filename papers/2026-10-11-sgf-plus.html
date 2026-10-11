@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · SGF+: Decoupling Gradient Flows for Autoregressive Video Generation</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Video & World Generation · AR Diffusion Training</span><span class="t-ko">Video & World Generation · 자기회귀 확산 학습</span></span>
+      <span>2026.10.11</span>
+    </div>
+    <h1>SGF+: Decoupling Gradient Flows for Autoregressive Video Generation<br>
+      <span class="glow t-en">— the weights that write memory and the weights that draw frames pull in opposite directions, so give each its own copy</span>
+      <span class="glow t-ko">— 기억을 쓰는 가중치와 프레임을 그리는 가중치가 서로 반대로 당기니, 각자 따로 갖게 하자</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge lab">🏛 Tsinghua · JD Joy Future Academy</span>
+      <span class="badge hot">▲ 55 HF · ★ 91 GitHub</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Zihan Su</b>, Junhao Zhuang, Yaowei Li, Siwen Lu, Haoran Li, Lingen Li, Haoyu Wu, Weiyang Jin, Songchun Zhang, Haoyang Huang, Chun Yuan, Zeyue Xue, Nan Duan <span class="t-en">(equal contribution: Zihan Su, Junhao Zhuang · corresponding: Junhao Zhuang, Chun Yuan)</span><span class="t-ko">(공동 1저자: Zihan Su, Junhao Zhuang · 교신: Junhao Zhuang, Chun Yuan)</span></span>
+      <span>🏛 Tsinghua · JD Joy Future Academy · CUHK</span>
+      <span>🗓 2026-10-07</span>
+      <span>📄 <a href="https://arxiv.org/abs/2610.10429">arXiv:2610.10429</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">AR video models use one network both to denoise the current frames and to write them into the KV cache. Long rollouts still degrade even after Self Gradient Forcing (SGF).</span><span class="t-ko">자기회귀 비디오 모델은 한 네트워크로 현재 프레임을 디노이즈하고, 그 프레임을 KV 캐시에 써 넣는다. Self Gradient Forcing(SGF)을 써도 긴 생성에서는 화질이 여전히 무너진다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Under the same loss, context-writing and denoising gradients point about 105° apart, and all 512 measured pairs have negative cosine similarity.</span><span class="t-ko">같은 손실 아래에서도 문맥 쓰기 기울기와 디노이즈 기울기는 약 105° 벌어져 있고, 잰 512쌍 모두 코사인 유사도가 음수다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Split the model into a context writer and a denoiser, both copied from the same checkpoint, and train them jointly with SGF's unchanged loss.</b> Opposing updates stop cancelling on shared weights.</span><span class="t-ko"><b>모델을 같은 체크포인트에서 복사한 문맥 작성기와 디노이저 둘로 나누고, SGF의 손실 그대로 함께 학습한다.</b> 반대 방향 업데이트가 공유 가중치 위에서 서로 상쇄되지 않는다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">At 240 s (48× the 5 s training window), aesthetics 64.74 vs SGF 62.54 and Self Forcing 55.12; runs up to 24 hours with nearly unchanged latency.</span><span class="t-ko">240초(학습 구간 5초의 48배)에서 미적 점수 64.74로 SGF 62.54, Self Forcing 55.12를 앞선다. 최대 24시간까지 이어서 생성하며 지연 시간은 거의 그대로다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Imagine one person who must both <b>paint the next panel</b> of a comic and <b>keep the continuity notes</b> for later panels. Feedback to "paint sharper" and "write cleaner notes" keeps pushing their habits in opposite directions. SGF+ hires <b>a separate note-keeper</b>; the painter still reads the notes, so the two stay coordinated.</p>
+    <p class="t-ko">만화의 <b>다음 칸을 그리는 일</b>과 뒤 칸을 위한 <b>연결 메모를 남기는 일</b>을 한 사람이 다 해야 한다고 하자. "더 선명하게 그려라"와 "메모를 더 깔끔하게 써라"라는 피드백이 그 사람의 습관을 계속 반대쪽으로 민다. SGF+는 <b>메모 담당을 따로 둔다</b>. 그린 사람은 여전히 그 메모를 읽으므로 둘은 계속 맞물려 움직인다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: same two passes, two sets of weights</span><span class="t-ko">작동 방식은 같은 두 단계, 가중치 두 벌</span></h2>
+    <p class="vlead t-en"><b>Only the bottom-right box changes: C(θ<sub>c</sub>) and D(θ<sub>d</sub>) replace one shared θ.</b> The rollout, the differentiable KV replay, and the DMD loss are SGF's.</p>
+    <p class="vlead t-ko"><b>바뀌는 것은 오른쪽 아래 상자뿐이다. 공유 θ 하나 대신 C(θ<sub>c</sub>)와 D(θ<sub>d</sub>)를 쓴다.</b> 롤아웃, 미분 가능한 KV 재구성, DMD 손실은 모두 SGF 그대로다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2610.10429/method_overview.png" target="_blank"><img src="fig/2610.10429/method_overview.png" alt="SGF and SGF+ training pipeline: pass 1 no-gradient self-rollout; pass 2 SGF uses a shared model for context writing and denoising, SGF+ uses separate context writer and denoiser"></a>
+      <figcaption class="t-en"><b>Figure 4.</b> Pass 1 rolls out without gradients and saves latents. Pass 2 replays them in parallel so the loss reaches context writing; SGF+ splits the weights.</figcaption>
+      <figcaption class="t-ko"><b>Figure 4.</b> 1단계는 기울기 없이 롤아웃하며 잠재를 저장한다. 2단계는 이를 병렬로 다시 계산해 손실이 문맥 쓰기까지 닿게 하고, SGF+는 여기서 가중치를 나눈다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2610.10429</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Copy the model twice.</span><span class="t-ko">모델을 두 벌로 복사한다.</span></b><span class="t-en">Writer and denoiser both start from the Causal Forcing teacher-forcing checkpoint of Wan2.1-1.3B.</span><span class="t-ko">작성기와 디노이저 모두 Wan2.1-1.3B 기반 Causal Forcing 교사 강제 체크포인트에서 출발한다.</span></li>
+      <li><b><span class="t-en">Roll out 5 s, then replay.</span><span class="t-ko">5초를 롤아웃한 뒤 다시 계산한다.</span></b><span class="t-en">The writer encodes clean history into KV; the denoiser reads it to denoise targets.</span><span class="t-ko">작성기는 깨끗한 이력을 KV로 쓰고, 디노이저는 그것을 읽어 목표 프레임을 디노이즈한다.</span></li>
+      <li><b><span class="t-en">One loss, two update paths.</span><span class="t-ko">손실 하나, 업데이트 경로 둘.</span></b><span class="t-en">DMD against a frozen Wan2.1-14B teacher reaches the writer only through future predictions.</span><span class="t-ko">고정된 Wan2.1-14B 교사와의 DMD 손실은 미래 예측을 거쳐서만 작성기에 닿는다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key finding: the two roles fight</span><span class="t-ko">핵심 발견은 두 역할이 서로 싸운다는 것</span></h2>
+    <p class="vlead t-en"><b>Both module families sit past the 90° line, so summed updates partly cancel.</b> The conflict already shows at teacher-forcing initialization, before any SGF training.</p>
+    <p class="vlead t-ko"><b>두 모듈 계열 모두 90° 선을 넘어서 있어, 더해진 업데이트가 일부 상쇄된다.</b> 이 충돌은 SGF 학습 전, 교사 강제 초기화 시점에 이미 보인다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Angle between mean context-writing and denoising gradients in SGF</span><span class="t-ko">SGF에서 문맥 쓰기 평균 기울기와 디노이즈 평균 기울기 사이 각도</span></div>
+      <div class="cs"><span class="t-en">Figure 3b · 128 prompts × 4 timesteps · degrees · line = 90° (orthogonal); beyond it, the roles oppose</span><span class="t-ko">Figure 3b · 프롬프트 128개 × 시점 4개 · 도 · 세로선 = 90°(직교), 이를 넘으면 두 역할이 반대 방향</span></div>
+      <div class="bars" style="--x:50%">
+        <div class="bar hl" title="Attention: 104.2°"><span class="bl">Attention</span><span class="bt"><span class="bf" style="--w:57.9%"></span></span><span class="bv">104.2°</span></div>
+        <div class="bar hl" title="FFN: 106.3°"><span class="bl">FFN</span><span class="bt"><span class="bf" style="--w:59.1%"></span></span><span class="bv">106.3°</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–180°. Separating only Attention or only FFN scores lower than separating both (Table 2).</figcaption>
+      <figcaption class="t-ko">축 0–180°. Attention이나 FFN 한쪽만 나누면 둘 다 나눌 때보다 점수가 낮다(Table 2).</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: steadier long videos</span><span class="t-ko">긴 영상이 더 안정적이다</span></h2>
+    <p class="vlead t-en"><b>SGF+ wins every consistency and quality metric at 240 s, but not Dynamic Degree.</b> The authors argue the baselines' extra "motion" is scene jumps and deformation.</p>
+    <p class="vlead t-ko"><b>SGF+는 240초에서 일관성과 화질 지표를 모두 이기지만 Dynamic Degree는 진다.</b> 저자들은 기준선의 높은 "움직임"이 장면 튀기와 변형 때문이라고 본다.</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1.</b> 240 s chunkwise generation, 128 MovieGen prompts, same initialization and seed. VBench-Long scores ×100, higher is better.</caption>
+        <caption class="t-ko"><b>Table 1.</b> 240초 청크 단위 생성, MovieGen 프롬프트 128개, 같은 초기화와 시드. VBench-Long 점수 ×100, 높을수록 좋음.</caption>
+        <thead><tr><th>Metric</th><th>Self Forcing</th><th>SGF</th><th>SGF+</th></tr></thead>
+        <tbody>
+          <tr><td>Subject consistency</td><td>94.94</td><td>97.72</td><td class="up">98.21</td></tr>
+          <tr><td>Background consistency</td><td>95.21</td><td>96.90</td><td class="up">97.31</td></tr>
+          <tr><td>Temporal flickering</td><td>93.54</td><td>97.03</td><td class="up">97.57</td></tr>
+          <tr><td>Aesthetic quality</td><td>55.12</td><td>62.54</td><td class="up">64.74</td></tr>
+          <tr><td>Imaging quality</td><td>68.38</td><td>71.11</td><td class="up">71.39</td></tr>
+          <tr><td>Dynamic degree</td><td class="up">93.90</td><td>56.97</td><td>56.92</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="vlead gap t-en"><b>Twice the weights, almost the same speed.</b> Each token only uses its own role's parameters, so compute per step does not double.</p>
+    <p class="vlead gap t-ko"><b>가중치는 두 배인데 속도는 거의 같다.</b> 토큰마다 자기 역할의 가중치만 쓰므로 단계당 계산량은 두 배가 되지 않는다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Inference memory for an 81-frame video</span><span class="t-ko">81프레임 영상 추론 메모리</span></div>
+      <div class="cs"><span class="t-en">Table 3 · GB · latency 4.962 s (SGF) vs 4.969 s (SGF+) · lower is better</span><span class="t-ko">Table 3 · GB · 지연 시간 4.962초(SGF) 대 4.969초(SGF+) · 낮을수록 좋음</span></div>
+      <div class="bars">
+        <div class="bar" title="Self Forcing: 24.85 GB"><span class="bl">Self Forcing</span><span class="bt"><span class="bf" style="--w:82.8%"></span></span><span class="bv">24.85</span></div>
+        <div class="bar" title="SGF: 24.85 GB"><span class="bl">SGF</span><span class="bt"><span class="bf" style="--w:82.8%"></span></span><span class="bv">24.85</span></div>
+        <div class="bar hl" title="SGF+: 27.96 GB"><span class="bl">SGF+</span><span class="bt"><span class="bf" style="--w:93.2%"></span></span><span class="bv">27.96</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–30 GB. Training time per step rises 8.2% (11.79 → 12.76 s).</figcaption>
+      <figcaption class="t-ko">축 0–30 GB. 학습 단계당 시간은 8.2% 늘어난다(11.79 → 12.76초).</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">512 / 512</div><div class="l"><span class="t-en">gradient pairs with negative cosine</span><span class="t-ko">코사인이 음수인 기울기 쌍</span></div></div>
+      <div class="stat"><div class="n">24 h</div><div class="l"><span class="t-en">continuous video from 5 s training rollouts</span><span class="t-ko">5초 학습 롤아웃으로 이어 만든 영상 길이</span></div></div>
+      <div class="stat"><div class="n">+0.007 s</div><div class="l"><span class="t-en">latency vs SGF, 81 frames</span><span class="t-ko">81프레임 기준 SGF 대비 지연 증가</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">When one network plays two roles under one loss, such as writing a cache and reading it, measure the per-role gradient angle before tuning anything else. Past 90°, separate weights may be the cheapest fix.</span><span class="t-ko">한 네트워크가 손실 하나 아래에서 캐시를 쓰고 읽는 식으로 두 역할을 맡는다면, 다른 걸 조정하기 전에 역할별 기울기 각도부터 재 보자. 90°를 넘으면 가중치를 나누는 것이 가장 싼 해법일 수 있다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">Baselines are only Self Forcing and SGF on one 1.3B backbone, with one seed, and no human study. The large Dynamic Degree drop at 240 s is explained by examples, not measured, and the extra 1.4B parameters are not compared against simply widening a shared model.</span><span class="t-ko">기준선은 1.3B 백본 하나 위의 Self Forcing과 SGF뿐이고, 시드는 하나이며 사람 평가도 없다. 240초에서 Dynamic Degree가 크게 떨어지는 이유는 예시로만 설명했지 측정하지 않았다. 늘어난 1.4B 가중치를 그냥 공유 모델을 키운 경우와 비교하지도 않았다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2610.10429">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2610.10429">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2610.10429">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2610.10429">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>P2 slot · wishlist exhausted · HF ▲55 · score 5 (P2 +3, hot +2), four-way tie broken by heat then recency; autoregressive video first</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-10-11.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P2 슬롯 · 위시리스트 소진 · HF ▲55 · 점수 5 (P2 +3, 화제성 +2), 4편 동점을 화제성과 최신순으로 가림, 자기회귀 비디오 우선</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-10-11.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
