@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Continually Post-training Small Models via Synthetic Self-distillation</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Small–Large Alignment · Continual Post-Training</span><span class="t-ko">Small–Large Alignment · 지속 후학습</span></span>
+      <span>2026.10.12</span>
+    </div>
+    <h1>Continually Post-training Small Models via Synthetic Self-distillation<br>
+      <span class="glow t-en">— let a slightly bigger sibling rewrite new data in the small model's own voice, and it learns more while forgetting less</span>
+      <span class="glow t-ko">— 조금 더 큰 형제 모델이 새 데이터를 작은 모델의 말투로 고쳐 써 주면, 더 많이 배우고 덜 잊는다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge lab">🏛 LG AI Research · KAIST AI</span>
+      <span class="badge hot">▲ 32 HF</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Woosung Koh</b>, Hyunsoo Lee, Kyungjae Lee, Haeju Park, Dahyun Lee, Dasol Hwang, Moontae Lee <span class="t-en">(corresponding: Moontae Lee)</span><span class="t-ko">(교신: Moontae Lee)</span></span>
+      <span>🏛 LG AI Research · KAIST AI</span>
+      <span>🗓 2026-10-09</span>
+      <span>📄 <a href="https://arxiv.org/abs/2610.13113">arXiv:2610.13113</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Self-distillation fine-tuning (SDFT) teaches new skills without much forgetting, but it relies on in-context learning that 0.5–3B models lack.</span><span class="t-ko">자기 증류 미세조정(SDFT)은 새 능력을 넣으면서도 잘 잊지 않지만, 0.5–3B 모델에는 없는 문맥 내 학습 능력에 기대고 있다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Across 23 training datasets, forgetting grows with how far fine-tuning shifts the output distribution (retention vs. KL shift: Spearman ρ = −0.85).</span><span class="t-ko">학습 데이터셋 23개에서, 미세조정이 출력 분포를 멀리 옮길수록 더 많이 잊는다(유지 성능과 KL 이동의 Spearman ρ = −0.85).</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>SynthSelf: a one-size-larger same-family model rewrites each demonstration, wrong answers are filtered out, and the small model does plain SFT on the rewrites.</b> Siblings share a voice, so the targets stay close to the student.</span><span class="t-ko"><b>SynthSelf는 같은 계열에서 한 단계 큰 모델이 예시를 하나씩 고쳐 쓰고, 답이 틀린 것은 걸러낸 뒤, 작은 모델이 그 결과로 일반 SFT를 한다.</b> 형제 모델은 말투가 비슷해서 학습 목표가 학생 분포에서 멀어지지 않는다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">Average acquisition 56.4 vs SFT 52.2 and SDFT 44.1 over 4 settings and 3 sizes, with retention tied for best; +16.9 pp over on-policy distillation from the same aligner.</span><span class="t-ko">설정 4개, 크기 3개 평균 습득 점수 56.4로 SFT 52.2, SDFT 44.1을 앞서고, 유지 점수는 최고 기준선과 같다. 같은 정렬 모델로 한 온폴리시 증류보다 16.9%p 높다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">A younger student learns best from <b>an older sibling's notes</b>, not from a professor's textbook. The sibling <b>rewrites each lesson in words the student already uses</b>, and any note with a wrong answer is <b>thrown away</b>. New facts arrive without disturbing everything the student already knew.</p>
+    <p class="t-ko">어린 학생은 교수의 교과서보다 <b>손위 형제의 노트</b>로 가장 잘 배운다. 형제는 <b>학생이 이미 쓰는 말로 수업을 하나씩 고쳐 쓰고</b>, 답이 틀린 노트는 <b>버린다</b>. 그래서 새 지식이 들어와도 학생이 원래 알던 것들이 흔들리지 않는다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: rewrite, filter, fine-tune</span><span class="t-ko">작동 방식은 고쳐 쓰고, 거르고, 미세조정하기</span></h2>
+    <p class="vlead t-en"><b>The aligner is chosen for closeness to the student, not for strength.</b> Its rewrites keep the gold answer but use phrasing the student already finds likely.</p>
+    <p class="vlead t-ko"><b>정렬 모델은 성능이 아니라 학생과의 가까움으로 고른다.</b> 고쳐 쓴 글은 정답은 그대로 두되 학생이 이미 그럴듯하다고 여기는 표현을 쓴다.</p>
+    <div class="diagram">
+      <div class="agent-row">
+        <div class="agent">
+          <div class="role"><span class="t-en">1 · rewrite</span><span class="t-ko">1 · 고쳐 쓰기</span></div>
+          <div class="sub"><span class="t-en">same-family aligner, greedy decoding</span><span class="t-ko">같은 계열 정렬 모델, 탐욕 디코딩</span></div>
+          <div class="latent">ŷ = argmax π<sub>A</sub>(y | P<sup>rewrite</sup>(x, y))</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent mid">
+          <div class="role"><span class="t-en">2 · reject wrong answers</span><span class="t-ko">2 · 틀린 답 버리기</span></div>
+          <div class="sub"><span class="t-en">keep only if the answer matches gold</span><span class="t-ko">답이 정답과 같을 때만 남김</span></div>
+          <div class="latent">a(ŷ) = a(y)</div>
+        </div>
+        <div class="flow">→</div>
+        <div class="agent">
+          <div class="role"><span class="t-en">3 · plain SFT</span><span class="t-ko">3 · 일반 SFT</span></div>
+          <div class="sub"><span class="t-en">small student, off-policy</span><span class="t-ko">작은 학생, 오프폴리시</span></div>
+          <div class="latent">min −log π<sub>θ</sub>(ŷ | x)</div>
+        </div>
+      </div>
+      <div class="cap t-en"><b>Drawn from Algorithm 1.</b> Aligner rule: lowest student NLL on the rewrites, which must beat gold SFT data and the student's own accuracy.</div>
+      <div class="cap t-ko"><b>Algorithm 1을 바탕으로 그린 도식.</b> 정렬 모델 선택 규칙은 학생 기준 NLL이 가장 낮은 것이고, 그 값은 원본 SFT 데이터보다 낮고 정확도는 학생보다 높아야 한다.</div>
+    </div>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Pick the closest sibling.</span><span class="t-ko">가장 가까운 형제를 고른다.</span></b><span class="t-en">For Qwen2.5-0.5B to 3B students, Qwen2.5-7B or 14B rewrites the data.</span><span class="t-ko">Qwen2.5-0.5B~3B 학생에게는 Qwen2.5-7B나 14B가 데이터를 고쳐 쓴다.</span></li>
+      <li><b><span class="t-en">Filter offline.</span><span class="t-ko">오프라인으로 거른다.</span></b><span class="t-en">Going off-policy is what makes rejection sampling possible; it also trims 17.1% of tool-use data.</span><span class="t-ko">오프폴리시로 가야 거부 샘플링이 가능하다. 도구 사용 데이터는 이 과정에서 17.1% 줄어든다.</span></li>
+      <li><b><span class="t-en">Train with no new knobs.</span><span class="t-ko">새 하이퍼파라미터 없이 학습한다.</span></b><span class="t-en">Same SFT settings as the baseline; nothing extra to tune.</span><span class="t-ko">기준선과 같은 SFT 설정을 쓰고, 따로 조정할 것이 없다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key finding: distribution shift is the forgetting meter</span><span class="t-ko">핵심 발견은 분포 이동이 곧 망각의 계기판이라는 것</span></h2>
+    <p class="vlead t-en"><b>The further a dataset pushes the model's distribution, the more it forgets, even with the same problems.</b> The model's own verified answers (LO) gain the most and forget the least.</p>
+    <p class="vlead t-ko"><b>데이터가 모델 분포를 멀리 밀수록 더 많이 잊고, 같은 문제를 써도 마찬가지다.</b> 모델이 직접 맞힌 답(LO)이 가장 많이 얻고 가장 적게 잊는다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2610.13113/paper_shift-and-arms.svg" target="_blank"><img src="fig/2610.13113/paper_shift-and-arms.svg" alt="Scatter of retention change versus KL shift for 23 datasets with rho -0.85, and bars for HI, MID, LO shift versions of OpenR1-Math showing KL, forgetting, performance and HumanEval retention"></a>
+      <figcaption class="t-en"><b>Figure 2.</b> (a) Retention change vs. KL(after ‖ before), 23 training datasets on Qwen2.5-3B. (b–e) One corpus as full R1 traces (HI), final solutions (MID), or self-solutions (LO).</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> (a) Qwen2.5-3B에서 학습 데이터셋 23개의 KL(학습 후 ‖ 학습 전) 대비 유지 성능 변화. (b–e) 같은 데이터를 R1 전체 추론(HI), 최종 풀이(MID), 자기 풀이(LO)로 바꿔 쓴 결과.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2610.13113</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: most learned, least forgotten</span><span class="t-ko">가장 많이 배우고 가장 적게 잊는다</span></h2>
+    <p class="vlead t-en"><b>SynthSelf is the only method that clearly beats plain SFT on acquisition at these sizes.</b> SDFT and DFT fall below SFT once the student is small.</p>
+    <p class="vlead t-ko"><b>이 크기에서 습득 점수로 일반 SFT를 확실히 넘는 방법은 SynthSelf뿐이다.</b> 학생이 작아지면 SDFT와 DFT는 SFT보다 못하다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Average acquisition, 4 settings × 3 model sizes</span><span class="t-ko">평균 습득 점수, 설정 4개 × 모델 크기 3개</span></div>
+      <div class="cs"><span class="t-en">Table 1, "Average" row · % · line = base model before training (34.2) · higher is better</span><span class="t-ko">Table 1 "Average" 행 · % · 세로선 = 학습 전 기본 모델 (34.2) · 높을수록 좋음</span></div>
+      <div class="bars" style="--x:34.2%">
+        <div class="bar" title="DFT: 39.8"><span class="bl">DFT</span><span class="bt"><span class="bf" style="--w:39.8%"></span></span><span class="bv">39.8</span></div>
+        <div class="bar" title="SDFT: 44.1"><span class="bl">SDFT</span><span class="bt"><span class="bf" style="--w:44.1%"></span></span><span class="bv">44.1</span></div>
+        <div class="bar" title="ASFT: 46.1"><span class="bl">ASFT</span><span class="bt"><span class="bf" style="--w:46.1%"></span></span><span class="bv">46.1</span></div>
+        <div class="bar" title="SFT: 52.2"><span class="bl">SFT</span><span class="bt"><span class="bf" style="--w:52.2%"></span></span><span class="bv">52.2</span></div>
+        <div class="bar hl" title="SynthSelf (7B aligner): 56.4"><span class="bl">SynthSelf</span><span class="bt"><span class="bf" style="--w:56.4%"></span></span><span class="bv">56.4</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–100. Retention: SynthSelf 41.7–41.8, ASFT 41.8, SFT 40.5, base 42.8.</figcaption>
+      <figcaption class="t-ko">축 0–100. 유지 점수는 SynthSelf 41.7–41.8, ASFT 41.8, SFT 40.5, 기본 모델 42.8.</figcaption>
+    </figure>
+    <p class="vlead gap t-en"><b>A closer aligner beats a stronger one, and costs far less.</b> Bigger cross-family models write more correct data but drift further from the student.</p>
+    <p class="vlead gap t-ko"><b>더 강한 정렬 모델보다 더 가까운 정렬 모델이 낫고, 비용도 훨씬 적다.</b> 계열이 다른 큰 모델은 정답률은 높지만 학생 분포에서 더 멀어진다.</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 2.</b> Science domain, averaged over 0.5B, 1.5B, and 3B students. NLL = student's negative log-likelihood of the rewrites (lower = more in-distribution).</caption>
+        <caption class="t-ko"><b>Table 2.</b> 과학 분야, 0.5B·1.5B·3B 학생 평균. NLL은 고쳐 쓴 글에 대한 학생의 음의 로그우도(낮을수록 분포 안쪽).</caption>
+        <thead><tr><th>Aligner</th><th>Acquisition</th><th>NLL</th><th>Data acc. (%)</th><th>PFLOPs</th></tr></thead>
+        <tbody>
+          <tr><td>Qwen2.5-7B (same family)</td><td class="up">66.8</td><td class="up">0.995</td><td>99.0</td><td class="up">13.9</td></tr>
+          <tr><td>Qwen2.5-14B (same family)</td><td>64.1</td><td>1.033</td><td>99.1</td><td>36.6</td></tr>
+          <tr><td>Qwen3.5-27B</td><td>65.1</td><td>1.440</td><td>90.3</td><td>70.0</td></tr>
+          <tr><td>Gemma-4-31B</td><td>60.8</td><td>1.245</td><td class="up">99.8</td><td>148.2</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">ρ = −0.85</div><div class="l"><span class="t-en">distribution shift vs. retention, 23 datasets</span><span class="t-ko">데이터셋 23개의 분포 이동과 유지 성능 상관</span></div></div>
+      <div class="stat"><div class="n">+16.9 pp</div><div class="l"><span class="t-en">acquisition over on-policy distillation, same aligner</span><span class="t-ko">같은 정렬 모델의 온폴리시 증류 대비 습득</span></div></div>
+      <div class="stat"><div class="n">+18.96 pp</div><div class="l"><span class="t-en">acquisition over prompt-matched SDFT</span><span class="t-ko">프롬프트를 맞춘 SDFT 대비 습득</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">Before fine-tuning a small model, score candidate data by the student's own NLL; it predicts forgetting better than the teacher's accuracy does. When a bigger model writes the targets, choose the nearest sibling, not the strongest.</span><span class="t-ko">작은 모델을 미세조정하기 전에 후보 데이터를 학생의 NLL로 먼저 채점하자. 교사의 정답률보다 망각을 더 잘 예측한다. 큰 모델에게 학습 목표를 쓰게 한다면 가장 강한 모델이 아니라 가장 가까운 형제 모델을 고르자.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">All students are Qwen2.5 at 0.5–3B, retention only ties the best baseline and still sits about 1 point under the base model, and medicine shows no gain over distillation. The shift–forgetting link is a correlation from one 3B model.</span><span class="t-ko">학생은 모두 0.5–3B 크기의 Qwen2.5뿐이다. 유지 점수는 최고 기준선과 같을 뿐이며 여전히 기본 모델보다 1점가량 낮고, 의료 분야에서는 증류보다 나은 점이 없다. 분포 이동과 망각의 관계도 3B 모델 하나에서 본 상관관계다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2610.13113">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2610.13113">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2610.13113">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2610.13113">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>P1 slot · wishlist exhausted · HF ▲32 · score 5 (P1 +3, hot +2), tie with Gains &amp; Collapse in OPD (▲30) broken by heat</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-10-12.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P1 슬롯 · 위시리스트 소진 · HF ▲32 · 점수 5 (P1 +3, 화제성 +2), Gains &amp; Collapse in OPD(▲30)와 동점을 화제성으로 가림</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-10-12.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
