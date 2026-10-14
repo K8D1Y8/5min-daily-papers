@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Gains and Collapse in On-Policy Distillation: A Reinforcement Learning Perspective</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Small–Large Alignment · On-Policy Distillation</span><span class="t-ko">Small–Large Alignment · 온폴리시 증류</span></span>
+      <span>2026.10.14</span>
+    </div>
+    <h1>Gains and Collapse in On-Policy Distillation: A Reinforcement Learning Perspective<br>
+      <span class="glow t-en">— the teacher is not a role model but a judge, and a judge with bad taste can reward rambling it would never write itself</span>
+      <span class="glow t-ko">— 교사는 본보기가 아니라 심판이고, 안목이 나쁜 심판은 자기라면 절대 쓰지 않을 장황한 답에도 점수를 준다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge lab">🏛 Westlake · Zhejiang Univ.</span>
+      <span class="badge hot">▲ 32 HF</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Han Cui</b>, Jianhao Yan, Yun Luo, Hongbo Zhang, Zhizhang Fu, Yue Zhang <span class="t-en">(equal contribution: Han Cui, Jianhao Yan, Yun Luo · corresponding: Yue Zhang)</span><span class="t-ko">(공동 1저자: Han Cui, Jianhao Yan, Yun Luo · 교신: Yue Zhang)</span></span>
+      <span>🏛 Westlake University · Zhejiang University</span>
+      <span>🗓 2026-10-02</span>
+      <span>📄 <a href="https://arxiv.org/abs/2610.03185">arXiv:2610.03185</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">On-policy distillation (OPD) is now standard post-training, yet some teacher–student pairs collapse into overlong, repetitive answers, and nobody could say why.</span><span class="t-ko">온폴리시 증류(OPD)는 이제 표준 후처리 단계지만, 일부 교사–학생 쌍은 지나치게 길고 반복되는 답으로 무너지며 그 이유는 밝혀지지 않았다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Successful OPD solves no new problems after an audited 1,024-sample check; the collapsed run's teacher already gives its highest advantage to long, repetitive student rollouts before training.</span><span class="t-ko">성공한 OPD도 1,024개 표본으로 확인해 보면 새로 푸는 문제가 없다. 무너진 실행에서는 학습 전부터 교사가 길고 반복되는 학생 답안에 가장 높은 이득을 준다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Treat the teacher's log-probability as an implicit token reward, audit which student rollouts it ranks highest, then mask length-capped rollouts or start from an SFT checkpoint.</b> Collapse is reward hacking, so fix the candidate pool.</span><span class="t-ko"><b>교사의 로그확률을 토큰 단위 암묵 보상으로 보고, 교사가 어떤 학생 답안을 가장 높게 치는지 점검한 뒤, 길이 상한에 걸린 답안을 손실에서 빼거나 SFT 체크포인트에서 시작한다.</b> 붕괴는 보상 해킹이므로 후보 답안 쪽을 고친다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">Good teacher: AIME 20.9 → 37.1. Collapsed: 99.4% truncated, 38% repetitive. With the 4B teacher, masking adds +3.08 pp on average and SFT warmup reaches 16.38 vs 10.16.</span><span class="t-ko">좋은 교사에서는 AIME 20.9 → 37.1. 무너진 실행은 99.4%가 길이 상한에 걸리고 38%가 반복된다. 4B 교사에서 마스킹으로 평균 3.08%p 오르고, SFT 예열은 10.16 대신 16.38에 이른다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">OPD is less like copying a master and more like a <b>contestant performing while a judge scores</b>. If the judge rewards good routines, the contestant <b>gets more consistent at what they could already do</b>. If the judge happens to <b>love long, repetitive routines</b>, the contestant learns exactly that, even though the judge would never perform that way.</p>
+    <p class="t-ko">OPD는 명인을 따라 하는 것보다, <b>참가자가 공연하고 심판이 채점하는</b> 쪽에 가깝다. 심판이 좋은 공연에 점수를 주면 참가자는 <b>원래 할 수 있던 것을 더 안정적으로</b> 해낸다. 그런데 심판이 마침 <b>길고 반복되는 공연을 좋아하면</b>, 심판 자신은 절대 그렇게 하지 않더라도 참가자는 바로 그걸 배운다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">The view: the teacher scores, it doesn't demonstrate</span><span class="t-ko">관점은 교사가 시범을 보이는 게 아니라 채점한다는 것</span></h2>
+    <p class="vlead t-en"><b>What matters is how well the teacher judges student rollouts, not how well it writes its own.</b> The student only ever trains on its own samples.</p>
+    <p class="vlead t-ko"><b>중요한 것은 교사가 직접 얼마나 잘 쓰느냐가 아니라 학생 답안을 얼마나 잘 채점하느냐다.</b> 학생은 언제나 자기가 뽑은 답안으로만 학습하기 때문이다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2610.03185/main_fig_w_cases.png" target="_blank"><img src="fig/2610.03185/main_fig_w_cases.png" alt="Two panels: accurate teacher preference guides the student to a short correct answer; biased teacher preference rewards a 7311-token incorrect answer full of 'Wait' loops"></a>
+      <figcaption class="t-en"><b>Figure 1.</b> Left: the teacher favors a correct 771-token answer. Right: it favors an incorrect 7,311-token answer that loops on "Wait".</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> 왼쪽은 교사가 771토큰짜리 정답을 선호하는 경우, 오른쪽은 "Wait"를 반복하는 7,311토큰짜리 오답을 선호하는 경우다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2610.03185</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Recast the loss as RL.</span><span class="t-ko">손실을 강화학습으로 다시 쓴다.</span></b><span class="t-en">Reverse KL equals maximizing teacher log-prob reward plus entropy over student-visited prefixes.</span><span class="t-ko">역방향 KL은 학생이 지나간 접두사에서 교사 로그확률 보상과 엔트로피를 최대화하는 것과 같다.</span></li>
+      <li><b><span class="t-en">Audit the reward before training.</span><span class="t-ko">학습 전에 보상을 점검한다.</span></b><span class="t-en">Rank initial student rollouts into 10 deciles by teacher advantage and check correctness, length, and repetition.</span><span class="t-ko">처음 학생 답안을 교사 이득 기준 10개 구간으로 나누고 정답률, 길이, 반복을 본다.</span></li>
+      <li><b><span class="t-en">Fix the pool, not the teacher.</span><span class="t-ko">교사가 아니라 후보 묶음을 고친다.</span></b><span class="t-en">Mask truncated rollouts, or warm up with SFT so pathological samples rarely appear.</span><span class="t-ko">상한에 걸린 답안을 손실에서 빼거나, SFT로 예열해 병적인 답안이 거의 나오지 않게 한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Finding 1: gains are sharper, not wider</span><span class="t-ko">발견 1은 넓어지는 게 아니라 날카로워진다는 것</span></h2>
+    <p class="vlead t-en"><b>After OPD the student solves slightly fewer distinct problems than before, though it solves them far more often.</b> The gain is sampling efficiency, not new capability.</p>
+    <p class="vlead t-ko"><b>OPD 뒤 학생이 푸는 서로 다른 문제 수는 오히려 조금 줄지만, 그 문제들을 훨씬 자주 맞힌다.</b> 이득은 표본 효율이지 새 능력이 아니다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Audited solvable problems on AIME24–26 (DS-R1-Distill-1.5B student)</span><span class="t-ko">점검을 거친 AIME24–26 풀이 가능 문제 수 (DS-R1-Distill-1.5B 학생)</span></div>
+      <div class="cs"><span class="t-en">Section 3 · up to 1,024 samples + manual review · count · no OPD-only problem remains</span><span class="t-ko">3절 · 최대 1,024개 표본과 수작업 검토 · 문제 수 · OPD 후에만 풀리는 문제는 없음</span></div>
+      <div class="bars">
+        <div class="bar hl" title="initial student: 73"><span class="bl">initial student</span><span class="bt"><span class="bf" style="--w:91.25%"></span></span><span class="bv">73</span></div>
+        <div class="bar" title="after OPD, JustRL teacher: 65"><span class="bl">OPD · JustRL</span><span class="bt"><span class="bf" style="--w:81.25%"></span></span><span class="bv">65</span></div>
+        <div class="bar" title="after OPD, DeepScaleR teacher: 63"><span class="bl">OPD · DeepScaleR</span><span class="bt"><span class="bf" style="--w:78.75%"></span></span><span class="bv">63</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–80. Meanwhile per-problem success rises on 90.6% (JustRL) and 84.4% (DeepScaleR) of solvable problems.</figcaption>
+      <figcaption class="t-ko">축 0–80. 그 대신 문제별 성공률은 풀 수 있던 문제의 90.6%(JustRL), 84.4%(DeepScaleR)에서 오른다.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Finding 2: collapse is reward hacking</span><span class="t-ko">발견 2는 붕괴가 보상 해킹이라는 것</span></h2>
+    <p class="vlead t-en"><b>The collapsed student is far worse than both its teacher and its starting point on length and repetition.</b> Loss curves look normal, so the failure hides in plain sight.</p>
+    <p class="vlead t-ko"><b>무너진 학생은 길이와 반복에서 교사보다도, 출발점보다도 훨씬 나쁘다.</b> 손실 곡선은 정상이라 실패가 눈앞에 있어도 잘 안 보인다.</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 2.</b> Endpoint generations on AIME24–26. Acc. %, mean length in k tokens, % truncated at the cap, % severe repetition.</caption>
+        <caption class="t-ko"><b>Table 2.</b> AIME24–26 최종 생성 결과. 정확도 %, 평균 길이(천 토큰), 상한 도달 %, 심한 반복 %.</caption>
+        <thead><tr><th>Setting · model</th><th>Acc.</th><th>Len.</th><th>Trunc.</th><th>Rep.</th></tr></thead>
+        <tbody>
+          <tr><td>JustRL-1.5B teacher</td><td>39.3</td><td>9.30</td><td>13.8</td><td>0.0</td></tr>
+          <tr><td>DS-Distill-1.5B initial</td><td>20.9</td><td>11.19</td><td>12.5</td><td>0.0</td></tr>
+          <tr><td>DS-Distill-1.5B after OPD</td><td class="up">37.1</td><td>9.72</td><td>16.5</td><td>0.0</td></tr>
+          <tr><td>Qwen3-4B teacher</td><td>19.6</td><td>3.09</td><td>2.1</td><td>0.0</td></tr>
+          <tr><td>Qwen3-1.7B-Base initial</td><td>0.2</td><td>1.18</td><td>4.1</td><td>4.2</td></tr>
+          <tr><td>Qwen3-1.7B-Base after OPD</td><td>5.4</td><td>8.16</td><td>99.4</td><td>38.0</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="vlead gap t-en"><b>Changing which rollouts get reinforced fixes it with the same teacher.</b> Warmup helps most because the bad samples never show up.</p>
+    <p class="vlead gap t-ko"><b>어떤 답안을 강화할지만 바꿔도 같은 교사로 문제가 풀린다.</b> 예열이 가장 효과적인 것은 나쁜 답안이 애초에 나오지 않기 때문이다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Qwen3-4B teacher → Qwen3-1.7B: mean accuracy</span><span class="t-ko">Qwen3-4B 교사 → Qwen3-1.7B: 평균 정확도</span></div>
+      <div class="cs"><span class="t-en">Table 3 · mean of AMC23 + AIME24/25/26 · % · higher is better</span><span class="t-ko">Table 3 · AMC23 + AIME24/25/26 평균 · % · 높을수록 좋음</span></div>
+      <div class="bars">
+        <div class="bar" title="Base before OPD: 1.44"><span class="bl">Base, pre-OPD</span><span class="bt"><span class="bf" style="--w:7.2%"></span></span><span class="bv">1.44</span></div>
+        <div class="bar" title="OPD from Base: 10.16"><span class="bl">OPD</span><span class="bt"><span class="bf" style="--w:50.8%"></span></span><span class="bv">10.16</span></div>
+        <div class="bar" title="OPD + mask: 13.24"><span class="bl">OPD + mask</span><span class="bt"><span class="bf" style="--w:66.2%"></span></span><span class="bv">13.24</span></div>
+        <div class="bar hl" title="OPD from SFT warmup: 16.38"><span class="bl">OPD + SFT warmup</span><span class="bt"><span class="bf" style="--w:81.9%"></span></span><span class="bv">16.38</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–20. Masking also helps with Qwen3-8B (+0.51) and Qwen3-30B-A3B (+2.58) teachers.</figcaption>
+      <figcaption class="t-ko">축 0–20. 마스킹은 Qwen3-8B(+0.51), Qwen3-30B-A3B(+2.58) 교사에서도 도움이 된다.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">0</div><div class="l"><span class="t-en">problems solvable only after OPD</span><span class="t-ko">OPD 뒤에만 풀리는 문제</span></div></div>
+      <div class="stat"><div class="n">99.4%</div><div class="l"><span class="t-en">answers truncated after collapsed OPD</span><span class="t-ko">무너진 OPD 뒤 상한에 걸린 답</span></div></div>
+      <div class="stat"><div class="n">+3.08 pp</div><div class="l"><span class="t-en">mean accuracy from masking, 4B teacher</span><span class="t-ko">4B 교사에서 마스킹으로 오른 평균 정확도</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">Before running OPD, score your student's own rollouts with the teacher and look at the top decile. If it is long or repetitive, the teacher will amplify that, whatever its benchmark scores say.</span><span class="t-ko">OPD를 돌리기 전에 교사로 학생 답안을 채점해 상위 10%를 들여다보자. 거기가 길거나 반복적이라면, 교사의 벤치마크 점수와 상관없이 교사가 그걸 키울 것이다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">Only 1.5B–1.7B students on math, and the collapse case uses a base model that solves 0.2% at the start. Masking drops about 90% of samples and slightly hurts two AIME sets with the 8B teacher.</span><span class="t-ko">학생은 수학 과제의 1.5B–1.7B 모델뿐이고, 붕괴 사례는 처음 정답률이 0.2%인 베이스 모델에서 나왔다. 마스킹은 표본의 약 90%를 버리며, 8B 교사에서는 AIME 두 세트의 점수를 조금 깎는다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2610.03185">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2610.03185">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2610.03185">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2610.03185">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>P1 slot · wishlist exhausted · HF ▲32 · score 5 (P1 +3, hot +2), only score-5 P1 candidate of 12</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-10-14.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P1 슬롯 · 위시리스트 소진 · HF ▲32 · 점수 5 (P1 +3, 화제성 +2), P1 후보 12편 중 유일한 5점</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-10-14.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
