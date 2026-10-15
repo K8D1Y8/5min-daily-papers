@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Simplifying and Improving On-Policy Distillation for Few-Step Diffusion</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Video & World Generation · Few-Step Distillation</span><span class="t-ko">Video & World Generation · 소수 단계 증류</span></span>
+      <span>2026.10.15</span>
+    </div>
+    <h1>Simplifying and Improving On-Policy Distillation for Few-Step Diffusion<br>
+      <span class="glow t-en">— no fake-score model, no discriminator, no new architecture: just regress the student's velocity onto the teacher's along the student's own path</span>
+      <span class="glow t-ko">— 가짜 점수 모델도, 판별기도, 새 구조도 없이 학생이 직접 지나가는 경로에서 교사의 속도를 그대로 회귀한다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge lab">🏛 Microsoft Research</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Jiawei Zhang</b>, Ziyu Wan, Nanye Ma, Long Zhao, Dong Chen, Hongyu Liu, Qifeng Chen, Dongdong Chen <span class="t-en">(corresponding: Ziyu Wan)</span><span class="t-ko">(교신: Ziyu Wan)</span></span>
+      <span>🏛 Microsoft Research · NYU · HKUST</span>
+      <span>🗓 2026-10-13</span>
+      <span>📄 <a href="https://arxiv.org/abs/2610.18472">arXiv:2610.18472</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Few-step distillation like DMD needs an online fake-score model, adversarial losses, or extra student modules, and often trains unstably.</span><span class="t-ko">DMD 같은 소수 단계 증류는 온라인 가짜 점수 모델이나 적대적 손실, 학생 쪽 추가 모듈이 필요하고 학습도 자주 불안정하다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Plain on-policy velocity regression already works at 4 steps, but on Wan2.1 video it jitters because the teacher's velocity bends sharply inside one coarse step.</span><span class="t-ko">단순한 온폴리시 속도 회귀만으로도 4단계 생성이 되지만, Wan2.1 비디오에서는 한 번의 큰 걸음 안에서 교사 속도가 크게 휘어 학습이 흔들린다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>SMD: a training-only Pivot residual lets the path bend inside each step without moving its endpoints, and the student is also pushed away from the teacher's unconditional prediction.</b> Both parts disappear at inference.</span><span class="t-ko"><b>SMD는 학습 때만 쓰는 Pivot 잔차로 걸음 안의 경로를 끝점은 그대로 둔 채 휘게 하고, 교사의 무조건 예측으로부터 학생을 밀어낸다.</b> 두 장치는 추론 때 모두 사라진다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">Wan2.1-14B at 4 vs 100 evaluations: Quality 85.72 vs teacher 84.56, best Dynamic Degree 83.89; FLUX GenEval 0.715 beats its 50-step teacher (0.664).</span><span class="t-ko">Wan2.1-14B는 4회 대 100회 평가에서 Quality 85.72로 교사 84.56을 넘고, Dynamic Degree는 83.89로 가장 높다. FLUX는 GenEval 0.715로 50단계 교사(0.664)를 넘는다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Picture a student who must cross a river in <b>four long jumps</b> while a guide watches. At random spots along each jump, the guide says <b>"the current here pushes this way,"</b> and the student averages that into one jump. When the current swirls, a practice-only <b>rope that may curve</b> but is tied at both banks absorbs the swirl, and the student also learns <b>where a careless guide would point</b>, so they avoid it.</p>
+    <p class="t-ko">강을 <b>네 번의 큰 점프</b>로 건너야 하는 학생과 옆에서 지켜보는 안내인이 있다고 하자. 안내인은 점프마다 아무 지점에서나 <b>"여기서는 물살이 이쪽으로 민다"</b>고 알려 주고, 학생은 그걸 평균 내 점프 한 번에 담는다. 물살이 소용돌이칠 때는 양쪽 기슭에 묶여 있되 <b>휘어질 수 있는 연습용 밧줄</b>이 그 소용돌이를 받아 주고, 학생은 <b>대충 보는 안내인이라면 가리킬 방향</b>도 배워서 그쪽을 피한다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: regression on the student's own path</span><span class="t-ko">작동 방식은 학생 자신의 경로 위에서 하는 회귀</span></h2>
+    <p class="vlead t-en"><b>Both refinements live only in training, so the 4-step sampler is untouched.</b> The proxy path keeps the endpoints fixed, so it changes the supervision, not the update.</p>
+    <p class="vlead t-ko"><b>두 개선 장치는 학습에만 있어서 4단계 샘플러는 손대지 않는다.</b> 보조 경로가 끝점을 고정하므로, 바뀌는 것은 감독 신호이지 업데이트 자체가 아니다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2610.18472/fig10_refinements.png" target="_blank"><img src="fig/2610.18472/fig10_refinements.png" alt="Two 3D panels: (a) a curved proxy path between x1 and x0 whose local velocity v(tau) = v_theta + r_phi(tau) is matched to the teacher velocity; (b) the student velocity is pushed toward the teacher prediction and away from a weaker teacher prediction"></a>
+      <figcaption class="t-en"><b>Figure 10.</b> (a) Imitation along a proxy path with the same endpoints. (b) Repulsion from a weaker teacher prediction alongside imitation of the target one.</figcaption>
+      <figcaption class="t-ko"><b>Figure 10.</b> (a) 끝점이 같은 보조 경로를 따라가는 모방. (b) 목표 교사 예측을 따라 하면서 더 약한 교사 예측은 밀어내기.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure (cropped from the PDF)</span><span class="t-ko">출처: 논문 원본 그림 (PDF에서 잘라냄)</span> · arXiv:2610.18472</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Roll out 4 coarse steps.</span><span class="t-ko">큰 걸음 4번으로 롤아웃한다.</span></b><span class="t-en">The student predicts one velocity per step from its own current state, prompt-only, no target data.</span><span class="t-ko">학생은 현재 자기 상태에서 걸음마다 속도 하나를 예측한다. 프롬프트만 쓰고 정답 데이터는 없다.</span></li>
+      <li><b><span class="t-en">Query the teacher mid-step.</span><span class="t-ko">걸음 중간에서 교사에게 묻는다.</span></b><span class="t-en">At random points inside each step, the frozen teacher's velocity becomes an L2 target for the Pivot-adjusted path.</span><span class="t-ko">걸음마다 아무 지점에서나 고정된 교사의 속도를 Pivot으로 보정한 경로의 L2 목표로 쓴다.</span></li>
+      <li><b><span class="t-en">Repel from the weak prediction.</span><span class="t-ko">약한 예측은 밀어낸다.</span></b><span class="t-en">Subtract λ × the distance to the teacher's unconditional output (λ = 0.2 worked best); drop both at inference.</span><span class="t-ko">교사의 무조건 출력과의 거리에 λ를 곱해 빼고(λ = 0.2가 가장 좋았다), 추론 때는 둘 다 뺀다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key point: 25× fewer network calls</span><span class="t-ko">핵심은 네트워크 호출이 25배 적다는 것</span></h2>
+    <p class="vlead t-en"><b>The student uses 4 evaluations where the Wan2.1 teacher uses 100.</b> Quality holds because the student learns the whole step, not every point inside it.</p>
+    <p class="vlead t-ko"><b>Wan2.1 교사가 100번 평가하는 일을 학생은 4번에 끝낸다.</b> 걸음 안의 모든 지점이 아니라 걸음 전체를 배우기 때문에 화질이 유지된다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Network evaluations per video, Wan2.1-T2V</span><span class="t-ko">영상 하나당 네트워크 평가 횟수, Wan2.1-T2V</span></div>
+      <div class="cs"><span class="t-en">Table 4 · teacher 50 steps × 2 (CFG) · count · lower is cheaper</span><span class="t-ko">Table 4 · 교사 50단계 × 2 (CFG) · 횟수 · 낮을수록 저렴</span></div>
+      <div class="bars">
+        <div class="bar" title="teacher: 100 NFE"><span class="bl">teacher</span><span class="bt"><span class="bf" style="--w:100%"></span></span><span class="bv">100</span></div>
+        <div class="bar hl" title="SMD student: 4 NFE"><span class="bl">SMD student</span><span class="bt"><span class="bf" style="--w:4%"></span></span><span class="bv">4</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–100. A count, not a measured wall-clock speedup.</figcaption>
+      <figcaption class="t-ko">축 0–100. 측정한 실제 속도 향상이 아니라 호출 횟수다.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: competitive video, livelier motion</span><span class="t-ko">비디오에서 대등한 화질, 더 활발한 움직임</span></h2>
+    <p class="vlead t-en"><b>On Wan2.1-14B, SMD is within 0.06 of the top Quality and leads Dynamic Degree by 7.5 points, but trails AnyFlow on Semantic.</b> Its edge is motion without an auxiliary model.</p>
+    <p class="vlead t-ko"><b>Wan2.1-14B에서 SMD는 Quality가 1위와 0.06 차이이고 Dynamic Degree는 7.5점 앞서지만, Semantic은 AnyFlow에 뒤진다.</b> 강점은 보조 모델 없이 얻은 움직임이다.</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 4.</b> VBench on Wan2.1-T2V-14B, all students at 4 NFE. Teacher and PDD quoted from PDD; DMD2 reproduced by the authors. Higher is better.</caption>
+        <caption class="t-ko"><b>Table 4.</b> Wan2.1-T2V-14B VBench, 학생은 모두 4 NFE. 교사와 PDD 값은 PDD 논문 인용, DMD2는 저자 재현. 높을수록 좋음.</caption>
+        <thead><tr><th>Method</th><th>Quality</th><th>Semantic</th><th>Dynamic Degree</th></tr></thead>
+        <tbody>
+          <tr><td>Teacher (100 NFE)</td><td>84.56</td><td>81.24</td><td>–</td></tr>
+          <tr><td>DMD2</td><td>84.33</td><td>80.26</td><td>49.72</td></tr>
+          <tr><td>rCM</td><td>85.19</td><td>81.21</td><td>76.39</td></tr>
+          <tr><td>AnyFlow</td><td class="up">85.78</td><td class="up">82.10</td><td>73.61</td></tr>
+          <tr><td>PDD</td><td>85.69</td><td>80.71</td><td>74.72</td></tr>
+          <tr><td>SMD</td><td>85.72</td><td>80.52</td><td class="up">83.89</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">4 / 100</div><div class="l"><span class="t-en">network evaluations, student vs Wan teacher</span><span class="t-ko">학생 대 Wan 교사 네트워크 평가 횟수</span></div></div>
+      <div class="stat"><div class="n">83.95</div><div class="l"><span class="t-en">causal 4-step VBench, no fake-score model</span><span class="t-ko">가짜 점수 모델 없는 인과 4단계 VBench</span></div></div>
+      <div class="stat"><div class="n">33B</div><div class="l"><span class="t-en">largest model distilled (audio–video)</span><span class="t-ko">증류한 가장 큰 모델 (오디오–비디오)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">Before reaching for DMD's fake-score model, try plain on-policy velocity regression; add a zero-integral residual only if training jitters on curved trajectories. For causal video it lands within 0.09 of Causal Forcing (83.95 vs 84.04).</span><span class="t-ko">DMD의 가짜 점수 모델부터 쓰기 전에 단순한 온폴리시 속도 회귀를 먼저 해 보자. 휘어진 궤적에서 학습이 흔들릴 때만 적분이 0인 잔차를 더하면 된다. 인과 비디오에서는 Causal Forcing과 0.09 차이까지 따라간다(83.95 대 84.04).</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">For video it is competitive, not dominant: Semantic stays below the teacher and AnyFlow at both scales. Pivot's layer, depth, and basis are tuned per model, and video is judged by VBench alone.</span><span class="t-ko">비디오에서는 대등할 뿐 압도적이지 않다. 두 크기 모두 Semantic이 교사와 AnyFlow보다 낮다. Pivot의 층 위치, 깊이, 기저는 모델마다 따로 조정했고, 비디오 평가는 VBench뿐이다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2610.18472">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2610.18472">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2610.18472">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2610.18472">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>P2 slot · wishlist exhausted · listed lab Microsoft Research · score 6 (P2 +3, lab +3); three-way tie, chosen over hotter DiffusionART and ATAS as the direct few-step video fit</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-10-15.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P2 슬롯 · 위시리스트 소진 · 관심 연구실 Microsoft Research · 점수 6 (P2 +3, 연구실 +3), 3편 동점 중 더 화제인 DiffusionART·ATAS 대신 소수 단계 비디오에 직접 맞아 선택</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-10-15.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
