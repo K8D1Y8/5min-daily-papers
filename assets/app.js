@@ -201,7 +201,7 @@
   var conflabel = tabs.querySelector('.conflabel');
   var confLabelHTML = conflabel ? conflabel.innerHTML : '';
   var coltoggle = tabs.querySelector('.coltoggle');
-  var TOPIC_ORDER = ['Multi-Agent & Latent Comm', 'Efficient Sequence Models', 'Model Compression', 'Shared World Models'];
+  var TOPIC_ORDER = ['Compressed Reasoning', 'Video & World Generation', 'Small–Large Alignment', 'Multi-Agent & Latent Comm', 'Efficient Sequence Models', 'Model Compression', 'Shared World Models'];
   var board = null, currentMode = 'all';
 
   function rating(ax) { try { return localStorage.getItem('paper-rating:' + ax); } catch (e) { return null; } }

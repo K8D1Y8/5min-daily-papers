@@ -30,10 +30,11 @@ languages (e.g. "LRU (least-recently-used)", "LRU(가장 오래 안 쓴 것부�
 - `{{PAPER_TITLE}}` (shared) · `{{SUBTITLE_EN/KO}}` one-line hook (≤ 20 words).
 - `{{TOPIC_EN/KO}}` chip — archive vocabulary, no leading emoji. **The first segment is load-bearing**:
   it picks the archive column and drives the daily slot (`paper_signals.py --slot`).
-  - P1 cards: `Small–Large Alignment · <sub>` (e.g. "Small–Large Alignment · On-Policy Distillation")
+  - P1 cards: `Compressed Reasoning · <sub>` (e.g. "Compressed Reasoning · Quantization", "Compressed Reasoning · KV Cache · Long-Horizon Agents").
+    Cards before 2026-10-16 used `Small–Large Alignment · …`; the slot counts both as P1.
   - P2 cards: `Video & World Generation · <sub>` (e.g. "Video & World Generation · AR Diffusion Distillation")
   - legacy cards: `Model Compression …`, `Efficient Inference …`, `Multi-Agent …`, `World Model …`
-  - The KO chip keeps the same English first segment (e.g. "Small–Large Alignment · 온폴리시 증류").
+  - The KO chip keeps the same English first segment (e.g. "Compressed Reasoning · 양자화").
 - **Badges** — keep only the ones that apply:
   - `.badge.venue` "ICML'26 Oral" (main track) · `.badge.pre` "Preprint" / "Workshop @ NeurIPS'26"
   - `.badge.lab` "🏛 Berkeley · Stoica · Zaharia · Song Han" (matched lab/authors)

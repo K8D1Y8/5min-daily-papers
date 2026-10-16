@@ -38,10 +38,11 @@ Default project dir: the root of this repository (if moved, locate by finding
 
 1. **Resolve the paper.**
    - Given an arXiv link/id or PDF → use it. If the id is in `done.log`, say so and ask before duplicating.
-   - **The user's priority topics (2026-09-26)** — P1 *Small–Large Alignment*: compressed / distilled /
-     small-pretrained models that match a large model on benchmarks but not in their output (logit)
-     distribution, and methods that measure or close that gap (keywords: flips, KL/fidelity, on-policy
-     distillation, closed-loop). P2 *Video & World Generation*: efficient video diffusion and world-model
+   - **The user's priority topics (P2 2026-09-26, P1 redefined 2026-10-16)** — P1 *Compressed Reasoning*:
+     how compressed models (quantized, pruned, sparse, low-rank, KV-cache compressed, distilled small
+     models) behave in reasoning and long-horizon / agentic tasks, and reasoning- or long-horizon-aware
+     compression methods. **On-policy distillation is out of scope**: titles about OPD get no priority tag
+     (`sources.md` → Priority exclude). P2 *Video & World Generation*: efficient video diffusion and world-model
      generation, autoregressive first (Self/Causal Forcing, few-step AR distillation, video KV cache,
      sparse/linear attention). Rotation 6:1 — `paper_signals.py --slot` prints today's slot (P1 / P2 / legacy).
    - Asked to pick → `wishlist.md` first: the top-most id not in `done.log` whose `[P1]`/`[P2]` tag

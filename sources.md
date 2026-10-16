@@ -13,45 +13,76 @@
 # Tie-breaks: axis not covered by the last 2 cards → hotter → newer.
 # Recency: prefer ≤ 45 days since first arXiv version; up to 120 days only if score ≥ 5.
 
-## Priority topics (set by the user 2026-09-26)
-# P1  Small–Large Alignment — small models (compressed, distilled, or pretrained small) that match a large
-#     model on benchmarks but not in their output/logit distribution, so they act wrongly in reasoning or
-#     action generation; methods that measure this or compress/distill/train to the same distribution.
+## Priority topics (P2 set 2026-09-26, P1 redefined by the user 2026-10-16)
+# P1  Compressed Reasoning — how compressed models (quantized, pruned, sparsified, low-rank, KV-cache
+#     compressed, distilled small models) behave in reasoning and long-horizon / agentic tasks (longer or
+#     looping outputs, errors that compound over steps, accuracy that holds on short benchmarks but breaks
+#     over long horizons), and compression methods that are aware of reasoning or long-horizon use.
+#     On-policy distillation (OPD) is OUT of scope from 2026-10-16: papers whose title is about OPD get no
+#     priority tag (see "Priority exclude").
 # P2  Video & World Generation — efficient video diffusion and world-model generation, autoregressive first
 #     (bidirectional also fine).
 # Rotation: 6 of every 7 cards alternate P1 / P2; every 7th card goes to the earlier axes (legacy:
 #   latent communication, KV/low-rank compression, efficient sequence models, shared world models).
 #   `paper_signals.py --slot` reads the last cards' topic chips and prints today's slot.
-# Scoring: a candidate whose title or abstract contains a keyword below gets +3 and a P1/P2 tag.
+# Scoring: +3 and a P1/P2 tag when the title or abstract matches the topic.
+#   P1 matches when it contains a "P1 keywords" phrase, OR a "P1 compression terms" entry together
+#   with a "P1 context terms" entry. P2 matches on any "P2 keywords" phrase.
 #   Keywords are a first filter — confirm the fit from the abstract before picking.
 # Card chip prefix (drives the slot and the archive columns):
-#   P1 → "Small–Large Alignment · …"   P2 → "Video & World Generation · …"
+#   P1 → "Compressed Reasoning · …"   P2 → "Video & World Generation · …"
+#   (cards before 2026-10-16 used "Small–Large Alignment · …"; the slot still counts them as P1)
 
-## P1 keywords — Small–Large Alignment
+## P1 keywords — Compressed Reasoning (any one phrase is enough)
+- quantized reasoning
+- compressed reasoning model
+- reasoning-aware quantization
+- reasoning-aware pruning
+- reasoning-aware compression
+- reasoning-aware kv
+- long-horizon-aware
+- quantization inflates
+- pruning-recovery
+- compressed llms fail
+- compressed models fail
+
+## P1 compression terms — paired with a context term
+- quantiz
+- low-bit
+- 2-bit
+- 4-bit
+- prun
+- sparsif
+- sparsity
+- low-rank
+- model compression
+- compressed model
+- kv cache compression
+- kv-cache compression
+- kv cache eviction
+- kv cache quantization
+- kv-cache quantization
+- token eviction
+- small language model
+
+## P1 context terms — paired with a compression term
+- reasoning
+- chain-of-thought
+- long-horizon
+- long horizon
+- multi-step
+- multi-turn
+- agentic
+- agent
+- long-output
+- long generation
+- test-time scaling
+- thinking
+
+## Priority exclude — a title containing any of these gets no P1/P2 tag
 - on-policy distillation
-- logit distillation
-- logit-based distillation
-- reverse KL
-- KL divergence
-- exposure bias
-- flips
-- fidelity loss
-- behavioral shift
-- behavior drift
-- behavioral equivalence
-- benchmark illusion
-- silent failure
-- faithfulness
-- closed-loop
-- distribution matching
-- teacher-student alignment
-- accuracy is not
-- accuracy is preserved
-- preserve accuracy
-- hidden cost
-- benchmarks miss
-- not fully captured by
-- mask underlying
+- on-policy self-distillation
+- OPD
 
 ## P2 keywords — Video & World Generation
 - video diffusion

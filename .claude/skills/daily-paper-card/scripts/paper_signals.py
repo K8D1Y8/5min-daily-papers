@@ -40,7 +40,10 @@ def load_sources(path):
     th = {k.lower(): float(v[0]) for k, *v in get("hot thresholds") if v}
     return {
         "p1": [e[0].lower() for e in get("p1 keywords")],
+        "p1_comp": [e[0].lower() for e in get("p1 compression terms")],
+        "p1_ctx": [e[0].lower() for e in get("p1 context terms")],
         "p2": [e[0].lower() for e in get("p2 keywords")],
+        "exclude": [e[0].lower() for e in get("priority exclude")],
         "venues": [e[0] for e in get("venues")],
         "authors": {norm(e[0]): e[0] for e in get("authors")},
         "labs": [e[0] for e in get("labs")],
@@ -85,11 +88,29 @@ def venue_signal(text, venues):
         return 1, "workshop"
     return 0, ""
 
+def excluded(title, src):
+    """Priority exclude (2026-10-16): titles about on-policy distillation get no P1/P2 tag."""
+    t = title.lower()
+    return any(re.search(r"(?<![a-z0-9])%s(?![a-z0-9])" % re.escape(k), t) for k in src.get("exclude", []))
+
+def topic_tags(title, text, src):
+    """P1 = a P1 phrase, or a compression term together with a reasoning / long-horizon term. P2 = any P2 phrase."""
+    if excluded(title, src):
+        return []
+    tags = []
+    if any(k in text for k in src["p1"]) or (any(k in text for k in src.get("p1_comp", []))
+                                            and any(k in text for k in src.get("p1_ctx", []))):
+        tags.append("P1")
+    if any(k in text for k in src["p2"]):
+        tags.append("P2")
+    return tags
+
 def score(aid, meta, ax_votes, ax_views, orgs, src, done):
     th, parts, why = src["th"], {}, []
     text = (meta["title"] + " " + meta.get("summary", "")).lower()
-    tags = [t.upper() for t in ("p1", "p2") if any(k in text for k in src[t])]
+    tags = topic_tags(meta["title"], text, src)
     if tags: parts["priority"] = 3; why.append("+".join(tags))
+    elif excluded(meta["title"], src): why.append("excluded:OPD")
     v, vlabel = venue_signal(meta["comment"] + " " + meta["jref"], src["venues"])
     if v: parts["venue"] = v; why.append(vlabel)
     hit = [src["authors"][norm(a)] for a in meta["authors"] if norm(a) in src["authors"]]
@@ -121,7 +142,9 @@ def card_slot(papers_dir="papers"):
         t = open(f, encoding="utf-8").read()
         m = re.search(r'<span class="chip">\s*<span class="t-en">(.*?)</span>', t, re.S)
         first = (m.group(1) if m else "").split("·")[0].lower()
-        kinds.append("P1" if "alignment" in first else "P2" if "video" in first else "legacy")
+        # P1 prefix: "Compressed Reasoning" (from 2026-10-16); older P1 cards used "Small–Large Alignment"
+        kinds.append("P1" if ("alignment" in first or "compressed reasoning" in first)
+                     else "P2" if "video" in first else "legacy")
     last6 = kinds[-6:]
     if len(last6) == 6 and "legacy" not in last6:
         return "legacy", "the last 6 cards were all priority topics"
