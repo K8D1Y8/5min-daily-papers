@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Waypoint-OPD: Transferring RL-Induced Policy Shifts via Gated On-Policy Distillation</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Small–Large Alignment · On-Policy Distillation</span><span class="t-ko">Small–Large Alignment · 온폴리시 증류</span></span>
+      <span>2026.10.16</span>
+    </div>
+    <h1>Waypoint-OPD: Transferring RL-Induced Policy Shifts via Gated On-Policy Distillation<br>
+      <span class="glow t-en">— copy only the parts of a teacher's RL change that kept pointing the same way, using one mid-training checkpoint as a witness</span>
+      <span class="glow t-ko">— 학습 중간 체크포인트 하나를 증인 삼아, 교사의 RL 변화 가운데 끝까지 같은 방향을 가리킨 부분만 옮긴다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge lab">🏛 Alibaba Cloud</span>
+      <span class="badge hot">▲ 181 HF</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Bingxi Hou</b>, Guochao Jiang, Guofeng Quan, Weiqing Li, Wenfeng Feng, Guohua Liu, Yuewei Zhang <span class="t-en">(corresponding: Guochao Jiang, Yuewei Zhang)</span><span class="t-ko">(교신: Guochao Jiang, Yuewei Zhang)</span></span>
+      <span>🏛 Alibaba Cloud Computing</span>
+      <span>🗓 2026-10-15</span>
+      <span>📄 <a href="https://arxiv.org/abs/2610.21601">arXiv:2610.21601</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Direct-OPD transfers a teacher's RL gain as log π<sub>after</sub> − log π<sub>before</sub> on student rollouts, but that endpoint shift hides whether the change was consistent.</span><span class="t-ko">Direct-OPD는 교사가 RL로 얻은 변화를 학생 답안 위의 log π<sub>후</sub> − log π<sub>전</sub>으로 옮기지만, 이 끝점 차이만으로는 변화가 일관됐는지 알 수 없다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">The same endpoint can come from early and late changes that agree or partly cancel; endpoint-only transfer treats them identically.</span><span class="t-ko">같은 끝점 차이라도 초반 변화와 후반 변화가 같은 방향이었을 수도, 서로 일부 상쇄했을 수도 있다. 끝점만 쓰는 전이는 둘을 구분하지 못한다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Score the student's top-16 tokens with the teacher's start, mid-RL, and final checkpoints, and scale the endpoint shift by the positive cosine between the early and late shifts.</b> Reversals get zero weight.</span><span class="t-ko"><b>학생의 상위 16개 토큰을 교사의 시작, RL 중간, 최종 체크포인트로 채점하고, 초반 변화와 후반 변화의 양의 코사인으로 끝점 변화를 조절한다.</b> 방향이 뒤집힌 곳은 가중치가 0이 된다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">From a Qwen3-4B teacher to 8B/14B/30B-A3B students: best average in all 6 math and code settings, +1.2 to +2.7 pp over Direct-OPD.</span><span class="t-ko">Qwen3-4B 교사에서 8B/14B/30B-A3B 학생으로 옮겼을 때 수학과 코드 6개 설정 모두에서 평균 1위이고, Direct-OPD보다 1.2~2.7%p 높다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Imagine copying a coach's playbook changes over a season. Comparing only the <b>first and last versions</b>, you can't tell whether a play was improved steadily or <b>flipped back and forth</b>. Pull out the <b>mid-season version</b> as well: keep the changes that moved the same way twice, and ignore the ones that reversed.</p>
+    <p class="t-ko">한 시즌 동안 바뀐 코치의 작전집을 베낀다고 해 보자. <b>처음과 마지막 판</b>만 비교하면 어떤 작전이 꾸준히 다듬어졌는지, <b>이리저리 뒤집혔는지</b> 알 수 없다. 그래서 <b>시즌 중간 판</b>도 꺼내 본다. 두 번 다 같은 쪽으로 바뀐 것만 따르고, 도중에 방향이 뒤집힌 것은 무시한다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: three teacher snapshots, one gate</span><span class="t-ko">작동 방식은 교사 스냅숏 셋과 게이트 하나</span></h2>
+    <p class="vlead t-en"><b>The Waypoint only decides how much to trust each local shift; the thing transferred is still the start-to-end change.</b> It costs one extra frozen scoring pass.</p>
+    <p class="vlead t-ko"><b>중간 체크포인트는 각 지점의 변화를 얼마나 믿을지만 정하고, 옮기는 대상은 여전히 처음에서 끝까지의 변화다.</b> 추가 비용은 고정된 교사로 한 번 더 채점하는 것뿐이다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2610.21601/waypoint_overview.svg" target="_blank"><img src="fig/2610.21601/waypoint_overview.svg" alt="Four-stage pipeline: student rollout with top-k candidates; frozen Initial, Waypoint, Final teachers give centered early, late and total shifts; agreement gate keeps aligned and suppresses reversing shifts, scaled per batch; student updated with dual-clipped PPO"></a>
+      <figcaption class="t-en"><b>Figure 2.</b> Rollout and top-k candidates, centered early and late teacher shifts, agreement gate with batch scaling, then a PPO-style student update.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> 롤아웃과 상위 k개 후보, 중심화한 초반·후반 교사 변화, 배치 스케일링을 곁들인 일치 게이트, 그리고 PPO 방식의 학생 업데이트.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2610.21601</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Keep three checkpoints.</span><span class="t-ko">체크포인트 세 개를 남긴다.</span></b><span class="t-en">From one Qwen3-4B RL run: before RL, step 600, and step 1200.</span><span class="t-ko">Qwen3-4B의 한 RL 실행에서 RL 전, 600단계, 1200단계를 쓴다.</span></li>
+      <li><b><span class="t-en">Compare shifts on student tokens.</span><span class="t-ko">학생 토큰 위에서 변화를 비교한다.</span></b><span class="t-en">Center early and late log-prob shifts over the student's top-16, weighted by student probability.</span><span class="t-ko">학생 확률로 가중한 상위 16개 후보에서 초반·후반 로그확률 변화를 중심화한다.</span></li>
+      <li><b><span class="t-en">Gate, rescale, update.</span><span class="t-ko">게이트를 걸고, 크기를 맞추고, 업데이트한다.</span></b><span class="t-en">Gate = max(0, cosine); rescale per batch; train with dual-clipped PPO plus KL to the initial student.</span><span class="t-ko">게이트는 max(0, 코사인)이고, 배치마다 크기를 맞춘 뒤, 처음 학생과의 KL을 더한 이중 클리핑 PPO로 학습한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key evidence: the gate must match its own prefix</span><span class="t-ko">핵심 근거는 게이트가 자기 위치에 맞아야 한다는 것</span></h2>
+    <p class="vlead t-en"><b>Shuffling gates across prefixes is worse than having no gate at all.</b> So the gain comes from where the agreement is measured, not from the gate's overall scale.</p>
+    <p class="vlead t-ko"><b>게이트를 다른 위치와 뒤섞으면 아예 게이트가 없는 것보다 나쁘다.</b> 그러니 이득은 게이트의 전체 크기가 아니라 일치도를 어디서 쟀는지에서 나온다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Ablation: Qwen3-8B math average</span><span class="t-ko">소거 실험: Qwen3-8B 수학 평균</span></div>
+      <div class="cs"><span class="t-en">Table 3 · mean@32 over 7 benchmarks · % · line = Final 4B teacher (56.13) · higher is better</span><span class="t-ko">Table 3 · 벤치마크 7개 mean@32 · % · 세로선 = 최종 4B 교사 (56.13) · 높을수록 좋음</span></div>
+      <div class="bars" style="--x:93.55%">
+        <div class="bar" title="shuffled gate: 51.20"><span class="bl">shuffled gate</span><span class="bt"><span class="bf" style="--w:85.33%"></span></span><span class="bv">51.20</span></div>
+        <div class="bar" title="no gate: 53.50"><span class="bl">no gate</span><span class="bt"><span class="bf" style="--w:89.17%"></span></span><span class="bv">53.50</span></div>
+        <div class="bar" title="Direct-OPD: 53.96"><span class="bl">Direct-OPD</span><span class="bt"><span class="bf" style="--w:89.93%"></span></span><span class="bv">53.96</span></div>
+        <div class="bar" title="no normalization: 55.22"><span class="bl">no normalization</span><span class="bt"><span class="bf" style="--w:92.03%"></span></span><span class="bv">55.22</span></div>
+        <div class="bar hl" title="Waypoint-OPD: 56.14"><span class="bl">Waypoint-OPD</span><span class="bt"><span class="bf" style="--w:93.57%"></span></span><span class="bv">56.14</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–60. Gaps are a few points, so the bars sit close together.</figcaption>
+      <figcaption class="t-ko">축 0–60. 차이가 몇 점 수준이라 막대 길이가 서로 비슷하다.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: students pass their smaller teacher</span><span class="t-ko">학생이 더 작은 교사를 넘어선다</span></h2>
+    <p class="vlead t-en"><b>Waypoint-OPD tops every student size, and the 14B student beats its 4B teacher on all seven math benchmarks.</b> It transfers the change, not the teacher's absolute level.</p>
+    <p class="vlead t-ko"><b>Waypoint-OPD는 모든 학생 크기에서 1위이고, 14B 학생은 수학 벤치마크 7개 모두에서 4B 교사를 넘는다.</b> 교사의 절대 수준이 아니라 변화를 옮기기 때문이다.</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1.</b> Math average, mean@32 over 7 benchmarks (%). Final Qwen3-4B teacher: 56.13. Higher is better.</caption>
+        <caption class="t-ko"><b>Table 1.</b> 수학 평균, 벤치마크 7개 mean@32 (%). 최종 Qwen3-4B 교사는 56.13. 높을수록 좋음.</caption>
+        <thead><tr><th>Method</th><th>Qwen3-8B</th><th>Qwen3-14B</th><th>Qwen3-30B-A3B</th></tr></thead>
+        <tbody>
+          <tr><td>Base student</td><td>26.04</td><td>27.32</td><td>28.03</td></tr>
+          <tr><td>OPD (imitate Final)</td><td>51.04</td><td>56.17</td><td>51.22</td></tr>
+          <tr><td>OPD²</td><td>51.46</td><td>52.83</td><td>52.68</td></tr>
+          <tr><td>Direct-OPD</td><td>53.96</td><td>57.61</td><td>55.96</td></tr>
+          <tr><td>Waypoint-OPD</td><td class="up">56.14</td><td class="up">59.20</td><td class="up">57.85</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">+2.18 pp</div><div class="l"><span class="t-en">math over Direct-OPD, Qwen3-8B</span><span class="t-ko">Qwen3-8B 수학, Direct-OPD 대비</span></div></div>
+      <div class="stat"><div class="n">19 / 21</div><div class="l"><span class="t-en">math benchmark comparisons improved</span><span class="t-ko">수학 벤치마크 비교 중 향상한 수</span></div></div>
+      <div class="stat"><div class="n">+1</div><div class="l"><span class="t-en">extra frozen-teacher scoring pass</span><span class="t-ko">추가로 필요한 고정 교사 채점 횟수</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">If you distill from an RL run, keep one intermediate checkpoint. Agreement between early and late changes is a cheap, verifier-free signal for which token-level updates are worth copying.</span><span class="t-ko">RL 실행에서 증류한다면 중간 체크포인트를 하나 남겨 두자. 초반 변화와 후반 변화의 일치도는 어떤 토큰 단위 변화를 옮길 가치가 있는지 알려 주는, 검증기 없이 얻는 값싼 신호다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">Student checkpoints are selected on AIME 2024, which is also one of the seven reported benchmarks, and results come from one teacher run with no reported seed repeats. All students are larger Qwen3 models, so this is weak-to-strong transfer, not compressing into a small student.</span><span class="t-ko">학생 체크포인트를 AIME 2024로 골랐는데, 이는 보고한 벤치마크 7개 중 하나이기도 하다. 결과는 교사 RL 실행 하나에서 나왔고 시드 반복도 보고하지 않았다. 학생이 모두 교사보다 큰 Qwen3 모델이라, 작은 학생으로 압축하는 문제가 아니라 약한 모델에서 강한 모델로 옮기는 문제다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2610.21601">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2610.21601">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2610.21601">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2610.21601">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>P1 slot · wishlist exhausted · HF ▲181 (very hot) · score 6 (P1 +3, hot +3), tie with a Keutzer continual-learning paper broken by heat</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-10-16.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P1 슬롯 · 위시리스트 소진 · HF ▲181 (매우 화제) · 점수 6 (P1 +3, 화제성 +3), Keutzer 연구실의 지속 학습 논문과 동점을 화제성으로 가림</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-10-16.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
