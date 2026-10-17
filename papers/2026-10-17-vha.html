@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Virtual Head Attention</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Model Compression · KV Cache · Attention Design</span><span class="t-ko">Model Compression · KV 캐시 · 어텐션 설계</span></span>
+      <span>2026.10.17</span>
+    </div>
+    <h1>Virtual Head Attention<br>
+      <span class="glow t-en">— train with two extra linear maps, fold them away at inference, and get a plain GQA-2 that beats GQA-8 with a quarter of the KV cache</span>
+      <span class="glow t-ko">— 학습 때만 선형 변환 두 개를 붙였다가 추론 때 접어 넣으면, KV 캐시 4분의 1로 GQA-8을 이기는 평범한 GQA-2가 된다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge venue">NeurIPS'26</span>
+      <span class="badge lab">🏛 Baidu · PaddlePaddle</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Xibo Ding</b>, Guoxia Wang, Jinle Zeng, Jiabin Yang, Sirui Tao, Chao Yang, Dianhai Yu <span class="t-en">(equal contribution: Xibo Ding, Guoxia Wang · corresponding: Dianhai Yu)</span><span class="t-ko">(공동 1저자: Xibo Ding, Guoxia Wang · 교신: Dianhai Yu)</span></span>
+      <span>🏛 Baidu Inc. · Peking University</span>
+      <span>🗓 2026-10-13</span>
+      <span>📄 <a href="https://arxiv.org/abs/2610.17959">arXiv:2610.17959</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Attention design trades off KV cache, training FLOPs, and quality: GQA-8 has a big cache, MLA loses quality, MFA adds about 50% FLOPs.</span><span class="t-ko">어텐션 설계는 KV 캐시, 학습 FLOPs, 품질 사이에서 하나를 포기해야 한다. GQA-8은 캐시가 크고, MLA는 품질이 떨어지며, MFA는 FLOPs가 약 50% 늘어난다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Shrinking GQA to 2 KV heads and half the query heads costs 1.71 points at 1.7B, because too many queries share too little.</span><span class="t-ko">GQA를 KV 헤드 2개와 쿼리 헤드 절반으로 줄이면 1.7B에서 1.71점이 떨어진다. 너무 많은 쿼리가 너무 적은 KV를 나눠 쓰기 때문이다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Premix turns each query into per-group virtual heads with a near-identity matrix; Postmix mixes head outputs through a low-rank I + AB<sup>T</sup>.</b> Both are linear, so they fold into W<sub>Q</sub> and W<sub>O</sub>.</span><span class="t-ko"><b>Premix는 항등에 가까운 행렬로 각 쿼리를 그룹별 가상 헤드로 늘리고, Postmix는 저랭크 I + AB<sup>T</sup>로 헤드 출력을 섞는다.</b> 둘 다 선형이라 W<sub>Q</sub>와 W<sub>O</sub>에 접혀 들어간다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">1.7B: 54.50 vs GQA-8 54.09 at 4× less cache and 7.9% fewer FLOPs; 30B-A3B: 50.36 vs MLA 49.66; RULER 8K–128K: 84.4 vs 73.0.</span><span class="t-ko">1.7B에서 캐시는 4배 작고 FLOPs는 7.9% 적은데 54.50으로 GQA-8의 54.09를 넘는다. 30B-A3B에서는 50.36으로 MLA 49.66을 앞서고, RULER 8K–128K 평균은 84.4 대 73.0이다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Picture a library with only <b>two reference desks</b> instead of eight. Readers would all ask the same questions, so each reader gets <b>a slightly different lens</b> before walking up, and afterward the readers <b>quickly compare notes</b>. On opening day the lenses and the note sharing are <b>built into the readers themselves</b>, so the library runs exactly like any two-desk library.</p>
+    <p class="t-ko">안내 데스크가 여덟 개가 아니라 <b>두 개뿐인 도서관</b>을 떠올려 보자. 그대로면 이용자들이 모두 같은 질문만 하게 되니, 데스크에 가기 전에 각자 <b>조금씩 다른 렌즈</b>를 끼고, 다녀온 뒤에는 <b>메모를 잠깐 맞춰 본다</b>. 정식 개관 날에는 렌즈와 메모 교환이 <b>이용자 몸에 아예 배어 있어서</b>, 도서관은 평범한 데스크 두 개짜리 도서관과 똑같이 돌아간다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: richer training, plain inference</span><span class="t-ko">작동 방식은 풍부한 학습, 평범한 추론</span></h2>
+    <p class="vlead t-en"><b>Premix sits on the query path and Postmix on the output path; neither touches K or V.</b> So the cache is exactly that of 2 KV heads.</p>
+    <p class="vlead t-ko"><b>Premix는 쿼리 경로에, Postmix는 출력 경로에 있고 둘 다 K와 V는 건드리지 않는다.</b> 그래서 캐시는 정확히 KV 헤드 2개 분량이다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2610.17959/VHAall.svg" target="_blank"><img src="fig/2610.17959/VHAall.svg" alt="VHA architecture with Premix after W_Q and low-rank Postmix before W_O, an impossible-triangle sketch of KV cache, FLOPs and quality, and bubble plots of KV cache versus training FLOPs at 1.7B and 4B"></a>
+      <figcaption class="t-en"><b>Figure 1.</b> (a) Premix after W<sub>Q</sub>, low-rank Postmix before W<sub>O</sub>. (b) The cache–FLOPs–quality triangle. (c) KV cache vs. training FLOPs, bubble = accuracy.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> (a) W<sub>Q</sub> 뒤의 Premix와 W<sub>O</sub> 앞의 저랭크 Postmix. (b) 캐시–FLOPs–품질 삼각형. (c) KV 캐시 대 학습 FLOPs, 원 크기는 정확도.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2610.17959</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Halve queries, keep 2 KV heads.</span><span class="t-ko">쿼리는 절반, KV 헤드는 2개.</span></b><span class="t-en">At 1.7B the shape goes from 16-8-8 to 8-2-2, 1 KB of cache per layer per token.</span><span class="t-ko">1.7B에서는 16-8-8 구성이 8-2-2가 되고, 캐시는 층당 토큰당 1 KB다.</span></li>
+      <li><b><span class="t-en">Premix makes virtual heads.</span><span class="t-ko">Premix로 가상 헤드를 만든다.</span></b><span class="t-en">One d×d matrix per KV group, initialized near identity, gives each group its own query view.</span><span class="t-ko">KV 그룹마다 항등 근처에서 시작하는 d×d 행렬 하나가 그룹별로 다른 쿼리 시각을 준다.</span></li>
+      <li><b><span class="t-en">Postmix, then fold.</span><span class="t-ko">Postmix 후 접어 넣기.</span></b><span class="t-en">A rank-4 head mixer starts at zero; after training both maps merge into the weights.</span><span class="t-ko">0에서 시작하는 rank-4 헤드 혼합기를 거치고, 학습이 끝나면 두 변환 모두 가중치에 합쳐진다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key point: smallest cache without the FLOPs bill</span><span class="t-ko">핵심은 FLOPs 대가 없이 가장 작은 캐시</span></h2>
+    <p class="vlead t-en"><b>VHA ties MFA for the smallest cache, and among small-cache designs only it cuts training FLOPs at every scale.</b> Halving the query projection pays for both add-ons.</p>
+    <p class="vlead t-ko"><b>VHA는 캐시가 MFA와 함께 가장 작고, 캐시가 작은 설계 중 모든 규모에서 학습 FLOPs를 줄이는 것은 VHA뿐이다.</b> 쿼리 투영을 절반으로 줄인 몫으로 두 장치의 비용을 치르기 때문이다.</p>
+    <div class="vgrid">
+      <figure class="chart">
+        <div class="ct"><span class="t-en">KV cache per layer per token, 1.7B</span><span class="t-ko">층당 토큰당 KV 캐시, 1.7B</span></div>
+        <div class="cs"><span class="t-en">Table 1 · KB in BF16 · lower is better</span><span class="t-ko">Table 1 · BF16 기준 KB · 낮을수록 좋음</span></div>
+        <div class="bars">
+          <div class="bar" title="MHA: 6.00 KB"><span class="bl">MHA</span><span class="bt"><span class="bf" style="--w:100%"></span></span><span class="bv">6.00</span></div>
+          <div class="bar" title="GQA-8: 4.00 KB"><span class="bl">GQA-8</span><span class="bt"><span class="bf" style="--w:66.7%"></span></span><span class="bv">4.00</span></div>
+          <div class="bar" title="MLA: 1.12 KB"><span class="bl">MLA</span><span class="bt"><span class="bf" style="--w:18.7%"></span></span><span class="bv">1.12</span></div>
+          <div class="bar" title="MFA: 1.00 KB"><span class="bl">MFA</span><span class="bt"><span class="bf" style="--w:16.7%"></span></span><span class="bv">1.00</span></div>
+          <div class="bar hl" title="VHA: 1.00 KB"><span class="bl">VHA</span><span class="bt"><span class="bf" style="--w:16.7%"></span></span><span class="bv">1.00</span></div>
+        </div>
+        <figcaption class="t-en">Axis 0–6 KB.</figcaption>
+        <figcaption class="t-ko">축 0–6 KB.</figcaption>
+      </figure>
+      <figure class="chart">
+        <div class="ct"><span class="t-en">Training FLOPs per token, 1.7B, S = 4096</span><span class="t-ko">토큰당 학습 FLOPs, 1.7B, S = 4096</span></div>
+        <div class="cs"><span class="t-en">Table 5 · GFLOPs · lower is better</span><span class="t-ko">Table 5 · GFLOPs · 낮을수록 좋음</span></div>
+        <div class="bars">
+          <div class="bar" title="MFA: 15.90"><span class="bl">MFA</span><span class="bt"><span class="bf" style="--w:99.4%"></span></span><span class="bv">15.90</span></div>
+          <div class="bar" title="GQA-8: 10.61"><span class="bl">GQA-8</span><span class="bt"><span class="bf" style="--w:66.3%"></span></span><span class="bv">10.61</span></div>
+          <div class="bar" title="MLA: 10.42"><span class="bl">MLA</span><span class="bt"><span class="bf" style="--w:65.1%"></span></span><span class="bv">10.42</span></div>
+          <div class="bar hl" title="VHA: 9.78"><span class="bl">VHA</span><span class="bt"><span class="bf" style="--w:61.1%"></span></span><span class="bv">9.78</span></div>
+        </div>
+        <figcaption class="t-en">Axis 0–16 G.</figcaption>
+        <figcaption class="t-ko">축 0–16 G.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: the compressed shape becomes the winner</span><span class="t-ko">압축한 구성이 오히려 1등이 된다</span></h2>
+    <p class="vlead t-en"><b>The same 8-2-2 shape goes from 1.71 points below GQA-8 to 0.41 above once Premix and Postmix are added.</b> Neither module alone gets there.</p>
+    <p class="vlead t-ko"><b>같은 8-2-2 구성이 Premix와 Postmix를 더하면 GQA-8보다 1.71점 낮던 데서 0.41점 높아진다.</b> 둘 중 하나만으로는 그만큼 오르지 못한다.</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Tables 2 and 4.</b> 1.7B, 50B tokens, mean zero-shot accuracy over 8 benchmarks (%). Higher is better.</caption>
+        <caption class="t-ko"><b>Table 2, 4.</b> 1.7B, 50B 토큰, 벤치마크 8개 zero-shot 평균 정확도(%). 높을수록 좋음.</caption>
+        <thead><tr><th>Config (Q-K-V)</th><th>KV cache</th><th>Avg</th><th>vs GQA-8</th></tr></thead>
+        <tbody>
+          <tr><td>GQA 16-8-8</td><td>4.00</td><td>54.09</td><td>—</td></tr>
+          <tr><td>GQA 16-2-2</td><td>1.00</td><td>53.09</td><td>−1.00</td></tr>
+          <tr><td>GQA 8-2-2</td><td>1.00</td><td>52.38</td><td>−1.71</td></tr>
+          <tr><td>8-2-2 + Premix only</td><td>1.00</td><td>53.31</td><td>−0.78</td></tr>
+          <tr><td>8-2-2 + Postmix only</td><td>1.00</td><td>53.95</td><td>−0.14</td></tr>
+          <tr><td>VHA 8-2-2</td><td>1.00</td><td class="up">54.50</td><td class="up">+0.41</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">4×</div><div class="l"><span class="t-en">smaller KV cache than GQA-8 (dense)</span><span class="t-ko">GQA-8 대비 KV 캐시 축소 (dense)</span></div></div>
+      <div class="stat"><div class="n">−7.9%</div><div class="l"><span class="t-en">training and prefill FLOPs at 1.7B</span><span class="t-ko">1.7B 학습·프리필 FLOPs</span></div></div>
+      <div class="stat"><div class="n">84.4</div><div class="l"><span class="t-en">RULER 8K–128K avg (GQA 73.0)</span><span class="t-ko">RULER 8K–128K 평균 (GQA 73.0)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">When a compressed shape loses quality, try training-only linear reparameterizations that fold back into it. You keep every existing GQA kernel in vLLM and SGLang and pay nothing at inference.</span><span class="t-ko">압축한 구성이 품질을 잃는다면, 학습 때만 쓰고 그 구성으로 다시 접히는 선형 재매개변수화를 시도해 보자. vLLM과 SGLang의 기존 GQA 커널을 그대로 쓰면서 추론 비용은 전혀 늘지 않는다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">Small-scale gains are +0.05 to +0.81 on zero-shot multiple choice, near run-to-run noise at some scales. The 30B and 128K results are single industrial runs, and decoding speedup is argued, not measured.</span><span class="t-ko">작은 규모의 향상은 zero-shot 객관식에서 +0.05~+0.81점으로, 일부 규모에서는 실행 간 편차와 비슷하다. 30B와 128K 결과는 사내 실행 한 번씩이고, 디코딩 가속은 이론으로 주장할 뿐 측정하지 않았다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2610.17959">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2610.17959">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2610.17959">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2610.17959">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>legacy slot (7th card) · KV-cache compression axis · NeurIPS main track · score 3 (venue +3), tie with DropKV broken by heat (HF ▲8)</b> · venue: NeurIPS 2026.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-10-17.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>legacy 슬롯 (7번째 카드) · KV 캐시 압축 축 · NeurIPS 메인 트랙 · 점수 3 (학회 +3), DropKV와 동점을 화제성(HF ▲8)으로 가림</b> · venue: NeurIPS 2026.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-10-17.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
