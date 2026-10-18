@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Speculative Forcing for Efficient Autoregressive Video Generation</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Video & World Generation · Adaptive Denoising</span><span class="t-ko">Video & World Generation · 적응형 디노이징</span></span>
+      <span>2026.10.18</span>
+    </div>
+    <h1>Speculative Forcing for Efficient Autoregressive Video Generation<br>
+      <span class="glow t-en">— stop denoising each token the moment its draft has settled, and a 4-step video model runs at about 1.7 steps</span>
+      <span class="glow t-ko">— 토큰마다 초안이 자리를 잡는 순간 디노이징을 멈추면, 4단계 비디오 모델이 약 1.7단계로 돌아간다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge lab">🏛 NAVER AI Lab · KAIST AI</span>
+      <span class="badge hot">▲ 78 HF</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Hyunwook Choi</b>, Seungryong Kim, Dongyoon Han, Sangdoo Yun <span class="t-en">(corresponding: Dongyoon Han, Sangdoo Yun)</span><span class="t-ko">(교신: Dongyoon Han, Sangdoo Yun)</span></span>
+      <span>🏛 KAIST AI · NAVER AI Lab</span>
+      <span>🗓 2026-10-15</span>
+      <span>📄 <a href="https://arxiv.org/abs/2610.22347">arXiv:2610.22347</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Few-step autoregressive video generators push every token through all four denoising steps, even tokens that barely change.</span><span class="t-ko">소수 단계 자기회귀 비디오 생성기는 거의 변하지 않는 토큰까지 포함해 모든 토큰을 디노이징 4단계 끝까지 돌린다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Regions that repeat earlier content already match the final output after one step; newly revealed regions keep changing to the end.</span><span class="t-ko">앞서 나온 내용을 되풀이하는 영역은 한 단계만에 최종 출력과 거의 같아지고, 새로 드러난 영역은 끝까지 계속 바뀐다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Treat each step's clean estimate as a draft; a verifier accepts tokens whose draft is close to the full-step result, freezing them while keeping their KV for the rest.</b> Like speculative decoding, per token.</span><span class="t-ko"><b>단계마다 나오는 깨끗한 추정을 초안으로 보고, 검증기가 최종 결과에 가까운 토큰을 받아들여 고정하되 그 KV는 나머지 토큰을 위해 남긴다.</b> 토큰 단위로 하는 추측 디코딩과 비슷하다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">LongLive: 1.68 steps per token, 41.7 vs 26.4 fps, VBench 83.21 vs 83.08. Lingbot-World 2.0: 2.55 steps, 24.5 vs 18.1 fps, same quality.</span><span class="t-ko">LongLive는 토큰당 1.68단계로 41.7 대 26.4 fps, VBench 83.21 대 83.08이다. Lingbot-World 2.0은 2.55단계로 24.5 대 18.1 fps이며 품질은 같다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Think of a painter retouching a scene in four passes. The sky that looks the same as the last frame is <b>done after the first pass</b>, while a face that just turned toward the camera needs <b>all four</b>. Speculative Forcing has an assistant <b>check each patch after every pass</b> and lift the brush from the finished ones, while those patches still serve as reference for the rest.</p>
+    <p class="t-ko">한 장면을 네 번에 걸쳐 덧칠하는 화가를 떠올려 보자. 지난 프레임과 똑같아 보이는 하늘은 <b>첫 번째 덧칠로 끝나지만</b>, 방금 카메라 쪽으로 돌아선 얼굴은 <b>네 번 모두</b> 필요하다. Speculative Forcing은 조수가 <b>덧칠할 때마다 조각별로 확인</b>해 다 된 곳에서는 붓을 떼게 하고, 그 조각은 나머지를 칠할 때 참고로 계속 쓴다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: draft, verify, commit</span><span class="t-ko">작동 방식은 초안, 검증, 확정</span></h2>
+    <p class="vlead t-en"><b>Accepted tokens drop out of the next denoising pass but stay visible as keys and values.</b> So each later pass costs only the rejected tokens.</p>
+    <p class="vlead t-ko"><b>받아들여진 토큰은 다음 디노이징 계산에서 빠지지만 키와 값으로는 계속 보인다.</b> 그래서 이후 단계는 거절된 토큰만큼만 계산한다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2610.22347/method_final.svg" target="_blank"><img src="fig/2610.22347/method_final.svg" alt="Baseline runs every token through four denoise steps; Speculative Forcing inserts a verifier after each step that accepts converged tokens and denoises only the rejected ones, using accepted tokens' keys and values as context"></a>
+      <figcaption class="t-en"><b>Figure 3.</b> (a) Baseline denoises every token four times. (b) After each step a verifier predicts the gap to the full-step output and accepts tokens under ε.</figcaption>
+      <figcaption class="t-ko"><b>Figure 3.</b> (a) 기존 방식은 모든 토큰을 네 번 디노이즈한다. (b) 단계마다 검증기가 최종 출력과의 차이를 예측해 ε 이하인 토큰을 받아들인다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2610.22347</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Step 1: compare with clean history.</span><span class="t-ko">1단계에서는 깨끗한 이력과 비교한다.</span></b><span class="t-en">A draft close to any earlier clean token, anywhere in the window, is accepted at once.</span><span class="t-ko">윈도 안 어디든 이전의 깨끗한 토큰과 가까운 초안은 바로 받아들인다.</span></li>
+      <li><b><span class="t-en">Later steps: check stability or ask the head.</span><span class="t-ko">이후 단계에서는 안정성을 보거나 헤드에 묻는다.</span></b><span class="t-en">Training-free: little change between drafts. Learned: a 3-layer 3D conv predicts the remaining gap.</span><span class="t-ko">학습이 필요 없는 방식은 초안 사이 변화가 작은지 보고, 학습 방식은 3층 3D 합성곱이 남은 차이를 예측한다.</span></li>
+      <li><b><span class="t-en">Smooth, then commit.</span><span class="t-ko">부드럽게 맞춘 뒤 확정한다.</span></b><span class="t-en">Scores are smoothed across neighbors so decisions stay coherent; the generator itself is never retrained.</span><span class="t-ko">이웃 토큰끼리 점수를 부드럽게 맞춰 판단이 들쭉날쭉하지 않게 하고, 생성기 자체는 다시 학습하지 않는다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key point: decide per token, not per chunk</span><span class="t-ko">핵심은 청크가 아니라 토큰 단위로 판단하는 것</span></h2>
+    <p class="vlead t-en"><b>At the same average step budget, token-wise acceptance drifts less than full 4-step sampling, while chunk-wise and heuristic signals drift more.</b> Settled tokens stop accumulating small errors.</p>
+    <p class="vlead t-ko"><b>평균 단계 수가 같을 때 토큰 단위 승인은 4단계 전체 샘플링보다도 드리프트가 적고, 청크 단위나 휴리스틱 신호는 더 크다.</b> 이미 자리 잡은 토큰에는 작은 오차가 더 쌓이지 않기 때문이다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Quality drift on Lingbot-World 2.0 rollouts</span><span class="t-ko">Lingbot-World 2.0 롤아웃의 품질 드리프트</span></div>
+      <div class="cs"><span class="t-en">Table 5 · Drift (variation of imaging quality across segments) · all adaptive methods at about 2.6 steps · lower is better</span><span class="t-ko">Table 5 · Drift (구간별 영상 품질의 변동) · 적응형 방법은 모두 약 2.6단계 · 낮을수록 좋음</span></div>
+      <div class="bars">
+        <div class="bar" title="channel variance: 4.996"><span class="bl">channel variance</span><span class="bt"><span class="bf" style="--w:99.9%"></span></span><span class="bv">4.996</span></div>
+        <div class="bar" title="temporal difference: 4.116"><span class="bl">temporal diff</span><span class="bt"><span class="bf" style="--w:82.3%"></span></span><span class="bv">4.116</span></div>
+        <div class="bar" title="chunk-wise acceptance: 3.214"><span class="bl">chunk-wise</span><span class="bt"><span class="bf" style="--w:64.3%"></span></span><span class="bv">3.214</span></div>
+        <div class="bar" title="uniform 4-step: 3.094"><span class="bl">uniform 4-step</span><span class="bt"><span class="bf" style="--w:61.9%"></span></span><span class="bv">3.094</span></div>
+        <div class="bar hl" title="token-wise, learned head: 2.839"><span class="bl">token-wise (head)</span><span class="bt"><span class="bf" style="--w:56.8%"></span></span><span class="bv">2.839</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–5. An oracle that runs all steps to measure the true gap reaches 2.903.</figcaption>
+      <figcaption class="t-ko">축 0–5. 모든 단계를 돌려 실제 차이를 재는 오라클은 2.903이다.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: four-step quality at two-step speed</span><span class="t-ko">2단계 속도로 4단계 품질</span></h2>
+    <p class="vlead t-en"><b>Uniform 2-step is as fast but loses 0.6 VBench points; Speculative Forcing keeps the 4-step score.</b> It spends the saved steps only where tokens still move.</p>
+    <p class="vlead t-ko"><b>일괄 2단계도 속도는 비슷하지만 VBench가 0.6점 떨어지고, Speculative Forcing은 4단계 점수를 지킨다.</b> 아낀 단계를 아직 움직이는 토큰에만 쓰기 때문이다.</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1.</b> LongLive 1.3B, 5-second videos, VBench 16 dimensions, one H100. Higher is better except mean steps.</caption>
+        <caption class="t-ko"><b>Table 1.</b> LongLive 1.3B, 5초 영상, VBench 16개 항목, H100 한 장. 평균 단계 수 외에는 높을수록 좋음.</caption>
+        <thead><tr><th>Sampler</th><th>Mean steps</th><th>FPS</th><th>VBench Total</th></tr></thead>
+        <tbody>
+          <tr><td>Uniform 1-step</td><td>1.00</td><td>67.97</td><td>79.06</td></tr>
+          <tr><td>Uniform 2-step</td><td>2.00</td><td>44.54</td><td>82.46</td></tr>
+          <tr><td>Uniform 4-step</td><td>4.00</td><td>26.40</td><td>83.08</td></tr>
+          <tr><td>Speculative Forcing, training-free</td><td>1.65</td><td>43.61</td><td>83.12</td></tr>
+          <tr><td>Speculative Forcing, learned head</td><td>1.68</td><td>41.74</td><td class="up">83.21</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">1.68</div><div class="l"><span class="t-en">denoising steps per token, down from 4</span><span class="t-ko">토큰당 디노이징 단계 수, 4에서 감소</span></div></div>
+      <div class="stat"><div class="n">1.58×</div><div class="l"><span class="t-en">throughput on LongLive 5 s videos</span><span class="t-ko">LongLive 5초 영상 처리량</span></div></div>
+      <div class="stat"><div class="n">1.35×</div><div class="l"><span class="t-en">throughput on Lingbot-World 2.0</span><span class="t-ko">Lingbot-World 2.0 처리량</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">In a distilled sampler, intermediate clean estimates are already usable outputs, so stopping per token is often safer than skipping whole steps. A tiny head reading frozen features was enough to predict which tokens are done.</span><span class="t-ko">증류된 샘플러에서는 중간 단계의 깨끗한 추정도 이미 쓸 만한 출력이라, 단계를 통째로 건너뛰기보다 토큰마다 멈추는 편이 더 안전한 경우가 많다. 고정된 특징을 읽는 작은 헤드 하나로 어떤 토큰이 끝났는지 충분히 예측할 수 있었다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">Tested on two 1.3B four-step generators with VBench only, and quality gaps are fractions of a point. Thresholds and the head are calibrated per generator and per setting, and wall-clock gains shrink to 1.35× once scenes change quickly.</span><span class="t-ko">시험한 것은 1.3B 크기의 4단계 생성기 두 개이고 평가는 VBench뿐이며, 품질 차이는 1점에도 못 미친다. 임계값과 헤드는 생성기와 설정마다 따로 맞춰야 하고, 장면이 빠르게 바뀌면 실제 속도 향상은 1.35배로 줄어든다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2610.22347">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2610.22347">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2610.22347">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2610.22347">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>P2 slot · wishlist exhausted · HF ▲78 · score 5 (P2 +3, hot +2); top direct efficient-video fit after setting aside the score-6 ATAS and DiffusionART as off-topic</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-10-18.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P2 슬롯 · 위시리스트 소진 · HF ▲78 · 점수 5 (P2 +3, 화제성 +2), 점수 6인 ATAS·DiffusionART는 주제와 맞지 않아 제외한 뒤 효율 비디오에 직접 맞는 후보 중 1위</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-10-18.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
