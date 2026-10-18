@@ -73,6 +73,7 @@ const DATA = {
   areas: [
     { key:'mac', subs:[
       { name:'Latent & KV-Cache Comm', blurb:'Agents exchange hidden states / KV-caches directly, skipping text.', nodes:[
+        ['Swarm Telepathy','method','Prefill-free KV-cache transfer across model families for multi-agent LLMs','2610.15095'],
         ['Cache-to-Cache','method','Projects one LLM KV-cache into another for direct transfer','2510.03215'],
         ['LatentMAS','method','Multi-agent collaboration entirely in shared latent space','2511.20639'],
         ['DroidSpeak','method','KV-cache sharing for cross-LLM communication','2411.02820'],
@@ -172,6 +173,7 @@ const DATA = {
         ['SSDi8','method','Accurate 8-bit post-training quantization for state-space duality (Mamba-2) models','2608.21952'],
         ['MuonSSM','method','Momentum pathway plus Newton-Schulz orthogonalized input injections stabilize SSM memory updates · ICML 2026 Oral','2606.30461'] ]},
       { name:'Linear Attention & Delta Rule', blurb:'Matrix-state attention and delta-rule updates, chunked training.', nodes:[
+        ['Gated Slot Attention-2','method','Two-sided associative-memory correction for the fixed-size state of linear attention','2610.02816'],
         ['GLA','method','Gated linear attention, hardware-efficient chunked training','2312.06635'],
         ['DeltaNet','method','Delta-rule linear transformer parallelized over length','2406.06484'],
         ['Gated DeltaNet','model','Delta rule plus gating improving recall','2412.06464'],
@@ -308,6 +310,7 @@ const DATA = {
         ['Black-box distillation','concept','Learn from teacher text outputs, no logits','2511.10643'],
         ['DistilBERT','model','Classic distilled encoder, 40% smaller','1910.01108'] ]},
       { name:'KV-Cache Compression', blurb:'Shrink the inference KV cache: eviction, quantization, low-rank, sharing.', nodes:[
+        ['Behavior-Preserving KV','method','KV eviction chosen to preserve model behavior instead of proxy importance scores','2610.06479'],
         ['H2O','method','Heavy-hitter token eviction for KV cache','2306.14048'],
         ['StreamingLLM','method','Keep attention-sink tokens for streaming','2309.17453'],
         ['SnapKV','method','Prompt-time KV selection from attention','2404.14469'],
@@ -387,6 +390,7 @@ const DATA = {
         ['Semigroup-JEPA','method','Multi-step latent rollout loss trains the JEPA encoder to keep what the predictor carries forward: dynamics survive unseen gravity','2609.10464'],
         ['H-JEPA','method','Hierarchy of action-conditioned JEPAs, each predicting farther ahead; top-down subgoal planning (Visual AntMaze 18%→73%)','2610.06805'] ]},
       { name:'Multi-Agent World Models', blurb:'Model-based MARL with shared/factored latent dynamics.', nodes:[
+        ['Multics','method','Generative multi-player world model with hierarchical communication between players','2610.17201'],
         ['CoDreamer','method','Decentralized world models with learned comm','2406.13600'],
         ['COMBO','method','Compositional world models for embodied cooperation','2404.10775'],
         ['MATWM','model','Transformer world model for sample-efficient MARL','2506.18537'],
@@ -446,6 +450,10 @@ const DATA = {
         ['Closed-Loop Collapse','concept','A compressed VLA policy passes offline evaluation yet fails in closed-loop execution','2609.23048'],
         ['Calibrated Instrument','benchmark','Calibrated LLM judge with a null condition measures how quantization, early exit and speculative decoding change output quality','2609.18005'] ]},
       { name:'On-policy distillation', blurb:'The student learns the teacher\'s token distribution on its own rollouts, fixing exposure bias.', nodes:[
+        ['Negative-Policy OPD','method','On-policy distillation that also uses negative-policy rollouts for supervision','2610.07874'],
+        ['OPD New Skills','method','On-policy distillation teaches students new compositional skill but not new facts','2610.09639'],
+        ['ActionOPD','method','Distills decisions rather than tokens for small agents: aligns behavior at the action level','2610.19820'],
+        ['GFD-OPD','method','Guidance-folded on-policy distillation of diffusion models across scales (large to small, and expert merging)','2609.39692'],
         ['GKD','method','On-policy distillation: student trains on self-generated sequences with teacher feedback · ICLR 2024','2306.13649'],
         ['MiniLLM','method','Reverse-KL on-policy distillation of LLMs · ICLR 2024','2306.08543'],
         ['Rethinking OPD','concept','Phenomenology, mechanism and recipe of on-policy distillation','2604.13016'],
@@ -476,6 +484,13 @@ const DATA = {
         ['VAT','method','Verification-aware draft training: a head predicts which positions survive verification, and loss weights restart at the first rejection','2608.30135'] ]} ]},
     { key:'video', subs:[
       { name:'AR video diffusion & distillation', blurb:'Turning bidirectional video diffusion into fast causal (autoregressive) generators.', nodes:[
+        ['Speculative Forcing','method','Few-step AR video generators spend the final denoising step on every token; this spends it only where refinement is needed','2610.22347'],
+        ['ForcingBooster','method','Adaptive patch-wise denoising: allocates compute unevenly across patches for faster AR video diffusion','2610.12625'],
+        ['Connected Self Forcing','method','Goes beyond local self-rollout learning in AR video to keep long videos consistent','2610.12156'],
+        ['Glance Forcing','method','Makes a bidirectional video diffusion model autoregressive without the usual distill-to-causal route','2610.20220'],
+        ['RepForcing','method','Representation-space initialization of the AR student before DMD distillation','2610.20111'],
+        ['Adversarial Gradient Forcing','method','Adversarial gradient signal for robust few-step AR video generation on self-rollouts','2610.14553'],
+        ['GFD-OPD','method','Guidance-folded on-policy distillation of diffusion models across scales (large to small, and expert merging)','2609.39692'],
         ['CausVid','method','Distills slow bidirectional video diffusion into fast autoregressive generation · CVPR 2025','2412.07772'],
         ['Self Forcing','method','Trains AR video diffusion on its own rollouts to close the train–test gap · NeurIPS 2025','2506.08009'],
         ['Diffusion Forcing','method','Next-token prediction meets full-sequence diffusion with per-token noise levels','2407.01392'],
@@ -493,6 +508,8 @@ const DATA = {
         ['Radian','method','Adds real-video adversarial loss in frozen vision-foundation-model features on top of on-policy DMD for AR video','2609.40037'],
         ['Diagonal Distillation','method','Distills AR video along a chunk × denoising-step diagonal to use temporal context and curb exposure bias · ICLR 2026','2603.09488'] ]},
       { name:'Attention & cache efficiency', blurb:'Sparse, linear and cached attention for long streaming video.', nodes:[
+        ['TempoKV','method','Predictive KV-cache quantization for AR video generation','2610.15324'],
+        ['FrameFold','method','Response-guided KV cache consolidation for AR long video generation','2610.14568'],
         ['Forcing-KV','method','Hybrid KV cache compression for AR video diffusion','2605.09681'],
         ['Sparse Forcing','method','Native trainable sparse attention for real-time AR video generation','2604.21221'],
         ['Temporal Cache Compression','method','Temporal cache compression + sparse attention for AR video and world models · ICML 2026','2602.01801'],
@@ -507,6 +524,8 @@ const DATA = {
         ['HLA-WM','method','Training-free fix for Gated DeltaNet forgetting in world models: retrieves past chunks by camera geometry and recomposes the state','2610.05739'],
         ['GRACE','method','Frozen-encoder latent of a downsampled video plus a learned residual: 8× fewer Wan2.1 tokens, 11–15× faster, same VBench','2610.10524'] ]},
       { name:'Interactive world models', blurb:'Real-time, controllable, long-horizon world generation.', nodes:[
+        ['World-T3','method','Test-time training as persistent memory for real-time video world models','2610.17434'],
+        ['WorldPlay2','method','Real-time interactive world model extended in control types and horizon','2609.35560'],
         ['WorldKV','method','World memory with retrieval and compression for persistent AR worlds','2605.22718'],
         ['RELIC','model','Interactive video world model with long-horizon memory','2512.04040'],
         ['Wonder','model','Real-time camera-controllable video world model','2607.26037'],
@@ -519,6 +538,13 @@ const DATA = {
         ['ReWorld','model','Mixed local/global attention heads plus a pose-indexed landmark bank keep long-horizon memory under a fixed KV budget','2608.23565'] ]} ]}
   ],
   links: [
+    ['Speculative Forcing','Self Forcing','spends the last denoising step only where a uniform schedule wastes it'],
+    ['GFD-OPD','GKD','on-policy distillation carried from LLMs to diffusion models'],
+    ['ActionOPD','SOD','OPD for small agents, at action/step granularity'],
+    ['TempoKV','QuantWM','KV quantization for AR video / world models'],
+    ['Swarm Telepathy','HeteroFold','cross-family prefill-free KV transfer'],
+    ['Multics','MultiWorld','multi-player/multi-view world models'],
+    ['World-T3','HLA-WM','persistent memory for long-horizon world models'],
     ['Self Forcing','GKD','both train the student on its own rollouts to fix exposure bias'],
     ['Causal Forcing','Self Forcing','AR diffusion distillation recipes'],
     ['CausVid','Self Forcing','bidirectional → autoregressive video'],
