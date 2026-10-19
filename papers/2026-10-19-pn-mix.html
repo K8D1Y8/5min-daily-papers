@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · PN-Mix</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Compressed Reasoning · KV Cache Quantization · Long Output</span><span class="t-ko">Compressed Reasoning · KV 캐시 양자화 · 긴 출력</span></span>
+      <span>2026.10.19</span>
+    </div>
+    <h1>PN-Mix<br>
+      <span class="glow t-en">— give the key channel pairs queries lean on 3 bits, the rest 1 bit, and AIME survives at 2 bits</span>
+      <span class="glow t-ko">— 쿼리가 기대는 키 채널 쌍만 3비트, 나머지는 1비트로 두면 2비트에서도 AIME 점수가 버틴다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge venue">EMNLP'26</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Gil Jae Song</b>, Sungjoo Yoo <span class="t-en">(corresponding: Sungjoo Yoo)</span><span class="t-ko">(교신: Sungjoo Yoo)</span></span>
+      <span>🏛 Seoul National University</span>
+      <span>🗓 2026-10-14</span>
+      <span>📄 <a href="https://arxiv.org/abs/2610.19605">arXiv:2610.19605</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Long chains of thought fill the KV cache, and plain 2-bit key quantization costs Qwen3-8B 12 AIME24 points.</span><span class="t-ko">긴 사고 사슬은 KV 캐시를 가득 채우고, 키를 평범하게 2비트로 양자화하면 Qwen3-8B의 AIME24 점수가 12점 떨어진다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Key error hurts attention in proportion to the query norm times the key norm of each RoPE channel pair, not the key's size alone.</span><span class="t-ko">키 오차가 어텐션을 흔드는 정도는 키 크기만이 아니라 RoPE 채널 쌍마다 쿼리 노름과 키 노름을 곱한 값에 비례한다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Score each channel pair by mean query norm × mean key norm over the prompt, keep the top 40–50% at 3 bits and the rest at 1 bit.</b> The choice is made once at prefill and reused for all decoding.</span><span class="t-ko"><b>프롬프트에서 채널 쌍마다 평균 쿼리 노름과 평균 키 노름을 곱해 점수를 매기고, 상위 40~50%는 3비트, 나머지는 1비트로 둔다.</b> 선택은 프리필에서 한 번만 하고 디코딩 내내 그대로 쓴다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">Top compressed score in 5 of 6 AIME settings with fewer bits; at 1.45 key bits Qwen3-8B keeps 67.7 while baselines hit 0.</span><span class="t-ko">더 적은 비트로 AIME 6개 설정 중 5개에서 압축 방법 중 최고 점수를 낸다. 키 1.45비트에서도 Qwen3-8B가 67.7점을 지키는데 비교 방법은 0점이다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">You must shrink a very long notebook to fit in a pocket. Instead of keeping sharp copies of the pages with the <b>darkest ink</b>, you keep sharp copies of the pages your <b>questions actually point to</b> and blur the rest. You work out which pages those are <b>from the first few pages</b>, and the choice holds to the last line.</p>
+    <p class="t-ko">아주 긴 공책을 주머니에 들어갈 만큼 줄여야 한다고 해 보자. <b>잉크가 진한 페이지</b>를 선명하게 남기는 대신, <b>질문이 실제로 가리키는 페이지</b>를 선명하게 남기고 나머지는 흐리게 줄인다. 어느 페이지인지는 <b>처음 몇 장만 보고</b> 정하는데, 그 선택이 마지막 줄까지 그대로 맞는다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: two bit widths, one mask per head</span><span class="t-ko">작동 방식은 비트 두 종류와 헤드별 마스크 하나</span></h2>
+    <p class="vlead t-en"><b>Only the key cache gets mixed precision; values get ordinary per-token 2-bit quantization.</b> A pilot study showed keys are the sensitive half.</p>
+    <p class="vlead t-ko"><b>혼합 정밀도는 키 캐시에만 쓰고, 값 캐시는 토큰 단위의 평범한 2비트 양자화를 쓴다.</b> 사전 실험에서 키 쪽이 민감하다는 것이 드러났기 때문이다.</p>
+    <figure class="fig narrow">
+      <a class="zoom" href="fig/2610.19605/pnmix_layout.png" target="_blank"><img src="fig/2610.19605/pnmix_layout.png" alt="Per-head key cache layout with FP16 sink and residual blocks around quantized pages, where selected channel pairs are stored in INT3 and the rest in binary with per-channel scale and zero point"></a>
+      <figcaption class="t-en"><b>Figure 1.</b> Sink tokens and the newest tokens stay FP16. In every quantized page the same chosen channel pairs are 3-bit (dark) and the rest 1-bit (light).</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> 싱크 토큰과 가장 최근 토큰은 FP16으로 남는다. 양자화된 모든 페이지에서 같은 채널 쌍이 3비트(진한 색)이고 나머지는 1비트(옅은 색)다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2610.19605</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Score pairs at prefill.</span><span class="t-ko">프리필에서 쌍에 점수 매기기.</span></b><span class="t-en">Average query and key pair norms over prompt tokens and multiply them, sharing query heads under GQA.</span><span class="t-ko">프롬프트 토큰에서 쿼리와 키의 쌍 노름을 평균 내어 곱하고, GQA에서는 쿼리 헤드끼리 평균한다.</span></li>
+      <li><b><span class="t-en">Store a bit mask.</span><span class="t-ko">비트 마스크 저장.</span></b><span class="t-en">The top pairs per KV head become one mask, with no offline calibration and no per-page index lists.</span><span class="t-ko">KV 헤드마다 상위 쌍을 마스크 하나로 저장한다. 오프라인 보정도, 페이지별 인덱스 목록도 없다.</span></li>
+      <li><b><span class="t-en">Quantize every 128 tokens.</span><span class="t-ko">128토큰마다 양자화.</span></b><span class="t-en">When the FP16 buffer fills, keys go to 3 or 1 bits by the mask; 1-bit groups use midpoint levels instead of min and max.</span><span class="t-ko">FP16 버퍼가 차면 마스크에 따라 키를 3비트나 1비트로 바꾼다. 1비트 그룹은 최솟값과 최댓값 대신 구간 중간값을 쓴다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key point: ask what the query sees, and ask once</span><span class="t-ko">핵심은 쿼리가 보는 것을 한 번만 묻기</span></h2>
+    <p class="vlead t-en"><b>Every swap in the ablation costs accuracy, and re-selecting pairs during decoding is worse than trusting the prompt.</b> Pairs picked at prefill overlap decoding-time salient pairs at about 0.72 even after 32K generated tokens.</p>
+    <p class="vlead t-ko"><b>어블레이션에서 무엇을 바꾸든 정확도가 떨어지고, 디코딩 중에 쌍을 다시 고르면 프롬프트를 믿을 때보다 나쁘다.</b> 프리필에서 고른 쌍은 3만 2천 토큰을 생성한 뒤에도 디코딩 시점의 중요한 쌍과 약 0.72 겹친다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">AIME24 by saliency score, Qwen3-8B, about 2.3 key bits</span><span class="t-ko">중요도 점수별 AIME24, Qwen3-8B, 키 약 2.3비트</span></div>
+      <div class="cs"><span class="t-en">Table 4 · pass@1 % · line = FP16 76.3</span><span class="t-ko">Table 4 · pass@1 % · 선 = FP16 76.3</span></div>
+      <div class="bars" style="--x:95.4%">
+        <div class="bar" title="Key range per channel: 70.67"><span class="bl">K range</span><span class="bt"><span class="bf" style="--w:88.3%"></span></span><span class="bv">70.7</span></div>
+        <div class="bar" title="Online re-selection during decoding: 72.33"><span class="bl">QK, online</span><span class="bt"><span class="bf" style="--w:90.4%"></span></span><span class="bv">72.3</span></div>
+        <div class="bar" title="Key magnitude per channel: 73.00"><span class="bl">K magnitude</span><span class="bt"><span class="bf" style="--w:91.3%"></span></span><span class="bv">73.0</span></div>
+        <div class="bar" title="Key pair norm only: 74.67"><span class="bl">K pair norm</span><span class="bt"><span class="bf" style="--w:93.3%"></span></span><span class="bv">74.7</span></div>
+        <div class="bar hl" title="Query × key pair norm at prefill: 76.00"><span class="bl">QK, prefill</span><span class="bt"><span class="bf" style="--w:95%"></span></span><span class="bv">76.0</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–80. Std is 3–7 points over 10 samples per question.</figcaption>
+      <figcaption class="t-ko">축 0–80. 문제당 10회 샘플의 표준편차는 3~7점이다.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: whole KV cache at about 2 bits</span><span class="t-ko">결과는 KV 캐시 전체를 약 2비트로</span></h2>
+    <p class="vlead t-en"><b>With values also at 2 bits, PN-Mix loses 2 points on AIME24 where KIVI loses 20.</b> On four general models at 2.26 key bits it stays within one point of FP16.</p>
+    <p class="vlead t-ko"><b>값 캐시까지 2비트로 줄여도 PN-Mix는 AIME24에서 2점만 잃고, KIVI는 20점을 잃는다.</b> 일반 모델 네 개에서도 키 2.26비트로 FP16과 1점 이내를 지킨다.</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 3.</b> Qwen3-8B, value cache at 2 bits, mean over 10 responses per question (%). Higher is better.</caption>
+        <caption class="t-ko"><b>Table 3.</b> Qwen3-8B, 값 캐시 2비트, 문제당 10회 응답 평균(%). 높을수록 좋음.</caption>
+        <thead><tr><th>Method</th><th>K bits</th><th>AIME24</th><th>AIME25</th></tr></thead>
+        <tbody>
+          <tr><td>FP16</td><td>16</td><td>76.33</td><td>67.00</td></tr>
+          <tr><td>KIVI</td><td>2.25</td><td>56.33</td><td>51.33</td></tr>
+          <tr><td>ChanMix</td><td>2.32</td><td>60.66</td><td>57.00</td></tr>
+          <tr><td>Kitty</td><td>2.39</td><td>71.33</td><td>62.00</td></tr>
+          <tr><td>PN-Mix (1)</td><td>2.26</td><td class="up">74.67</td><td>64.00</td></tr>
+          <tr><td>PN-Mix (2)</td><td>2.29</td><td>74.33</td><td class="up">65.33</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="vlead gap t-en"><b>Below 2.25 bits the gap turns into a cliff.</b> KIVI and Kitty fall to near zero by 2 bits, while PN-Mix gives up under 9 points even at 1.45 bits.</p>
+    <p class="vlead gap t-ko"><b>2.25비트 아래로 내려가면 차이가 절벽이 된다.</b> KIVI와 Kitty는 2비트 무렵 0점 가까이 무너지고, PN-Mix는 1.45비트에서도 9점 미만만 내준다.</p>
+    <div class="vgrid">
+      <figure class="chart">
+        <div class="ct"><span class="t-en">AIME24 at about 2.0 key bits</span><span class="t-ko">키 약 2.0비트의 AIME24</span></div>
+        <div class="cs"><span class="t-en">Table 14 · Qwen3-8B · line = FP16 76.3</span><span class="t-ko">Table 14 · Qwen3-8B · 선 = FP16 76.3</span></div>
+        <div class="bars" style="--x:76.3%">
+          <div class="bar" title="KIVI at 2.00 bits: 0.00"><span class="bl">KIVI 2.00</span><span class="bt"><span class="bf" style="--w:0%"></span></span><span class="bv">0.0</span></div>
+          <div class="bar" title="Kitty at 2.03 bits: 9.33"><span class="bl">Kitty 2.03</span><span class="bt"><span class="bf" style="--w:9.3%"></span></span><span class="bv">9.3</span></div>
+          <div class="bar hl" title="PN-Mix at 2.04 bits: 74.67"><span class="bl">PN-Mix 2.04</span><span class="bt"><span class="bf" style="--w:74.7%"></span></span><span class="bv">74.7</span></div>
+        </div>
+        <figcaption class="t-en">Axis 0–100.</figcaption>
+        <figcaption class="t-ko">축 0–100.</figcaption>
+      </figure>
+      <figure class="chart">
+        <div class="ct"><span class="t-en">AIME24 at about 1.5 key bits</span><span class="t-ko">키 약 1.5비트의 AIME24</span></div>
+        <div class="cs"><span class="t-en">Table 14 · Qwen3-8B · line = FP16 76.3</span><span class="t-ko">Table 14 · Qwen3-8B · 선 = FP16 76.3</span></div>
+        <div class="bars" style="--x:76.3%">
+          <div class="bar" title="KIVI at 1.50 bits: 0.00"><span class="bl">KIVI 1.50</span><span class="bt"><span class="bf" style="--w:0%"></span></span><span class="bv">0.0</span></div>
+          <div class="bar" title="Kitty at 1.51 bits: 0.00"><span class="bl">Kitty 1.51</span><span class="bt"><span class="bf" style="--w:0%"></span></span><span class="bv">0.0</span></div>
+          <div class="bar hl" title="PN-Mix at 1.45 bits: 67.66"><span class="bl">PN-Mix 1.45</span><span class="bt"><span class="bf" style="--w:67.7%"></span></span><span class="bv">67.7</span></div>
+        </div>
+        <figcaption class="t-en">Axis 0–100. R1-Llama-8B shows the same pattern.</figcaption>
+        <figcaption class="t-ko">축 0–100. R1-Llama-8B에서도 같은 양상이다.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">&lt;1 pt</div><div class="l"><span class="t-en">from FP16 on 4 general models</span><span class="t-ko">일반 모델 4개에서 FP16과의 차이</span></div></div>
+      <div class="stat"><div class="n">8×</div><div class="l"><span class="t-en">longer output than FP16 at batch 32</span><span class="t-ko">배치 32에서 FP16 대비 출력 길이</span></div></div>
+      <div class="stat"><div class="n">2.37×</div><div class="l"><span class="t-en">peak per-GPU throughput vs FP16</span><span class="t-ko">FP16 대비 GPU당 최대 처리량</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">When you compress a cache for long reasoning, rank what to protect by its effect on attention logits, which here means multiplying in the query side. The prompt alone predicts that ranking well enough to freeze it for 32K tokens.</span><span class="t-ko">긴 추론을 위해 캐시를 압축할 때는 무엇을 지킬지를 어텐션 로짓에 주는 영향으로 정하자. 여기서는 쿼리 쪽을 함께 곱하는 것이다. 그 순위는 프롬프트만으로도 충분히 예측되어 3만 2천 토큰 동안 고정해도 된다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">At batch 1 decoding is slower than FP16 (2036 s vs 1299 s for a 32K AIME trace), so the win comes from fitting bigger batches. Several AIME gaps to Kitty are smaller than the 3–7 point std, and only 7B–8B reasoning models were tested on AIME.</span><span class="t-ko">배치 1에서는 디코딩이 FP16보다 느리다(32K AIME 추론에서 2036초 대 1299초). 이득은 더 큰 배치를 올릴 수 있다는 데서 나온다. Kitty와의 AIME 차이 중 여럿은 3~7점인 표준편차보다 작고, AIME에서는 7B~8B 추론 모델만 시험했다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2610.19605">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2610.19605">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2610.19605">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2610.19605">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>P1 slot (Compressed Reasoning) · KV-cache quantization built for long reasoning outputs, tested on AIME with R1-distilled and Qwen3 models · score 6 (priority +3, venue +3), top among P1 candidates; runner-up TGAS on pruned reasoning models (2610.19934, score 3)</b> · venue: EMNLP 2026.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-10-19.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P1 슬롯 (Compressed Reasoning) · 긴 추론 출력을 겨냥한 KV 캐시 양자화, R1 증류 모델과 Qwen3로 AIME 평가 · 점수 6 (우선 주제 +3, 학회 +3), P1 후보 중 1위. 차점은 가지치기한 추론 모델을 다룬 TGAS (2610.19934, 점수 3)</b> · venue: EMNLP 2026.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-10-19.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
