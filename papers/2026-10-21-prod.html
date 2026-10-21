@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Progress-Aware Distillation</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Compressed Reasoning · Agent Distillation · Multi-Turn Stagnation</span><span class="t-ko">Compressed Reasoning · 에이전트 증류 · 다중 턴 정체</span></span>
+      <span>2026.10.21</span>
+    </div>
+    <h1>Progress-Aware Distillation (ProD)<br>
+      <span class="glow t-en">— distilled small agents loop more as turns pile up; penalize the loops by how much worse they are than the teacher's</span>
+      <span class="glow t-ko">— 증류된 작은 에이전트는 턴이 쌓일수록 같은 시도를 되풀이한다. 교사보다 더 되풀이한 만큼 벌한다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge venue">NeurIPS'26</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Yuanpu Cao</b>, Saket Sathe, Hanyu Wang, Ziyi Yin, Fenglong Ma, Jinghui Chen <span class="t-en">(corresponding: Yuanpu Cao, Jinghui Chen)</span><span class="t-ko">(교신: Yuanpu Cao, Jinghui Chen)</span></span>
+      <span>🏛 The Pennsylvania State University · Microsoft CoreAI</span>
+      <span>🗓 2026-10-14</span>
+      <span>📄 <a href="https://arxiv.org/abs/2610.19439">arXiv:2610.19439</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">SFT on teacher trajectories teaches small models the agent workflow, but distilled students often get stuck repeating failed searches and code.</span><span class="t-ko">교사 궤적으로 SFT를 하면 작은 모델도 에이전트 작업 흐름은 익히지만, 증류된 학생은 실패한 검색과 코드를 되풀이하다 자주 멈춘다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Stagnation grows with turns and with smaller students; by turn 10 SFT Qwen3-0.6B overlaps past turns at about 0.87, GPT-4.1 at 0.33–0.38.</span><span class="t-ko">정체는 턴이 늘수록, 모델이 작을수록 심해진다. 10턴째에 SFT Qwen3-0.6B는 이전 턴과 약 0.87 겹치고 GPT-4.1은 0.33~0.38이다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Roll out the SFT student once per question, measure how much more it repeats than the teacher, and use that gap plus a wrong answer as the margin in a SimPO-style loss.</b> An SFT term keeps teacher trajectories likely.</span><span class="t-ko"><b>SFT 학생을 문제마다 한 번 돌려 교사보다 얼마나 더 되풀이했는지 재고, 그 차이와 오답 여부를 SimPO식 손실의 마진으로 쓴다.</b> SFT 항을 함께 두어 교사 궤적의 확률을 지킨다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">Across 8 students from 0.6B to 8B, +4.7 points in-domain and +4.9 out-of-domain over SFT, with 20.7% fewer tokens per task.</span><span class="t-ko">0.6B부터 8B까지 학생 8개에서 SFT보다 도메인 안 4.7점, 도메인 밖 4.9점 높고, 과제당 토큰은 20.7% 적다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">A trainee driver who memorized an expert's route videos does fine <b>until a road is closed</b>, then keeps <b>circling the same block</b>. ProD puts the trainee's own circling <b>next to the expert's detour</b> and scolds harder the longer the circling went on.</p>
+    <p class="t-ko">숙련자의 주행 영상을 외운 초보 운전자는 <b>길이 막히기 전까지는</b> 잘 달리다가, 막히면 <b>같은 블록만 계속 돈다</b>. ProD는 초보자가 맴돈 기록을 <b>숙련자의 우회로 옆에</b> 나란히 놓고, 오래 맴돌았을수록 더 세게 꾸짖는다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">The failure: small students loop as turns accumulate</span><span class="t-ko">문제는 턴이 쌓일수록 맴도는 작은 학생</span></h2>
+    <p class="vlead t-en"><b>The teacher's repetition stays nearly flat across turns, while every SFT student climbs, and the smaller the student the steeper the climb.</b> Lexical, semantic, and LLM-judge scores agree at r above 0.92.</p>
+    <p class="vlead t-ko"><b>교사의 반복 정도는 턴이 지나도 거의 평평한데 SFT 학생은 모두 올라가고, 작을수록 가파르게 오른다.</b> 어휘, 의미, LLM 판정 세 가지 점수는 상관계수 0.92 이상으로 일치한다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2610.19439/stagnation_bar_4panel.svg" target="_blank"><img src="fig/2610.19439/stagnation_bar_4panel.svg" alt="Turn-level lexical stagnation on MATH and HotpotQA rising with turns for SFT-distilled Qwen3 4B, 1.7B and 0.6B while GPT-4.1 stays flat, plus bar charts of average semantic and judgment stagnation that grow as the student shrinks"></a>
+      <figcaption class="t-en"><b>Figure 2.</b> Left two panels, overlap of each turn with earlier turns from turn 2 to 10. Right two, average semantic and LLM-judge stagnation by model.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> 왼쪽 두 칸은 2턴부터 10턴까지 각 턴이 앞선 턴과 겹치는 정도. 오른쪽 두 칸은 모델별 평균 의미 정체와 LLM 판정 정체.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2610.19439</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Distill by SFT.</span><span class="t-ko">SFT로 증류.</span></b><span class="t-en">GPT-4.1 runs 3,000 MATH and 3,000 HotpotQA tasks in CodeAct; successful trajectories train LoRA students.</span><span class="t-ko">GPT-4.1이 CodeAct 방식으로 MATH와 HotpotQA 문제를 각 3,000개 풀고, 성공한 궤적으로 LoRA 학생을 학습한다.</span></li>
+      <li><b><span class="t-en">Score the student's loops.</span><span class="t-ko">학생의 맴돌기 채점.</span></b><span class="t-en">One rollout per training question; each turn scores its highest ROUGE-L against earlier turns, and the gap to the teacher's average sets the margin with answer correctness.</span><span class="t-ko">학습 문제마다 한 번 돌리고, 각 턴은 앞선 턴들과의 ROUGE-L 최댓값으로 채점한다. 교사 평균과의 차이를 정답 여부와 섞어 마진으로 쓴다.</span></li>
+      <li><b><span class="t-en">Contrast, then repeat.</span><span class="t-ko">대비하고 반복.</span></b><span class="t-en">Push the teacher trajectory above the student's by at least that margin, keep the SFT loss, and rerun with fresh rollouts if a gap remains.</span><span class="t-ko">교사 궤적이 학생 궤적보다 그 마진 이상 높도록 밀고 SFT 손실도 유지한다. 차이가 남으면 새 롤아웃으로 다시 돈다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key point: punish the loop, not the token</span><span class="t-ko">핵심은 토큰이 아니라 맴돌기를 벌하기</span></h2>
+    <p class="vlead t-en"><b>One round of ProD pulls the 1.7B and 0.6B students down by about 0.09–0.10 on the judge score.</b> Decoding-time repetition penalties and shorter teacher demos do not help, and a strong penalty hurts.</p>
+    <p class="vlead t-ko"><b>ProD 한 번이면 1.7B와 0.6B 학생의 판정 점수가 약 0.09~0.10 내려간다.</b> 디코딩 때 반복 벌점을 주거나 교사 시연을 짧게 줄이는 방법은 도움이 안 되고, 벌점을 세게 주면 오히려 나빠진다.</p>
+    <div class="vgrid">
+      <figure class="chart">
+        <div class="ct"><span class="t-en">LLM-judge stagnation, Qwen3 students</span><span class="t-ko">LLM 판정 정체, Qwen3 학생</span></div>
+        <div class="cs"><span class="t-en">Figure 3 values · lower is better · line = GPT-4.1 0.385</span><span class="t-ko">Figure 3 수치 · 낮을수록 좋음 · 선 = GPT-4.1 0.385</span></div>
+        <div class="bars" style="--x:38.5%">
+          <div class="bar" title="SFT Qwen3-4B: 0.557"><span class="bl">SFT 4B</span><span class="bt"><span class="bf" style="--w:55.7%"></span></span><span class="bv">0.557</span></div>
+          <div class="bar hl" title="ProD Qwen3-4B: 0.526"><span class="bl">ProD 4B</span><span class="bt"><span class="bf" style="--w:52.6%"></span></span><span class="bv">0.526</span></div>
+          <div class="bar" title="SFT Qwen3-1.7B: 0.637"><span class="bl">SFT 1.7B</span><span class="bt"><span class="bf" style="--w:63.7%"></span></span><span class="bv">0.637</span></div>
+          <div class="bar hl" title="ProD Qwen3-1.7B: 0.537"><span class="bl">ProD 1.7B</span><span class="bt"><span class="bf" style="--w:53.7%"></span></span><span class="bv">0.537</span></div>
+          <div class="bar" title="SFT Qwen3-0.6B: 0.719"><span class="bl">SFT 0.6B</span><span class="bt"><span class="bf" style="--w:71.9%"></span></span><span class="bv">0.719</span></div>
+          <div class="bar hl" title="ProD Qwen3-0.6B: 0.633"><span class="bl">ProD 0.6B</span><span class="bt"><span class="bf" style="--w:63.3%"></span></span><span class="bv">0.633</span></div>
+        </div>
+        <figcaption class="t-en">Axis 0–1. Averaged over turns, MATH and HotpotQA.</figcaption>
+        <figcaption class="t-ko">축 0–1. 턴과 MATH, HotpotQA 평균.</figcaption>
+      </figure>
+      <figure class="chart">
+        <div class="ct"><span class="t-en">HotpotQA accuracy, Qwen3-4B student</span><span class="t-ko">HotpotQA 정확도, Qwen3-4B 학생</span></div>
+        <div class="cs"><span class="t-en">Table 5 · % · line = GPT-4.1 71.0</span><span class="t-ko">Table 5 · % · 선 = GPT-4.1 71.0</span></div>
+        <div class="bars" style="--x:88.75%">
+          <div class="bar" title="SFT distill: 66.6"><span class="bl">SFT</span><span class="bt"><span class="bf" style="--w:83.25%"></span></span><span class="bv">66.6</span></div>
+          <div class="bar" title="Repetition penalty 1.1: 66.2"><span class="bl">Rep. pen. 1.1</span><span class="bt"><span class="bf" style="--w:82.75%"></span></span><span class="bv">66.2</span></div>
+          <div class="bar" title="Repetition penalty 1.3: 61.6"><span class="bl">Rep. pen. 1.3</span><span class="bt"><span class="bf" style="--w:77%"></span></span><span class="bv">61.6</span></div>
+          <div class="bar" title="Concise teacher SFT: 66.4"><span class="bl">Concise SFT</span><span class="bt"><span class="bf" style="--w:83%"></span></span><span class="bv">66.4</span></div>
+          <div class="bar hl" title="ProD: 70.8"><span class="bl">ProD</span><span class="bt"><span class="bf" style="--w:88.5%"></span></span><span class="bv">70.8</span></div>
+        </div>
+        <figcaption class="t-en">Axis 0–80.</figcaption>
+        <figcaption class="t-ko">축 0–80.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: gains at every size, in and out of domain</span><span class="t-ko">결과는 모든 크기에서, 도메인 안팎 모두 오른다</span></h2>
+    <p class="vlead t-en"><b>Every one of the 8 students improves over SFT in both settings, by 4.3 to 6.4 points out of domain in the rows below.</b> The Qwen3-4B student reaches 70.8 on HotpotQA against the teacher's 71.0.</p>
+    <p class="vlead t-ko"><b>학생 8개 모두 두 설정에서 SFT보다 좋아지고, 아래 표의 도메인 밖 향상은 4.3~6.4점이다.</b> Qwen3-4B 학생은 HotpotQA에서 70.8점으로 교사의 71.0점에 거의 닿는다.</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 3.</b> Average accuracy (%). In-domain is MATH and HotpotQA; out-of-domain is Omni-MATH and 2WikiMultiHopQA. GPT-4.1 teacher scores 80.7 and 67.1. Higher is better.</caption>
+        <caption class="t-ko"><b>Table 3.</b> 평균 정확도(%). 도메인 안은 MATH와 HotpotQA, 도메인 밖은 Omni-MATH와 2WikiMultiHopQA. GPT-4.1 교사는 80.7점과 67.1점. 높을수록 좋음.</caption>
+        <thead><tr><th>Student</th><th>ID SFT</th><th>ID ProD</th><th>OOD SFT</th><th>OOD ProD</th></tr></thead>
+        <tbody>
+          <tr><td>Qwen3-4B</td><td>74.2</td><td class="up">78.0</td><td>54.1</td><td class="up">58.4</td></tr>
+          <tr><td>Qwen3-1.7B</td><td>62.2</td><td class="up">67.9</td><td>41.7</td><td class="up">48.1</td></tr>
+          <tr><td>Qwen3-0.6B</td><td>49.0</td><td class="up">52.7</td><td>30.5</td><td class="up">34.9</td></tr>
+          <tr><td>Llama-3.1-8B</td><td>61.8</td><td class="up">67.2</td><td>39.1</td><td class="up">45.3</td></tr>
+          <tr><td>Llama-3.2-1B</td><td>35.9</td><td class="up">41.6</td><td>20.2</td><td class="up">25.7</td></tr>
+          <tr><td>Gemma-3-1B</td><td>28.6</td><td class="up">33.2</td><td>16.5</td><td class="up">21.9</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">+4.9 pt</div><div class="l"><span class="t-en">out-of-domain accuracy over SFT, 8 students</span><span class="t-ko">학생 8개 평균, SFT 대비 도메인 밖 정확도</span></div></div>
+      <div class="stat"><div class="n">−20.7%</div><div class="l"><span class="t-en">tokens per task vs SFT</span><span class="t-ko">SFT 대비 과제당 토큰</span></div></div>
+      <div class="stat"><div class="n">74 min</div><div class="l"><span class="t-en">extra rollouts for 3,000 tasks, 4B, one H200</span><span class="t-ko">4B, H200 한 장, 3,000문제 추가 롤아웃</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">When you shrink an agent by distillation, measure how often each turn repeats earlier turns, not just final accuracy, because that is where small students break first. Failed student rollouts make useful negatives if the penalty scales with how badly they looped.</span><span class="t-ko">에이전트를 증류로 줄일 때는 최종 정확도만 보지 말고 각 턴이 앞선 턴을 얼마나 되풀이하는지도 재자. 작은 학생이 가장 먼저 무너지는 곳이 거기다. 실패한 학생 롤아웃은 맴돈 정도에 비례해 벌점을 주면 좋은 부정 예시가 된다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">The horizon is capped at 10 turns and averages about 4, and the out-of-domain sets stay within math and multi-hop QA. Coding, web navigation, and genuinely long agent runs are untested, and the main table reports no run-to-run spread.</span><span class="t-ko">상호작용은 최대 10턴, 평균 약 4턴이고, 도메인 밖 평가도 수학과 다중 홉 QA 안에 머문다. 코딩, 웹 탐색, 진짜 긴 에이전트 실행은 시험하지 않았고, 주 표에는 실행 간 편차가 없다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2610.19439">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2610.19439">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2610.19439">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2610.19439">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>P1 slot (Compressed Reasoning) · how distilled small agents fail as turns accumulate, plus a stagnation-aware distillation fix · NeurIPS main track · score 6 (priority +3, venue +3), tied with Specter (2511.14102, ASPLOS'27, HF ▲15) and chosen on topic fit and recency; a preference-style loss over one-off student rollouts rather than teacher-scored OPD</b> · venue: NeurIPS 2026.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-10-21.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P1 슬롯 (Compressed Reasoning) · 증류된 작은 에이전트가 턴이 쌓일수록 무너지는 양상과 이를 고려한 증류 방법 · NeurIPS 메인 트랙 · 점수 6 (우선 주제 +3, 학회 +3). Specter (2511.14102, ASPLOS'27, HF ▲15)와 동점이었으나 주제 적합도와 최신성으로 골랐다. 교사가 학생 출력을 채점하는 OPD가 아니라 한 번 뽑은 학생 롤아웃에 선호 학습식 손실을 쓴다</b> · venue: NeurIPS 2026.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-10-21.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
