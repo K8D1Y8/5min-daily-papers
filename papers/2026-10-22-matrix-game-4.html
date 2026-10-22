@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Matrix-Game 4.0</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Video & World Generation · Real-Time Rendering · Few-Step Distillation</span><span class="t-ko">Video & World Generation · 실시간 렌더링 · 소수 스텝 증류</span></span>
+      <span>2026.10.22</span>
+    </div>
+    <h1>Matrix-Game 4.0<br>
+      <span class="glow t-en">— code keeps the rules, a 1-step causal video model paints every frame, 60 FPS on one RTX 5090</span>
+      <span class="glow t-ko">— 규칙은 코드가 지키고, 1스텝 인과 비디오 모델이 매 프레임을 그려 RTX 5090 한 장에서 60 FPS</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Technical report</span>
+      <span class="badge hot">▲ 185 HF</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Jihai Zhang</b>, Runjia Qian, Kaiqin Kong, Biao Jiang, Puyi Wang, Siru Chen, Tianle Li, Guanjie Chen, Junyi Wu, Chubin Chen, Yuanhang Li, Kaichen Huang, Haobo Zhang, Yangguang Li, Wei Yu, Guibin Chen, Yu Cheng, Yahui Zhou <span class="t-en">(equal contribution: Jihai Zhang, Runjia Qian, Kaiqin Kong, Biao Jiang · project lead and corresponding: Wei Yu)</span><span class="t-ko">(공동 1저자: Jihai Zhang, Runjia Qian, Kaiqin Kong, Biao Jiang · 프로젝트 리드 겸 교신: Wei Yu)</span></span>
+      <span>🏛 SkyworkAI · CUHK · UC San Diego · USTC · SJTU · Shanghai AI Lab · NTU</span>
+      <span>🗓 2026-10-20</span>
+      <span>📄 <a href="https://arxiv.org/abs/2610.27999">arXiv:2610.27999</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Video world models that keep the world state in pixels drift, forget off-screen objects, and offer little gameplay beyond walking around.</span><span class="t-ko">세계 상태를 픽셀에 담는 비디오 월드 모델은 점점 어긋나고, 화면 밖 물체를 잊고, 돌아다니기 말고는 게임다운 상호작용이 거의 없다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">The authors argue a diffusion model behaves more like a renderer than a simulator, so rules and state belong in code.</span><span class="t-ko">저자들은 확산 모델이 시뮬레이터라기보다 렌더러에 가깝다고 보고, 규칙과 상태는 코드에 둬야 한다고 주장한다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>A light engine runs the rules and draws low-poly proxies; a Wan2.2 5B model, distilled into a causal 1–2-step generator, paints each 4-frame chunk from the proxy, a live caption, and memory frames.</b> A coding agent edits the game.</span><span class="t-ko"><b>가벼운 엔진이 규칙을 돌리고 로우폴리 프록시를 그리면, 1~2스텝 인과 생성기로 증류한 Wan2.2 5B 모델이 프록시와 실시간 캡션, 기억 프레임을 보고 4프레임 청크를 그린다.</b> 코딩 에이전트가 게임을 고친다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">83 FPS and 112 ms key-to-frame at 480p on one RTX 5090, 19× faster than the plain causal model, and the only compared system on a consumer GPU.</span><span class="t-ko">RTX 5090 한 장에서 480p 83 FPS, 키 입력부터 화면까지 112 ms로, 단순 인과 모델보다 19배 빠르고 비교 대상 중 유일하게 소비자용 GPU에서 돈다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Think of a play with a <b>strict stage manager</b> and a <b>fast scene painter</b>. The manager tracks where everyone is and what the rules allow; the painter only turns the manager's <b>chalk sketch</b> into a finished backdrop, quickly enough to keep up. If the painter forgets something, the next sketch puts it back.</p>
+    <p class="t-ko">연극에 <b>깐깐한 무대 감독</b>과 <b>손 빠른 배경 화가</b>가 있다고 해 보자. 감독은 누가 어디 있는지, 규칙상 무엇이 가능한지를 챙기고, 화가는 감독이 그린 <b>분필 스케치</b>를 공연 속도에 맞춰 완성된 배경으로 바꾸기만 한다. 화가가 뭔가를 빠뜨려도 다음 스케치가 다시 채워 넣는다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: the engine thinks, the model paints</span><span class="t-ko">작동 방식은 엔진이 판단하고 모델이 그리기</span></h2>
+    <p class="vlead t-en"><b>The video model never decides what happens; it re-renders a proxy that the engine has already resolved.</b> That lets it be tiny-step and causal without losing the world.</p>
+    <p class="vlead t-ko"><b>비디오 모델은 무슨 일이 일어날지 정하지 않고, 엔진이 이미 결정한 프록시를 다시 그릴 뿐이다.</b> 그래서 스텝을 아주 적게 줄인 인과 모델로도 세계를 잃지 않는다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2610.27999/mg4_overview.jpg" target="_blank"><img src="fig/2610.27999/mg4_overview.jpg" alt="Matrix-Game 4.0 overview: player, coding agent, game engine, proxy and caption, and video model in a loop; split-screen proxy versus generated frames for desert shooter, city driving and air combat; gameplay created by agent requests; latency comparison and 83 and 57 FPS generation rates on an RTX 5090"></a>
+      <figcaption class="t-en"><b>Figure 1.</b> The loop, held-out proxy versus generated frames, game modes written by the coding agent, and latency against recent systems.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> 전체 순환 구조, 학습에 쓰지 않은 클립의 프록시와 생성 프레임 비교, 코딩 에이전트가 만든 게임 모드, 최근 시스템과의 지연 시간 비교.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2610.27999</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Capture paired data.</span><span class="t-ko">짝 데이터 수집.</span></b><span class="t-en">1,712 hours of UE5 gameplay are recorded twice, as a low-poly proxy and a full render aligned pixel by pixel, with object and event logs that become captions.</span><span class="t-ko">UE5 게임 플레이 1,712시간을 로우폴리 프록시와 완전한 렌더로 두 번 녹화해 픽셀 단위로 맞추고, 물체와 사건 기록은 캡션이 된다.</span></li>
+      <li><b><span class="t-en">Train, then make it causal.</span><span class="t-ko">학습 후 인과 모델로.</span></b><span class="t-en">Wan2.2 5B is fine-tuned per game as video-to-video, then teacher-forced, consistency-distilled to 4 steps, and trained with DMD on its own rollouts down to 1–2 steps.</span><span class="t-ko">Wan2.2 5B를 게임마다 비디오 대 비디오로 미세조정한 뒤, 교사 강제 학습과 일관성 증류로 4스텝까지 줄이고, 자기 롤아웃에 DMD를 걸어 1~2스텝까지 줄인다.</span></li>
+      <li><b><span class="t-en">Run with a structured cache.</span><span class="t-ko">구조화된 캐시로 실행.</span></b><span class="t-en">The KV cache holds 3 memory frames chosen by camera pose, reference frames, and the latest 20 chunks; each finished chunk is re-run clean to write its keys and values.</span><span class="t-ko">KV 캐시에는 카메라 자세로 고른 기억 프레임 3장, 기준 프레임, 최근 20청크가 들어간다. 완성된 청크는 깨끗한 상태로 한 번 더 돌려 키와 값을 기록한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key point: real time comes from a stack of small fixes</span><span class="t-ko">핵심은 작은 개선을 쌓아 얻은 실시간</span></h2>
+    <p class="vlead t-en"><b>No single trick gets there: the biggest jumps are a RoPE kernel with cached text KV (2.4×) and one-step distillation (2.1×), which still stops at 51 FPS.</b> Kernel fusion then cuts latency from 367 to 121 ms, and cache and attention tricks carry it past 80 FPS.</p>
+    <p class="vlead t-ko"><b>한 가지 기법으로는 안 된다. 가장 큰 도약은 RoPE 커널과 텍스트 KV 캐싱(2.4배), 그리고 1스텝 증류(2.1배)인데, 여기까지도 51 FPS에 그친다.</b> 이어서 커널 융합이 지연을 367 ms에서 121 ms로 줄이고, 캐시와 어텐션 개선이 80 FPS를 넘긴다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Steady-state FPS as optimizations stack, RTX 5090, 480p</span><span class="t-ko">개선을 누적할 때의 정상 상태 FPS, RTX 5090, 480p</span></div>
+      <div class="cs"><span class="t-en">Table 2 · each row adds to all above · line = 60 FPS game rate</span><span class="t-ko">Table 2 · 각 행은 위의 개선을 모두 포함 · 선 = 게임 속도 60 FPS</span></div>
+      <div class="bars mono" style="--x:60%">
+        <div class="bar" title="Causal Wan2.2, 4 steps, full VAE: 4.5 FPS, 1110 ms"><span class="bl">4 steps, full VAE</span><span class="bt"><span class="bf" style="--w:4.5%"></span></span><span class="bv">4.5</span></div>
+        <div class="bar" title="+ tiny VAE: 6.5 FPS"><span class="bl">+ tiny VAE</span><span class="bt"><span class="bf" style="--w:6.5%"></span></span><span class="bv">6.5</span></div>
+        <div class="bar" title="+ RoPE kernel, cached text KV: 15.4 FPS"><span class="bl">+ RoPE, text KV</span><span class="bt"><span class="bf" style="--w:15.4%"></span></span><span class="bv">15.4</span></div>
+        <div class="bar" title="+ FP8 weights, CUDA Graph: 24.2 FPS"><span class="bl">+ FP8, CUDA Graph</span><span class="bt"><span class="bf" style="--w:24.2%"></span></span><span class="bv">24.2</span></div>
+        <div class="bar" title="+ 1-step distillation: 51.2 FPS, 376 ms"><span class="bl">+ 1-step</span><span class="bt"><span class="bf" style="--w:51.2%"></span></span><span class="bv">51.2</span></div>
+        <div class="bar" title="+ async I/O: 57.7 FPS, 367 ms"><span class="bl">+ async I/O</span><span class="bt"><span class="bf" style="--w:57.7%"></span></span><span class="bv">57.7</span></div>
+        <div class="bar" title="+ fused Triton kernels: 65.8 FPS, 121 ms"><span class="bl">+ fused kernels</span><span class="bt"><span class="bf" style="--w:65.8%"></span></span><span class="bv">65.8</span></div>
+        <div class="bar" title="+ ring KV cache: 73.7 FPS"><span class="bl">+ ring KV</span><span class="bt"><span class="bf" style="--w:73.7%"></span></span><span class="bv">73.7</span></div>
+        <div class="bar" title="+ split-KV FlashAttention: 83.4 FPS, 112 ms"><span class="bl">+ split-KV attn</span><span class="bt"><span class="bf" style="--w:83.4%"></span></span><span class="bv">83.4</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–100 FPS. Latency falls from 1110 ms to 112 ms over the same rows.</figcaption>
+      <figcaption class="t-ko">축 0–100 FPS. 같은 단계에서 지연은 1110 ms에서 112 ms로 준다.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: about a fifth of the next latency, on a gaming card</span><span class="t-ko">결과는 게임용 그래픽카드에서 차순위의 약 5분의 1 지연</span></h2>
+    <p class="vlead t-en"><b>Every other code-plus-renderer system needs a data-center GPU and answers in half a second or more.</b> Most rivals render at higher resolution, but AgentGarten at a similar 480p still takes 878 ms.</p>
+    <p class="vlead t-ko"><b>코드와 렌더러를 결합한 다른 시스템은 모두 데이터센터 GPU가 필요하고 응답에 0.5초 이상 걸린다.</b> 대부분은 더 높은 해상도로 그리지만, 비슷한 480p의 AgentGarten도 878 ms가 걸린다.</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 3.</b> End-to-end latency as reported by each system (chunked systems counted as two chunk times). Lower is better.</caption>
+        <caption class="t-ko"><b>Table 3.</b> 각 시스템이 보고한 종단 지연(청크 방식 시스템은 청크 두 개 생성 시간으로 계산). 낮을수록 좋음.</caption>
+        <thead><tr><th>System</th><th>Latency</th><th>Resolution</th><th>Hardware</th></tr></thead>
+        <tbody>
+          <tr><td>Code World Model (streaming)</td><td>≈10.2 s</td><td>1344×768</td><td>1× H200</td></tr>
+          <tr><td>Magpie</td><td>≈1.55 s</td><td>1280×768</td><td>1× H100</td></tr>
+          <tr><td>AgentGarten</td><td>≈878 ms</td><td>832×480</td><td>1× H100</td></tr>
+          <tr><td>StreamRender-H3</td><td>≈517 ms</td><td>1344×768</td><td>8× GB200</td></tr>
+          <tr><td>Matrix-Game 4.0</td><td class="up">112 ms</td><td>864×480</td><td class="up">1× RTX 5090</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">112 ms</div><div class="l"><span class="t-en">key press to first reflecting frame</span><span class="t-ko">키 입력부터 반영된 첫 프레임까지</span></div></div>
+      <div class="stat"><div class="n">18.2 GiB</div><div class="l"><span class="t-en">peak memory, text encoder to VAE</span><span class="t-ko">텍스트 인코더부터 VAE까지 최대 메모리</span></div></div>
+      <div class="stat"><div class="n">58 FPS</div><div class="l"><span class="t-en">on a 16 GiB RTX 5070 Ti, fixed prompts</span><span class="t-ko">16 GiB RTX 5070 Ti, 고정 프롬프트</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">If your world model drifts, move state and rules into an engine and give the generator a structural proxy to re-render; the model can then be few-step and causal. Once you reach one step, kernel launch and cache layout matter as much as the model.</span><span class="t-ko">월드 모델이 자꾸 어긋난다면 상태와 규칙을 엔진으로 옮기고 생성기에는 다시 그릴 구조 프록시를 주자. 그러면 모델은 적은 스텝의 인과 모델이어도 된다. 1스텝까지 내려오면 커널 실행 방식과 캐시 배치가 모델만큼 중요해진다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">There is no quantitative quality measure at all, no FVD, PSNR, or user study, only 40-second qualitative rollouts. Each game needs its own model trained on paired UE5 captures, and the latency table mixes resolutions and latency definitions.</span><span class="t-ko">FVD나 PSNR, 사용자 평가 같은 정량적 품질 지표가 전혀 없고 40초짜리 정성 롤아웃뿐이다. 게임마다 UE5 짝 데이터로 따로 학습한 모델이 필요하고, 지연 비교표는 해상도와 지연의 정의가 서로 다르다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2610.27999">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2610.27999">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2610.27999">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2610.27999">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>P2 slot (Video &amp; World Generation) · real-time autoregressive video renderer with few-step causal distillation and inference engineering · score 6 (priority +3, hot +3, HF ▲185), tied with Ropedia W0 (2610.26855, HF ▲187, robot world model) and chosen on topic fit and recency</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-10-22.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P2 슬롯 (Video &amp; World Generation) · 소수 스텝 인과 증류와 추론 최적화로 만든 실시간 autoregressive 비디오 렌더러 · 점수 6 (우선 주제 +3, 화제성 +3, HF ▲185). Ropedia W0 (2610.26855, HF ▲187, 로봇 월드 모델)와 동점이었으나 주제 적합도와 최신성으로 골랐다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-10-22.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
