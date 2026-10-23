@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Muse Glimmer 30B</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Compressed Reasoning · On-Device Agent · 4-bit Quantization</span><span class="t-ko">Compressed Reasoning · 온디바이스 에이전트 · 4비트 양자화</span></span>
+      <span>2026.10.23</span>
+    </div>
+    <h1>Muse Glimmer 30B<br>
+      <span class="glow t-en">— a frontier model distilled into a dense 30B and squeezed to about 20 GB, losing under one point on agent tasks</span>
+      <span class="glow t-ko">— 프런티어 모델을 30B 밀집 모델로 증류하고 약 20 GB로 줄여도 에이전트 과제 점수는 1점도 안 떨어진다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Technical report</span>
+      <span class="badge lab">🏛 Meta Superintelligence Labs · Zettlemoyer</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Muse Glimmer team</b> <span class="t-en">(329 authors; 78 core contributors including Rob Fergus and Luke Zettlemoyer)</span><span class="t-ko">(저자 329명, Rob Fergus와 Luke Zettlemoyer를 포함한 핵심 기여자 78명)</span></span>
+      <span>🏛 Meta Superintelligence Labs</span>
+      <span>🗓 2026-10-17</span>
+      <span>📄 <a href="https://arxiv.org/abs/2610.24628">arXiv:2610.24628</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Open models that fit consumer GPUs are mostly general-purpose, and a long agent session must also fit its KV cache into 24–32 GB.</span><span class="t-ko">소비자용 GPU에 들어가는 공개 모델은 대부분 범용이고, 긴 에이전트 세션은 KV 캐시까지 24~32 GB 안에 넣어야 한다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">At a fixed inference-memory ceiling, dense scaling ladders were 2–2.5× more compute-efficient than 1:8 or 1:16 MoE, so the model is dense.</span><span class="t-ko">추론 메모리 상한을 고정하면 밀집 모델의 스케일링 사다리가 1:8, 1:16 MoE보다 계산 효율이 2~2.5배 높아서 밀집 구조를 골랐다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Logit-distill Muse Spark into a dense 30B with 2 KV heads and three sliding-window layers per global one, then pick a mixed 4–6-bit weight profile by measured loss to land near 20 GB.</b> Agentic training follows distillation.</span><span class="t-ko"><b>Muse Spark의 로짓을 KV 헤드 2개, 전역 층 하나당 슬라이딩 윈도 층 3개인 30B 밀집 모델로 증류하고, 측정한 손실을 보고 4~6비트 혼합 가중치 구성을 골라 약 20 GB에 맞춘다.</b> 에이전트 학습은 증류 뒤에 이어진다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">The 19.65 GB profile keeps 75.6 of BF16's 75.7 over 15 tasks without longer reasoning, and the model leads Gemma4-31B on every agent row.</span><span class="t-ko">19.65 GB 구성은 15개 과제 평균에서 BF16의 75.7점 중 75.6점을 지키고 추론도 길어지지 않으며, 모든 에이전트 항목에서 Gemma4-31B를 앞선다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Packing one fixed-size backpack for a long hike: pick <b>one sturdy pack over many pouches</b>, copy <b>an expert's packing list</b>, then vacuum-seal the clothes but <b>leave the first-aid kit as it is</b>. Done carefully, the trip goes the same as with the big suitcase.</p>
+    <p class="t-ko">긴 산행을 위해 크기가 정해진 배낭 하나를 싼다고 해 보자. <b>작은 주머니 여러 개보다 튼튼한 배낭 하나</b>를 고르고, <b>전문가의 짐 목록</b>을 따라 하고, 옷은 진공 압축하되 <b>구급상자는 그대로 둔다</b>. 꼼꼼히만 하면 큰 여행 가방을 들고 갈 때와 산행이 다르지 않다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: three compressions under one memory budget</span><span class="t-ko">작동 방식은 메모리 예산 하나에 압축 세 가지</span></h2>
+    <p class="vlead t-en"><b>Every design choice is scored against a 32 GB box that must also hold the KV cache, a draft model, and the vision encoder.</b> That leaves under 20 GB for the language-model weights.</p>
+    <p class="vlead t-ko"><b>모든 설계 선택은 KV 캐시, 초안 모델, 비전 인코더까지 담아야 하는 32 GB 상자를 기준으로 평가된다.</b> 그래서 언어 모델 가중치에 남는 자리는 20 GB 미만이다.</p>
+    <figure class="fig narrow">
+      <a class="zoom" href="fig/2610.24628/quantization_memory_pareto.svg" target="_blank"><img src="fig/2610.24628/quantization_memory_pareto.svg" alt="Scatter of language-model weight size in GB against mean validation delta NLL for GPTQ, AWQ, uniform NVFP4, NVFP4 with MXFP8, Q4KM, Greedy-KL, EvoPress and uniform MXFP8, with a dashed 20 GB weight target; Q4KM and EvoPress are highlighted"></a>
+      <figcaption class="t-en"><b>Figure 3 (left).</b> Weight size against loss increase over BF16. Q4KM is the smallest good point and EvoPress the most accurate under 20 GB.</figcaption>
+      <figcaption class="t-ko"><b>Figure 3 (왼쪽).</b> 가중치 크기와 BF16 대비 손실 증가. Q4KM은 작으면서 괜찮은 지점이고, EvoPress는 20 GB 아래에서 가장 정확하다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2610.24628</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Choose dense over MoE.</span><span class="t-ko">MoE 대신 밀집 구조.</span></b><span class="t-en">Ladders compared at equal inference memory favored dense by 2–2.5× in compute efficiency.</span><span class="t-ko">추론 메모리를 같게 맞춘 사다리 비교에서 밀집 구조가 계산 효율로 2~2.5배 앞섰다.</span></li>
+      <li><b><span class="t-en">Distill from Muse Spark.</span><span class="t-ko">Muse Spark에서 증류.</span></b><span class="t-en">Pre-training matches the teacher's top-256 logits with KL for 95% of steps, then switches to plain cross-entropy; context then grows to 128K with agent data.</span><span class="t-ko">사전학습의 95% 동안 교사의 상위 256개 로짓을 KL로 따라가고 이후 평범한 교차 엔트로피로 바꾼다. 그 뒤 에이전트 데이터로 문맥을 128K까지 늘린다.</span></li>
+      <li><b><span class="t-en">Shrink cache and weights.</span><span class="t-ko">캐시와 가중치 줄이기.</span></b><span class="t-en">Two KV heads and a 2,048-token window in three of every four layers bound the cache; weights go from 55.7 GB to 19.65 GB (EvoPress) or Q4KM for 24 GB cards.</span><span class="t-ko">KV 헤드 2개와 네 층 중 세 층의 2,048토큰 윈도가 캐시를 묶는다. 가중치는 55.7 GB에서 19.65 GB(EvoPress)로 줄고, 24 GB 카드용은 Q4KM이다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key point: careful 4-bit does not stretch the reasoning</span><span class="t-ko">핵심은 조심스러운 4비트가 추론을 늘리지 않는다는 것</span></h2>
+    <p class="vlead t-en"><b>Aggressive low-bit models are known to think longer; with sensitive tensors kept at higher precision, response length stays within about 3% of BF16.</b> Accuracy drops by 0.1 to 1.3 points.</p>
+    <p class="vlead t-ko"><b>공격적인 저비트 모델은 생각을 더 길게 한다고 알려져 있다. 민감한 텐서를 더 높은 정밀도로 남기면 응답 길이는 BF16과 약 3% 안에서 머문다.</b> 정확도는 0.1~1.3점 떨어진다.</p>
+    <div class="vgrid">
+      <figure class="chart">
+        <div class="ct"><span class="t-en">Average accuracy, 15 tasks</span><span class="t-ko">15개 과제 평균 정확도</span></div>
+        <div class="cs"><span class="t-en">Table 3 · % · line = BF16 75.7</span><span class="t-ko">Table 3 · % · 선 = BF16 75.7</span></div>
+        <div class="bars" style="--x:75.7%">
+          <div class="bar hl" title="EvoPress: 75.6"><span class="bl">EvoPress</span><span class="bt"><span class="bf" style="--w:75.6%"></span></span><span class="bv">75.6</span></div>
+          <div class="bar" title="Greedy-KL: 75.3"><span class="bl">Greedy-KL</span><span class="bt"><span class="bf" style="--w:75.3%"></span></span><span class="bv">75.3</span></div>
+          <div class="bar hl" title="Q4KM: 74.8"><span class="bl">Q4KM</span><span class="bt"><span class="bf" style="--w:74.8%"></span></span><span class="bv">74.8</span></div>
+          <div class="bar" title="NVFP4/MXFP8: 74.4"><span class="bl">NVFP4/MXFP8</span><span class="bt"><span class="bf" style="--w:74.4%"></span></span><span class="bv">74.4</span></div>
+        </div>
+        <figcaption class="t-en">Axis 0–100. Highlighted rows ship.</figcaption>
+        <figcaption class="t-ko">축 0–100. 강조한 두 구성이 배포된다.</figcaption>
+      </figure>
+      <figure class="chart">
+        <div class="ct"><span class="t-en">Average response length</span><span class="t-ko">평균 응답 길이</span></div>
+        <div class="cs"><span class="t-en">Table 3 · tokens · line = BF16 11,070</span><span class="t-ko">Table 3 · 토큰 · 선 = BF16 11,070</span></div>
+        <div class="bars" style="--x:92.25%">
+          <div class="bar hl" title="EvoPress: 11417"><span class="bl">EvoPress</span><span class="bt"><span class="bf" style="--w:95.1%"></span></span><span class="bv">11,417</span></div>
+          <div class="bar" title="Greedy-KL: 10754"><span class="bl">Greedy-KL</span><span class="bt"><span class="bf" style="--w:89.6%"></span></span><span class="bv">10,754</span></div>
+          <div class="bar hl" title="Q4KM: 10774"><span class="bl">Q4KM</span><span class="bt"><span class="bf" style="--w:89.8%"></span></span><span class="bv">10,774</span></div>
+          <div class="bar" title="NVFP4/MXFP8: 10988"><span class="bl">NVFP4/MXFP8</span><span class="bt"><span class="bf" style="--w:91.6%"></span></span><span class="bv">10,988</span></div>
+        </div>
+        <figcaption class="t-en">Axis 0–12,000 tokens.</figcaption>
+        <figcaption class="t-ko">축 0–12,000 토큰.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: ahead of its size class on tools, mixed on coding</span><span class="t-ko">결과는 도구 사용에서 앞서고 코딩은 엇갈림</span></h2>
+    <p class="vlead t-en"><b>It beats Gemma4-31B on every agent and tool row of the scorecard, by 21 points on MCPAtlas.</b> Qwen3.6-27B still wins OSWorld, TerminalBench, SWE-Bench Verified, and GDPval-AA.</p>
+    <p class="vlead t-ko"><b>성적표의 모든 에이전트와 도구 항목에서 Gemma4-31B를 이기고, MCPAtlas에서는 21점 앞선다.</b> OSWorld, TerminalBench, SWE-Bench Verified, GDPval-AA에서는 여전히 Qwen3.6-27B가 이긴다.</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 2.</b> Muse Glimmer at high reasoning strength vs thinking modes of similar-size open models. Higher is better.</caption>
+        <caption class="t-ko"><b>Table 2.</b> 높은 추론 강도의 Muse Glimmer와 비슷한 크기 공개 모델의 thinking 모드 비교. 높을수록 좋음.</caption>
+        <thead><tr><th>Benchmark</th><th>Glimmer</th><th>Gemma4-31B</th><th>Qwen3.6-27B</th></tr></thead>
+        <tbody>
+          <tr><td>MCPAtlas</td><td class="up">75.5</td><td>54.2</td><td>62.5</td></tr>
+          <tr><td>τ³-Banking</td><td class="up">23.5</td><td>15.1</td><td>16.7</td></tr>
+          <tr><td>SWE-Bench Pro</td><td class="up">51.2</td><td>36.9</td><td>50.2</td></tr>
+          <tr><td>SWE-Bench Verified</td><td>76.0</td><td>66.6</td><td class="up">77.2</td></tr>
+          <tr><td>OSWorld-Verified</td><td>65.9</td><td>58.5</td><td class="up">75.6</td></tr>
+          <tr><td>TerminalBench 2.1</td><td>51.7</td><td>43.4</td><td class="up">60.7</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">2–2.5×</div><div class="l"><span class="t-en">compute efficiency, dense vs MoE at equal memory</span><span class="t-ko">같은 메모리에서 MoE 대비 밀집 구조의 계산 효율</span></div></div>
+      <div class="stat"><div class="n">55.7→19.65</div><div class="l"><span class="t-en">GB of weights, BF16 to EvoPress</span><span class="t-ko">가중치 GB, BF16에서 EvoPress로</span></div></div>
+      <div class="stat"><div class="n">−0.1 pt</div><div class="l"><span class="t-en">15-task average after quantization</span><span class="t-ko">양자화 후 15개 과제 평균 변화</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">When the target is a fixed memory box, compare architectures at equal inference memory rather than equal parameters, and budget the KV cache before the weights. For reasoning-heavy agents, keep quantization conservative on sensitive tensors; here that avoided the longer chains of thought seen with aggressive low-bit models.</span><span class="t-ko">목표가 정해진 메모리 상자라면 파라미터 수가 아니라 같은 추론 메모리에서 구조를 비교하고, 가중치보다 KV 캐시 예산을 먼저 잡자. 추론을 많이 하는 에이전트라면 민감한 텐서의 양자화는 보수적으로 두자. 여기서는 그 덕분에 공격적인 저비트 모델에서 보이던 사고 사슬 길어짐을 피했다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">This is a model report, not a controlled study. The quantization effect appears only as a 15-task average with no per-task or long-horizon breakdown, the scorecard does not say which precision it used, and no on-device speed is reported.</span><span class="t-ko">통제된 연구가 아니라 모델 보고서다. 양자화 효과는 15개 과제 평균으로만 나오고 과제별이나 긴 과제별 분석이 없으며, 성적표가 어떤 정밀도로 측정됐는지 밝히지 않고, 기기에서의 속도도 보고하지 않는다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2610.24628">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2610.24628">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2610.24628">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2610.24628">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>P1 slot (Compressed Reasoning) · a distilled and roughly 4-bit agent model with measured quantization effects on agentic and reasoning tasks · score 6 (priority +3, listed author Luke Zettlemoyer +3), frontier-lab report, top among P1 candidates; Right On Q (2610.29378) fit the topic but is built on on-policy distillation, which is out of scope</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-10-23.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P1 슬롯 (Compressed Reasoning) · 증류하고 약 4비트로 양자화한 에이전트 모델로, 양자화가 에이전트와 추론 과제에 주는 영향을 측정 · 점수 6 (우선 주제 +3, 목록 저자 Luke Zettlemoyer +3), 프런티어 랩 보고서, P1 후보 중 1위. Right On Q (2610.29378)는 주제에 맞지만 주제에서 뺀 on-policy distillation 기반이라 제외</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-10-23.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
