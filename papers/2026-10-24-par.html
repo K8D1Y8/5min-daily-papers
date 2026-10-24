@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Progress-Aligned Recurrence</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Efficient Sequence Models · Looped LMs · State Tracking</span><span class="t-ko">Efficient Sequence Models · 루프 언어 모델 · 상태 추적</span></span>
+      <span>2026.10.24</span>
+    </div>
+    <h1>Progress-Aligned Recurrence (PAR)<br>
+      <span class="glow t-en">— make loop k compute step k and pin the state's scale, and a 0.5B looped model runs 16× longer</span>
+      <span class="glow t-ko">— k번째 루프가 k번째 단계를 계산하게 하고 상태 크기를 고정하면, 0.5B 루프 모델이 학습 길이의 16배까지 버틴다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge hot">▲ 162 HF</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Pan Wang</b>, Yihao Hu, Guangyuan Dong, Yitong Lin, Hang Wang, Zimi Liu, Zhihao Wen, Jianshe Li, Jiang-Ming Yang, Wei Wu, Yongqi Tong <span class="t-en">(equal contribution: Pan Wang, Yihao Hu, Guangyuan Dong · corresponding: Yongqi Tong)</span><span class="t-ko">(공동 1저자: Pan Wang, Yihao Hu, Guangyuan Dong · 교신: Yongqi Tong)</span></span>
+      <span>🏛 Ant International · National University of Singapore</span>
+      <span>🗓 2026-10-20</span>
+      <span>📄 <a href="https://arxiv.org/abs/2610.27628">arXiv:2610.27628</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Looped LMs can loop more at test time, yet extra loops rarely solve longer problems; deeper or 48-layer baselines extrapolate under 2×.</span><span class="t-ko">루프 언어 모델은 테스트 때 더 많이 돌 수 있지만, 루프를 늘려도 더 긴 문제는 거의 못 푼다. 더 깊거나 48층인 기준 모델도 2배를 못 넘긴다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Two failures: final-answer targets never say how far each loop should advance, and repeated updates let the recurrent state's scale drift.</span><span class="t-ko">실패 원인은 두 가지다. 최종 답만 감독하면 루프마다 얼마나 나아가야 하는지 정해지지 않고, 같은 갱신을 반복하면 순환 상태의 크기가 흘러간다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Train loop k to predict the state after the first k moves, and rescale each token's state to its first-loop RMS norm after every loop.</b> The output head also learns when the task is done.</span><span class="t-ko"><b>k번째 루프가 처음 k번 이동한 뒤의 상태를 예측하도록 학습하고, 루프마다 각 토큰의 상태를 첫 루프의 RMS 노름으로 되돌린다.</b> 출력 헤드는 과제가 끝났는지도 함께 배운다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">Qwen2.5-0.5B trained on at most 32 swaps tracks 512 swaps at 95.5% full-state accuracy, vs 55.7% for RLT and 0.8% for chain of thought.</span><span class="t-ko">최대 32번의 교환으로 학습한 Qwen2.5-0.5B가 512번 교환에서 전체 상태 정확도 95.5%를 낸다. RLT는 55.7%, 사고 사슬은 0.8%다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Teaching a long dance routine: instead of only checking the final pose, you check that <b>on count k the dancer is in position k</b>, and you stop them from <b>taking ever bigger steps</b>. With both habits, they can follow a routine <b>far longer than any they practiced</b>.</p>
+    <p class="t-ko">긴 안무를 가르친다고 해 보자. 마지막 자세만 확인하는 대신 <b>k번째 박자에 k번째 자리에 있는지</b>를 확인하고, <b>보폭이 점점 커지지 않게</b> 잡아 준다. 이 두 습관이 있으면 <b>연습한 것보다 훨씬 긴 안무</b>도 따라간다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: give every loop a job</span><span class="t-ko">작동 방식은 루프마다 할 일을 정해 주기</span></h2>
+    <p class="vlead t-en"><b>A pretrained 24-layer model is cut into a prelude, a shared 8-layer core that loops, and a coda that can read an answer after any loop.</b> No intermediate tokens are generated.</p>
+    <p class="vlead t-ko"><b>사전학습된 24층 모델을 앞부분, 반복해서 도는 8층 공유 코어, 어느 루프에서든 답을 읽을 수 있는 뒷부분으로 나눈다.</b> 중간 토큰은 하나도 생성하지 않는다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2610.27628/par_overview.png" target="_blank"><img src="fig/2610.27628/par_overview.png" alt="PAR overview: prelude layers 1 to 8, shared core layers 9 to 16 looped with RMS anchoring, coda layers 17 to 24 reading an answer each loop; progress-aligned targets where loop k predicts the answer after k moves; prefix self-distillation with an EMA teacher on prefixes; learned halting with yes or no confirmation over loops"></a>
+      <figcaption class="t-en"><b>Figure 2.</b> (a) Retrofitted loop with RMS anchoring. (b) Loop k targets the answer after k moves. (c) Prefix self-distillation without step labels. (d) Learned halting.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> (a) RMS 고정을 넣어 개조한 루프. (b) k번째 루프의 목표는 k번 이동 뒤의 답. (c) 단계 레이블 없이 하는 접두 자기 증류. (d) 학습된 정지.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2610.27628</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Retrofit the loop.</span><span class="t-ko">루프로 개조.</span></b><span class="t-en">Layers 9–16 become one weight-tied core that sees the fixed input features again each time; an adapter starts as identity, so one loop equals the original model.</span><span class="t-ko">9~16층을 가중치를 공유하는 코어 하나로 만들고, 매번 고정된 입력 특징을 다시 넣는다. 어댑터는 항등에서 시작해 루프 한 번이면 원래 모델과 같다.</span></li>
+      <li><b><span class="t-en">Align and anchor.</span><span class="t-ko">정렬과 고정.</span></b><span class="t-en">Loop k gets cross-entropy against the state after k moves, and each token's state is rescaled to its first-loop RMS norm.</span><span class="t-ko">k번째 루프는 k번 이동 뒤의 상태와 교차 엔트로피로 맞추고, 각 토큰의 상태는 첫 루프의 RMS 노름으로 다시 맞춘다.</span></li>
+      <li><b><span class="t-en">Stop on its own.</span><span class="t-ko">스스로 멈추기.</span></b><span class="t-en">The coda also says Yes or No to "finished", and the answer is read at the first loop where 6 of the next 8 say Yes. Without labels, an EMA teacher run on prefixes supplies the targets.</span><span class="t-ko">뒷부분은 "끝났는가"에 Yes나 No도 답하고, 이후 8루프 중 6번이 Yes인 첫 루프에서 답을 읽는다. 레이블이 없으면 접두부에 돌린 EMA 교사가 목표를 대신 만든다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key point: either piece alone collapses</span><span class="t-ko">핵심은 둘 중 하나만으로는 무너진다는 것</span></h2>
+    <p class="vlead t-en"><b>At 16× the training depth, every recipe that drops progress targets or norm anchoring falls to near chance; only the pair stays near 100%.</b> Earlier papers' supervision schemes are among the failures.</p>
+    <p class="vlead t-ko"><b>학습 깊이의 16배에서는 진행 정렬 목표나 노름 고정 중 하나라도 빼면 모두 우연에 가까운 수준으로 떨어지고, 둘을 함께 쓸 때만 100% 가까이 유지된다.</b> 기존 논문들의 감독 방식도 실패한 쪽에 들어 있다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Accuracy at depth 256, trained on depth ≤ 16</span><span class="t-ko">학습 깊이 16 이하, 테스트 깊이 256의 정확도</span></div>
+      <div class="cs"><span class="t-en">Table 7 · S5, one query · % · seed mean · line = chance 20%</span><span class="t-ko">Table 7 · S5, 질문 하나 · % · 시드 평균 · 선 = 우연 20%</span></div>
+      <div class="bars" style="--x:20%">
+        <div class="bar" title="Final answer at loop d: 15"><span class="bl">Final at loop d</span><span class="bt"><span class="bf" style="--w:15%"></span></span><span class="bv">15</span></div>
+        <div class="bar" title="Prefix targets, no norm: 20"><span class="bl">Prefix, no norm</span><span class="bt"><span class="bf" style="--w:20%"></span></span><span class="bv">20</span></div>
+        <div class="bar" title="Final answer at every loop: 21"><span class="bl">Final every loop</span><span class="bt"><span class="bf" style="--w:21%"></span></span><span class="bv">21</span></div>
+        <div class="bar" title="Final answer at loop d with norm: 26.8"><span class="bl">Final at d + norm</span><span class="bt"><span class="bf" style="--w:26.8%"></span></span><span class="bv">26.8</span></div>
+        <div class="bar hl" title="PAR, prefix targets plus norm: 99.7"><span class="bl">PAR</span><span class="bt"><span class="bf" style="--w:99.7%"></span></span><span class="bv">99.7</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–100. Seed means from Table 7; the norm row uses the 26.8 average stated in §6.1.</figcaption>
+      <figcaption class="t-ko">축 0–100. 시드 평균은 Table 7 기준이고, 노름 행은 6.1절에 적힌 평균 26.8을 썼다.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: past the best latent-recurrence model</span><span class="t-ko">결과는 최고의 잠재 순환 모델을 넘어선다</span></h2>
+    <p class="vlead t-en"><b>On the swap-S5 protocol, every PAR seed beats RLT's mean at 16× length, and learned halting gives up almost nothing without knowing the length.</b> Explicit chain of thought is perfect in range but collapses.</p>
+    <p class="vlead t-ko"><b>swap-S5 프로토콜의 16배 길이에서 PAR의 모든 시드가 RLT 평균을 넘고, 길이를 모르는 채 스스로 멈춰도 거의 손해가 없다.</b> 명시적 사고 사슬은 학습 범위 안에서는 완벽하지만 그 밖에서는 무너진다.</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Tables 1 and 4.</b> Swap-S5, trained on ≤ 32 swaps, full-state accuracy (%), mean ± sd; the halting row uses later checkpoints. Higher is better.</caption>
+        <caption class="t-ko"><b>Table 1, 4.</b> Swap-S5, 32번 이하 교환으로 학습, 전체 상태 정확도(%), 평균 ± 표준편차. 정지 행은 더 나중 체크포인트. 높을수록 좋음.</caption>
+        <thead><tr><th>Method</th><th>256 swaps (8×)</th><th>512 swaps (16×)</th></tr></thead>
+        <tbody>
+          <tr><td>Transformer</td><td>0.85 ± 0.30</td><td>0.85 ± 0.30</td></tr>
+          <tr><td>Explicit CoT</td><td>0.8</td><td>0.8</td></tr>
+          <tr><td>RLT</td><td>97.3 ± 2.8</td><td>55.7 ± 25.8</td></tr>
+          <tr><td>PAR, told the length</td><td class="up">99.5 ± 1.2</td><td class="up">95.5 ± 11.0</td></tr>
+          <tr><td>PAR + learned halting</td><td>98.7 ± 3.1</td><td>92.9 ± 16.2</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">16×</div><div class="l"><span class="t-en">training length, the largest measured</span><span class="t-ko">학습 길이 대비, 측정 가능한 최대치</span></div></div>
+      <div class="stat"><div class="n">&lt;2.2×</div><div class="l"><span class="t-en">extrapolation once norm anchoring is removed</span><span class="t-ko">노름 고정을 빼면 남는 외삽 배율</span></div></div>
+      <div class="stat"><div class="n">85%</div><div class="l"><span class="t-en">at 16× from final-answer labels only</span><span class="t-ko">최종 답 레이블만으로 16배에서</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">Recurrent depth only buys longer problems when each iteration has a defined job and the state cannot drift in scale. If you build looped or recurrent models, supervise intermediate iterations and normalize the carried state, not just the output.</span><span class="t-ko">순환 깊이는 반복마다 할 일이 정해져 있고 상태 크기가 흘러가지 않을 때만 더 긴 문제로 이어진다. 루프나 순환 모델을 만든다면 출력만이 아니라 중간 반복을 감독하고, 넘겨받는 상태를 정규화하자.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">All tasks are synthetic or templated state tracking, and graph reachability, which has no sequential steps, fails. Swap-S5, halting, and self-distillation were run only on the 0.5B model, and larger backbones swing by 33–43 points across seeds at 16×.</span><span class="t-ko">과제는 모두 합성이거나 틀이 정해진 상태 추적이고, 순차 단계가 없는 그래프 도달 문제에서는 실패한다. swap-S5, 정지, 자기 증류는 0.5B 모델에서만 돌렸고, 더 큰 모델은 16배에서 시드마다 33~43점씩 흔들린다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2610.27628">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2610.27628">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2610.27628">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2610.27628">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>legacy slot (7th card) · efficient sequence models axis, recurrent depth and state tracking · score 3 (very hot, HF ▲162), tied with MoEZip and DropKV (NeurIPS, KV-cache axis) and chosen by the tie-break, an axis unused in the last two cards and then heat</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-10-24.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>legacy 슬롯 (7번째 카드) · 효율 시퀀스 모델 축, 순환 깊이와 상태 추적 · 점수 3 (매우 화제, HF ▲162). MoEZip, DropKV (NeurIPS, KV 캐시 축)와 동점이었고, 최근 두 카드에 없던 축과 화제성이라는 동점 규칙으로 골랐다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-10-24.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
