@@ -304,6 +304,7 @@ const DATA = {
         ['Zero Sum SVD','method','Global rank allocation from a zero-sum rule on cumulative predicted loss change','2602.02848'],
         ['IO-SVD','method','KL-aware double-sided (input + output) whitening with heterogeneous rank allocation for SVD compression','2605.15626'] ]},
       { name:'Knowledge Distillation', blurb:'Transfer teacher behavior into a smaller student.', nodes:[
+        ['WASD','method','Wasserstein-based knowledge distillation for LLMs','2610.07706'],
         ['MiniLLM','method','Reverse-KL on-policy white-box distillation','2306.08543'],
         ['GKD','method','Generalized on-policy distillation over samples','2306.13649'],
         ['Sequence-level KD','concept','Train student on teacher output sequences','1606.07947'],
@@ -450,6 +451,9 @@ const DATA = {
         ['Closed-Loop Collapse','concept','A compressed VLA policy passes offline evaluation yet fails in closed-loop execution','2609.23048'],
         ['Calibrated Instrument','benchmark','Calibrated LLM judge with a null condition measures how quantization, early exit and speculative decoding change output quality','2609.18005'] ]},
       { name:'On-policy distillation', blurb:'The student learns the teacher\'s token distribution on its own rollouts, fixing exposure bias.', nodes:[
+        ['TeacherGRPO','method','Closes the capacity gap in reasoning distillation by aligning teacher distribution to what the student can learn','2609.33426'],
+        ['Allspark','method','Weak-to-strong transfer of reasoning via alternating chain of thought, avoiding large-model rollouts','2609.32913'],
+        ['Cross-Feedback Reasoning Distillation','method','Collaborative reasoning distillation with cross-feedback and coherent curation of traces','2610.09587'],
         ['Negative-Policy OPD','method','On-policy distillation that also uses negative-policy rollouts for supervision','2610.07874'],
         ['OPD New Skills','method','On-policy distillation teaches students new compositional skill but not new facts','2610.09639'],
         ['ActionOPD','method','Distills decisions rather than tokens for small agents: aligns behavior at the action level','2610.19820'],
@@ -484,6 +488,14 @@ const DATA = {
         ['VAT','method','Verification-aware draft training: a head predicts which positions survive verification, and loss weights restart at the first rejection','2608.30135'] ]} ]},
     { key:'video', subs:[
       { name:'AR video diffusion & distillation', blurb:'Turning bidirectional video diffusion into fast causal (autoregressive) generators.', nodes:[
+        ['Direct Forcing','method','Single-stage recipe for few-step AR text-to-video: merges causal adaptation and distribution matching','2610.30861'],
+        ['TriTD','method','Tri-partite trajectory-distribution distillation for real-time AR video generation','2610.26165'],
+        ['ViRDM','method','Representation distribution matching for few-step causal video, replacing DMD-only post-training','2609.28923'],
+        ['Parametric Trajectory Distillation','method','Few-step video distillation that allocates student capacity along the sampling trajectory','2610.11498'],
+        ['Uncertainty DMD','method','Restores sample diversity lost to few-step AR video distillation','2609.11265'],
+        ['Clean Forcing','method','Drift-resistant AR video diffusion with a frozen base model','2610.25634'],
+        ['Looking Ahead','method','Models future scene evolution in AR video generation beyond teacher forcing','2610.29989'],
+        ['Memory Forcing','method','Attendable mid-horizon history for streaming video generation','2610.11756'],
         ['Speculative Forcing','method','Few-step AR video generators spend the final denoising step on every token; this spends it only where refinement is needed','2610.22347'],
         ['ForcingBooster','method','Adaptive patch-wise denoising: allocates compute unevenly across patches for faster AR video diffusion','2610.12625'],
         ['Connected Self Forcing','method','Goes beyond local self-rollout learning in AR video to keep long videos consistent','2610.12156'],
@@ -508,6 +520,10 @@ const DATA = {
         ['Radian','method','Adds real-video adversarial loss in frozen vision-foundation-model features on top of on-policy DMD for AR video','2609.40037'],
         ['Diagonal Distillation','method','Distills AR video along a chunk × denoising-step diagonal to use temporal context and curb exposure bias · ICLR 2026','2603.09488'] ]},
       { name:'Attention & cache efficiency', blurb:'Sparse, linear and cached attention for long streaming video.', nodes:[
+        ['Dynamics-Aware Sparse Attention','method','Sparse attention guided by scene dynamics for AR video diffusion','2610.26262'],
+        ['CORAL-KV','method','Cross-layer prediction and residual coding to compress AR video KV caches','2610.12514'],
+        ['TGuide','method','Historical trajectory guidance speeds up four-step AR video diffusion','2610.14657'],
+        ['Frequency-Step Cache','method','Training-free caching that separates synchronization from repair in AR video diffusion','2610.15922'],
         ['TempoKV','method','Predictive KV-cache quantization for AR video generation','2610.15324'],
         ['FrameFold','method','Response-guided KV cache consolidation for AR long video generation','2610.14568'],
         ['Forcing-KV','method','Hybrid KV cache compression for AR video diffusion','2605.09681'],
@@ -538,6 +554,12 @@ const DATA = {
         ['ReWorld','model','Mixed local/global attention heads plus a pose-indexed landmark bank keep long-horizon memory under a fixed KV budget','2608.23565'] ]} ]}
   ],
   links: [
+    ['TeacherGRPO','GKD','student-aware teacher distribution for reasoning distillation'],
+    ['Direct Forcing','Self Forcing','one stage instead of separate causal adaptation + DMD'],
+    ['TriTD','Self Forcing','distillation recipe for real-time AR video'],
+    ['Uncertainty DMD','Speculative Forcing','both fix costs of few-step AR distillation (diversity vs compute)'],
+    ['CORAL-KV','TempoKV','KV cache compression for AR video'],
+    ['Memory Forcing','Self Forcing','keeps mid-horizon history that Self Forcing drops'],
     ['Speculative Forcing','Self Forcing','spends the last denoising step only where a uniform schedule wastes it'],
     ['GFD-OPD','GKD','on-policy distillation carried from LLMs to diffusion models'],
     ['ActionOPD','SOD','OPD for small agents, at action/step granularity'],
