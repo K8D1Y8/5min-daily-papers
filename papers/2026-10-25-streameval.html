@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · StreamEval</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Video & World Generation · Streaming Benchmark · Interactive Control</span><span class="t-ko">Video & World Generation · 스트리밍 벤치마크 · 상호작용 제어</span></span>
+      <span>2026.10.25</span>
+    </div>
+    <h1>StreamEval<br>
+      <span class="glow t-en">— 37 streaming video models, 300 timed sessions: they look good but rarely do what they are told</span>
+      <span class="glow t-ko">— 스트리밍 비디오 모델 37개를 시간이 정해진 세션 300개로 시험하니, 보기에는 좋아도 시킨 일은 잘 못한다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge hot">▲ 464 HF · ★ 306 GitHub</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>StreamEval Team</b>: Jungang Li, Ziqi Huang, Tian Ye, Haocheng Xi, Yuezhou Hu, Kai Jiang, Zhifei Li, Yichuan Wang, Shuo Yang, Zhiqiu Lin, Zian Zheng, Alberto Taiuti, Jintao Zhang</span>
+      <span>🏛 Tsinghua · NVIDIA · CMU · UC Berkeley · Princeton · NUS · Reactor</span>
+      <span>🗓 2026-10-20</span>
+      <span>📄 <a href="https://arxiv.org/abs/2610.28402">arXiv:2610.28402</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Streaming video models accept new inputs mid-session, yet existing benchmarks score clips, not whether a request was carried out and then kept.</span><span class="t-ko">스트리밍 비디오 모델은 세션 도중에 새 입력을 받지만, 기존 벤치마크는 클립을 채점할 뿐 요청을 실행하고 유지했는지는 보지 않는다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Visual quality does not predict obedience: HappyOyster has the best world-generation Quality (58.3) but follows only 5.6% of controls.</span><span class="t-ko">화질이 좋다고 말을 잘 듣는 것은 아니다. HappyOyster는 월드 생성 Quality가 58.3으로 가장 높지만 제어의 5.6%만 따른다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>300 scripted sessions of 15–300 s across five tasks release timed requests on a session clock, and VLM judges check each one against an oracle of what must change and what must stay.</b> Ten metrics roll into four dimensions.</span><span class="t-ko"><b>다섯 과제에 걸친 15~300초짜리 세션 300개가 세션 시계에 맞춰 요청을 내보내고, VLM 판정자가 무엇이 바뀌고 무엇이 남아야 하는지 적은 정답표와 하나씩 대조한다.</b> 지표 열 개를 네 차원으로 묶는다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">The best world-generation Following is 25.9 and the best Overall 33.4; in reference editing the top full-edit success is 15.0 out of 100.</span><span class="t-ko">월드 생성에서 가장 높은 Following은 25.9, 가장 높은 Overall은 33.4다. 참조 편집에서 편집을 끝까지 성공한 최고 점수는 100점 만점에 15.0이다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Instead of judging a street performer from a photo, you <b>shout requests at set times</b> during the show: "juggle three balls now", "drop one at thirty seconds". Then you check both that <b>each request happened</b> and that <b>nothing else fell apart</b> along the way.</p>
+    <p class="t-ko">거리 공연자를 사진 한 장으로 평가하는 대신, 공연 중에 <b>정해진 시각마다 요청을 외친다</b>. "지금 공 세 개로 저글링", "30초에 하나 내려놓기" 같은 식이다. 그리고 <b>요청마다 실제로 해냈는지</b>, 그러는 동안 <b>다른 것은 무너지지 않았는지</b>를 함께 확인한다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: a test is a session, not a clip</span><span class="t-ko">작동 방식은 클립이 아니라 세션 단위의 시험</span></h2>
+    <p class="vlead t-en"><b>Every case is a timeline: a starting asset, requests that arrive at fixed seconds, and an oracle saying what to establish, keep, cancel, or restore.</b> World generation sits beside avatars and live editing.</p>
+    <p class="vlead t-ko"><b>모든 시험은 하나의 시간표다. 시작 자료가 있고, 정해진 초에 요청이 도착하며, 무엇을 만들고 유지하고 취소하고 되돌릴지 정답표가 정해 둔다.</b> 월드 생성은 아바타, 실시간 편집과 나란히 놓인다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2610.28402/se_overview.jpg" target="_blank"><img src="fig/2610.28402/se_overview.jpg" alt="StreamEval overview with five tasks: avatar dialogue and performance, world generation with timed online inputs such as move toward the dock at 0 seconds and camera follows to the right at 10 seconds, and real-time instruction and reference editing on a shared source video"></a>
+      <figcaption class="t-en"><b>Figure 1.</b> Five tasks. In world generation, controls such as "move toward the dock" and "camera follows to the right" arrive at 0 s and 10 s.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> 다섯 과제. 월드 생성에서는 "부두 쪽으로 이동", "카메라가 오른쪽으로 따라감" 같은 제어가 0초와 10초에 도착한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2610.28402</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Script the sessions.</span><span class="t-ko">세션 대본 작성.</span></b><span class="t-en">60 cases per task, 12 at each of 15, 30, 60, 120, and 300 s, with 1,347 planned online events in total.</span><span class="t-ko">과제당 60개, 15·30·60·120·300초에 12개씩이고, 계획된 온라인 이벤트는 모두 1,347개다.</span></li>
+      <li><b><span class="t-en">Stream the inputs.</span><span class="t-ko">입력을 흘려보내기.</span></b><span class="t-en">A scheduler releases each request on the session clock while editing sources keep moving; every case runs three times per model.</span><span class="t-ko">스케줄러가 세션 시계에 맞춰 요청을 내보내고 편집할 원본 영상은 계속 흘러간다. 모델마다 시험을 세 번씩 돌린다.</span></li>
+      <li><b><span class="t-en">Judge by rule.</span><span class="t-ko">규칙으로 채점.</span></b><span class="t-en">VLM judges list defects and outcomes for each 5-second clip, and fixed rules turn them into 0–100 scores; world-generation Overall is the mean of four metrics.</span><span class="t-ko">VLM 판정자가 5초 클립마다 결함과 결과를 적고, 정해진 규칙이 이를 0~100점으로 바꾼다. 월드 생성 Overall은 지표 네 개의 평균이다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key point: pretty is not obedient</span><span class="t-ko">핵심은 예쁜 것과 말 잘 듣는 것은 다르다는 것</span></h2>
+    <p class="vlead t-en"><b>The models with the best-looking worlds sit near the bottom on following controls.</b> On the same 0–100 scale, Following never passes 26 for any world model.</p>
+    <p class="vlead t-ko"><b>가장 보기 좋은 세계를 만드는 모델이 제어를 따르는 데서는 바닥 근처에 있다.</b> 같은 0~100 척도에서 어떤 월드 모델도 Following 26점을 넘지 못한다.</p>
+    <div class="vgrid">
+      <figure class="chart">
+        <div class="ct"><span class="t-en">World generation: Quality</span><span class="t-ko">월드 생성: Quality</span></div>
+        <div class="cs"><span class="t-en">Table 4 · 0–100 · higher is better</span><span class="t-ko">Table 4 · 0–100 · 높을수록 좋음</span></div>
+        <div class="bars mono">
+          <div class="bar" title="HappyOyster 1.0: 58.34"><span class="bl">HappyOyster</span><span class="bt"><span class="bf" style="--w:58.34%"></span></span><span class="bv">58.3</span></div>
+          <div class="bar" title="HY-World 1.5 WorldPlay: 50.60"><span class="bl">HY-World 1.5</span><span class="bt"><span class="bf" style="--w:50.6%"></span></span><span class="bv">50.6</span></div>
+          <div class="bar" title="Rolling Forcing: 45.19"><span class="bl">Rolling Forcing</span><span class="bt"><span class="bf" style="--w:45.19%"></span></span><span class="bv">45.2</span></div>
+          <div class="bar" title="MemFlow: 40.93"><span class="bl">MemFlow</span><span class="bt"><span class="bf" style="--w:40.93%"></span></span><span class="bv">40.9</span></div>
+          <div class="bar" title="Krea Realtime: 35.61"><span class="bl">Krea Realtime</span><span class="bt"><span class="bf" style="--w:35.61%"></span></span><span class="bv">35.6</span></div>
+        </div>
+        <figcaption class="t-en">Axis 0–100.</figcaption>
+        <figcaption class="t-ko">축 0–100.</figcaption>
+      </figure>
+      <figure class="chart">
+        <div class="ct"><span class="t-en">World generation: Following</span><span class="t-ko">월드 생성: Following</span></div>
+        <div class="cs"><span class="t-en">Table 4 · % of controls executed · same models</span><span class="t-ko">Table 4 · 실행된 제어 비율 · 같은 모델</span></div>
+        <div class="bars mono">
+          <div class="bar" title="HappyOyster 1.0: 5.56"><span class="bl">HappyOyster</span><span class="bt"><span class="bf" style="--w:5.56%"></span></span><span class="bv">5.6</span></div>
+          <div class="bar" title="HY-World 1.5 WorldPlay: 10.00"><span class="bl">HY-World 1.5</span><span class="bt"><span class="bf" style="--w:10%"></span></span><span class="bv">10.0</span></div>
+          <div class="bar" title="Rolling Forcing: 17.78"><span class="bl">Rolling Forcing</span><span class="bt"><span class="bf" style="--w:17.78%"></span></span><span class="bv">17.8</span></div>
+          <div class="bar" title="MemFlow: 22.59"><span class="bl">MemFlow</span><span class="bt"><span class="bf" style="--w:22.59%"></span></span><span class="bv">22.6</span></div>
+          <div class="bar" title="Krea Realtime: 25.93"><span class="bl">Krea Realtime</span><span class="bt"><span class="bf" style="--w:25.93%"></span></span><span class="bv">25.9</span></div>
+        </div>
+        <figcaption class="t-en">Axis 0–100. The order flips.</figcaption>
+        <figcaption class="t-ko">축 0–100. 순서가 뒤집힌다.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: no world model wins on every axis</span><span class="t-ko">결과는 모든 축에서 이기는 월드 모델이 없다는 것</span></h2>
+    <p class="vlead t-en"><b>Among 17 world-generation configurations, no model leads more than two of the four metrics, and the best Overall is only 33.4.</b> Self-Forcing, the base of many recent AR recipes, scores 15.5.</p>
+    <p class="vlead t-ko"><b>월드 생성 구성 17개 가운데 지표 네 개 중 셋 이상에서 1등인 모델은 없고, 가장 높은 Overall도 33.4에 그친다.</b> 최근 여러 AR 학습법의 출발점인 Self-Forcing은 15.5점이다.</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 4.</b> Top six world-generation models by Overall, 0–100. Higher is better.</caption>
+        <caption class="t-ko"><b>Table 4.</b> Overall 기준 상위 여섯 월드 생성 모델, 0–100. 높을수록 좋음.</caption>
+        <thead><tr><th>Model</th><th>Quality</th><th>Stability</th><th>Following</th><th>Continuity</th><th>Overall</th></tr></thead>
+        <tbody>
+          <tr><td>MemFlow</td><td>40.93</td><td>40.38</td><td>22.59</td><td>29.54</td><td class="up">33.36</td></tr>
+          <tr><td>Rolling Forcing</td><td>45.19</td><td>44.47</td><td>17.78</td><td>24.61</td><td>33.01</td></tr>
+          <tr><td>Krea Realtime</td><td>35.61</td><td>42.79</td><td class="up">25.93</td><td>22.12</td><td>31.61</td></tr>
+          <tr><td>HY-World 1.5</td><td>50.60</td><td>48.06</td><td>10.00</td><td>17.11</td><td>31.44</td></tr>
+          <tr><td>HappyOyster 1.0</td><td class="up">58.34</td><td class="up">56.67</td><td>5.56</td><td>2.78</td><td>30.84</td></tr>
+          <tr><td>Matrix-Game 3.5</td><td>40.43</td><td>37.86</td><td>6.67</td><td class="up">34.50</td><td>29.87</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">25.9</div><div class="l"><span class="t-en">best world-generation Following</span><span class="t-ko">월드 생성 최고 Following</span></div></div>
+      <div class="stat"><div class="n">36.9</div><div class="l"><span class="t-en">best avatar action Following</span><span class="t-ko">아바타 동작 최고 Following</span></div></div>
+      <div class="stat"><div class="n">15.0</div><div class="l"><span class="t-en">best full-edit success, reference editing</span><span class="t-ko">참조 편집 최고 완전 편집 성공률</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">If you build an interactive world model, score request execution and state retention across a session, not clip quality. Here those axes barely move together, so tuning for VBench-style visuals alone will not give you a controllable world.</span><span class="t-ko">상호작용 월드 모델을 만든다면 클립 화질이 아니라 세션 전체에서 요청을 실행하고 상태를 유지하는지를 채점하자. 여기서는 두 축이 거의 함께 움직이지 않아서, VBench식 화질만 맞추면 제어 가능한 세계가 나오지 않는다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">Every score comes from automated VLM judges, Qwen models wherever the paper names them, while Qwen also drafted the scripts; agreement with humans is left for future work. Despite the real-time framing, latency and throughput are not measured, and the editing tables show only configurations above 5, chosen after evaluation.</span><span class="t-ko">모든 점수는 자동 VLM 판정자가 매기는데, 논문이 이름을 밝힌 판정자는 대본을 쓴 것과 같은 Qwen 계열이다. 사람 판단과의 일치도는 향후 과제로 남겼다. 실시간을 내세우면서도 지연이나 처리량은 재지 않았고, 편집 표는 평가 뒤에 고른 5점 넘는 구성만 보여 준다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2610.28402">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2610.28402">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2610.28402">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2610.28402">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>P2 slot (Video &amp; World Generation) · benchmark of interactive streaming video and world generation across 37 models · score 6 (priority +3, very hot HF ▲464), tied with Looking Ahead (2610.29989, HF ▲170) and Ropedia W0 and chosen on heat; FAPL (2610.30926) scored 9, but its listed-author match looked like a name collision and its topic is cinematic quality, not efficiency</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-10-25.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P2 슬롯 (Video &amp; World Generation) · 모델 37개를 시험한 상호작용 스트리밍 비디오·월드 생성 벤치마크 · 점수 6 (우선 주제 +3, 매우 화제 HF ▲464). Looking Ahead (2610.29989, HF ▲170), Ropedia W0와 동점이었고 화제성으로 골랐다. FAPL (2610.30926)은 9점이었지만 목록 저자 일치가 동명이인으로 보였고 주제도 효율이 아닌 영화풍 화질이라 제외</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-10-25.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
