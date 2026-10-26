@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · LayerTrim</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Compressed Reasoning · Structured Pruning · Long CoT</span><span class="t-ko">Compressed Reasoning · 구조적 가지치기 · 긴 사고 사슬</span></span>
+      <span>2026.10.26</span>
+    </div>
+    <h1>LayerTrim<br>
+      <span class="glow t-en">— keep every attention layer, trim only redundant MLPs, and a pruned reasoning model rambles far less</span>
+      <span class="glow t-ko">— 어텐션은 전부 남기고 중복된 MLP만 깎으면, 가지치기한 추론 모델이 훨씬 덜 헤맨다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Woosang Lim</b>, Haneul Yoo, Vincent-Daniel Yun, Sungjoo Yoo <span class="t-en">(equal contribution: Woosang Lim, Haneul Yoo, Vincent-Daniel Yun · corresponding: Sungjoo Yoo)</span><span class="t-ko">(공동 1저자: Woosang Lim, Haneul Yoo, Vincent-Daniel Yun · 교신: Sungjoo Yoo)</span></span>
+      <span>🏛 Seoul National University · NYU · USC</span>
+      <span>🗓 2026-10-13</span>
+      <span>📄 <a href="https://arxiv.org/abs/2610.19121">arXiv:2610.19121</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Pruning methods built for ordinary LLMs break long chains of thought: removing 9 of 40 layers drops Qwen3-14B from 76.7 to near zero.</span><span class="t-ko">일반 LLM용 가지치기는 긴 사고 사슬을 망가뜨린다. 40층 중 9층을 빼면 Qwen3-14B의 평균 점수가 76.7에서 거의 0이 된다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Narrowing MLPs distorts hidden states least, cutting attention or whole layers breaks reasoning, and 38% of MLP features carry 89% of importance.</span><span class="t-ko">MLP 폭을 줄이면 은닉 상태가 가장 덜 흔들리고, 어텐션이나 층 전체를 자르면 추론이 무너진다. MLP 특징의 38%가 중요도의 89%를 차지한다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>From 24 dense-model AIME traces, pick the 2N least influential layers, then keep each one's MLP features with the largest expected squared output.</b> No gradients, masks, or recovery training.</span><span class="t-ko"><b>원래 모델의 AIME 추론 기록 24개로 영향이 가장 작은 층 2N개를 고르고, 각 층에서 출력 기여의 제곱 기댓값이 큰 MLP 특징만 남긴다.</b> 기울기, 마스크, 복구 학습이 모두 필요 없다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">Best average among structured pruning methods on 3 models at both budgets, up to 21.4 points above the best baseline, at about 1.2× faster inference.</span><span class="t-ko">세 모델과 두 예산 모두에서 구조적 가지치기 중 평균이 가장 높고, 최강 기준보다 최대 21.4점 앞서며, 추론은 약 1.2배 빨라진다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Slimming a relay team for a marathon: you <b>don't drop runners</b>, and you don't blindfold anyone at the <b>baton handoff</b>. Instead, on the stretches where runners barely change pace, you give them <b>lighter packs</b>. The baton keeps moving all the way to the finish.</p>
+    <p class="t-ko">마라톤 계주팀을 가볍게 만든다고 해 보자. <b>주자를 빼지 않고</b>, <b>바통을 넘기는 순간</b>에 누구의 눈도 가리지 않는다. 대신 속도가 거의 변하지 않는 구간의 주자에게 <b>가벼운 배낭</b>을 준다. 그러면 바통은 결승선까지 계속 이어진다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: five stages, forward passes only</span><span class="t-ko">작동 방식은 순전파만 쓰는 다섯 단계</span></h2>
+    <p class="vlead t-en"><b>Every statistic comes from the dense model reading its own reasoning traces.</b> The output is a smaller dense checkpoint, so no sparse kernels are needed.</p>
+    <p class="vlead t-ko"><b>모든 통계는 원래 모델이 자기 추론 기록을 읽으면서 얻는다.</b> 결과물은 더 작은 밀집 체크포인트라 희소 커널이 필요 없다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2610.19121/layertrim_overview.svg" target="_blank"><img src="fig/2610.19121/layertrim_overview.svg" alt="LayerTrim overview in five stages: reasoning-trace calibration on AIME 2024 prompts, decoder-layer selection by lowest Block Influence, MLP feature ranking by expected squared activation times down-projection norm, structured trimming of gate, up and down projections, and the compressed model where only selected layers have narrower MLPs while attention and depth stay unchanged"></a>
+      <figcaption class="t-en"><b>Figure 3.</b> Calibrate, select low-influence layers, rank MLP features, trim them, and keep attention and depth intact.</figcaption>
+      <figcaption class="t-ko"><b>Figure 3.</b> 보정, 영향이 작은 층 선택, MLP 특징 순위 매기기, 잘라내기. 어텐션과 깊이는 그대로 둔다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2610.19121</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Calibrate on traces.</span><span class="t-ko">추론 기록으로 보정.</span></b><span class="t-en">24 AIME 2024 traces from the dense model, using each prompt and the first 2K generated tokens.</span><span class="t-ko">원래 모델이 만든 AIME 2024 추론 기록 24개에서 프롬프트와 생성 토큰 앞 2K개를 쓴다.</span></li>
+      <li><b><span class="t-en">Pick layers by influence.</span><span class="t-ko">영향으로 층 고르기.</span></b><span class="t-en">Block Influence is 1 minus the cosine between a block's input and output; a budget of N layers trims the 2N lowest.</span><span class="t-ko">블록 영향도는 1에서 블록 입력과 출력의 코사인을 뺀 값이다. N층 분량 예산이면 영향도가 가장 낮은 2N개 층을 깎는다.</span></li>
+      <li><b><span class="t-en">Keep the strongest features.</span><span class="t-ko">강한 특징만 남기기.</span></b><span class="t-en">Each feature scores mean squared activation times its down-projection norm squared; the rest are deleted from all three projections.</span><span class="t-ko">특징마다 활성값 제곱의 평균에 down 투영 열 노름의 제곱을 곱해 점수를 매기고, 나머지는 세 투영에서 모두 지운다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key point: leave attention alone</span><span class="t-ko">핵심은 어텐션을 건드리지 않는 것</span></h2>
+    <p class="vlead t-en"><b>At the same parameter cut, pruning attention alone takes accuracy to nearly zero, while MLP-only trimming keeps most of it.</b> MLP-trimmed models also overlap most with the dense model's attention, even on tokens 16K–32K back.</p>
+    <p class="vlead t-ko"><b>같은 양을 잘라도 어텐션만 자르면 정확도가 거의 0이 되고, MLP만 깎으면 대부분 남는다.</b> MLP만 깎은 모델은 16K~32K 토큰 앞을 보는 어텐션에서도 원래 모델과 가장 많이 겹친다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">What to prune, Qwen3-14B, about 1.5B parameters removed</span><span class="t-ko">무엇을 자를까, Qwen3-14B, 약 1.5B 파라미터 제거</span></div>
+      <div class="cs"><span class="t-en">Table 2 · mean of AIME25 and GPQA-D, % · line = dense 67.3 (computed from Table 1)</span><span class="t-ko">Table 2 · AIME25와 GPQA-D 평균, % · 선 = 원래 모델 67.3 (Table 1로 계산)</span></div>
+      <div class="bars" style="--x:67.3%">
+        <div class="bar" title="Attention removal: 0.4"><span class="bl">Attn removal</span><span class="bt"><span class="bf" style="--w:0.4%"></span></span><span class="bv">0.4</span></div>
+        <div class="bar" title="Attention trimming: 0.7"><span class="bl">Attn trimming</span><span class="bt"><span class="bf" style="--w:0.7%"></span></span><span class="bv">0.7</span></div>
+        <div class="bar" title="MLP removal: 8.8"><span class="bl">MLP removal</span><span class="bt"><span class="bf" style="--w:8.8%"></span></span><span class="bv">8.8</span></div>
+        <div class="bar" title="Joint trimming, 25% attention: 48.3"><span class="bl">Joint trimming</span><span class="bt"><span class="bf" style="--w:48.3%"></span></span><span class="bv">48.3</span></div>
+        <div class="bar hl" title="MLP-only trimming: 58.8"><span class="bl">MLP trimming</span><span class="bt"><span class="bf" style="--w:58.8%"></span></span><span class="bv">58.8</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–100. Removal deletes whole modules; trimming narrows them.</figcaption>
+      <figcaption class="t-ko">축 0–100. 제거는 모듈을 통째로 지우고, 깎기는 폭만 줄인다.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: right answers with shorter traces</span><span class="t-ko">결과는 더 짧은 추론으로 맞히기</span></h2>
+    <p class="vlead t-en"><b>Broken pruning shows up as rambling before wrong answers.</b> On Qwen3-14B the other pruned models write roughly twice as many tokens, and on Phi-4 LayerTrim hits the token limit on 24.4% of GPQA answers vs 70.2% for FLAP.</p>
+    <p class="vlead t-ko"><b>망가진 가지치기는 오답보다 장황함으로 먼저 드러난다.</b> Qwen3-14B에서 다른 가지치기 모델은 토큰을 대략 두 배 쓰고, Phi-4에서 GPQA 답이 토큰 한도에 걸리는 비율은 LayerTrim 24.4%, FLAP 70.2%다.</p>
+    <div class="vgrid">
+      <figure class="fig narrow">
+        <a class="zoom" href="fig/2610.19121/acc_vs_tokens.svg" target="_blank"><img src="fig/2610.19121/acc_vs_tokens.svg" alt="Scatter of accuracy versus average generated tokens on Qwen3-14B at 9 of 40 layers: depth pruning methods near zero accuracy and over 30K tokens, FLAP and RESP near 20K tokens, LayerTrim near 65 percent and about 10K tokens, close to the dense model"></a>
+        <figcaption class="t-en"><b>Figure 1.</b> Qwen3-14B, budget of 9 of 40 layers, averaged over five benchmarks.</figcaption>
+        <figcaption class="t-ko"><b>Figure 1.</b> Qwen3-14B, 40층 중 9층 분량 예산, 벤치마크 다섯 개 평균.</figcaption>
+        <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2610.19121</div>
+      </figure>
+      <div class="tablewrap">
+        <table class="ptable">
+          <caption class="t-en"><b>Table 1.</b> Average accuracy (%) over five benchmarks, budget of 9 of 40 layers. Higher is better.</caption>
+          <caption class="t-ko"><b>Table 1.</b> 벤치마크 다섯 개 평균 정확도(%), 40층 중 9층 분량 예산. 높을수록 좋음.</caption>
+          <thead><tr><th>Model</th><th>Dense</th><th>ShortGPT</th><th>RESP</th><th>LayerTrim</th></tr></thead>
+          <tbody>
+            <tr><td>Qwen3-14B</td><td>76.7</td><td>0.4</td><td>58.3</td><td class="up">65.1</td></tr>
+            <tr><td>Phi-4-reasoning+</td><td>71.0</td><td>1.8</td><td>34.6</td><td class="up">48.9</td></tr>
+            <tr><td>Magistral-Small</td><td>70.3</td><td>0.0</td><td>24.3</td><td class="up">45.7</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">21.4 pt</div><div class="l"><span class="t-en">over the best baseline, Magistral, 9/40</span><span class="t-ko">최강 기준 대비, Magistral, 9/40</span></div></div>
+      <div class="stat"><div class="n">1.24×</div><div class="l"><span class="t-en">faster prefill, Qwen3-14B, 20% less memory</span><span class="t-ko">Qwen3-14B 프리필 가속, 메모리 20% 감소</span></div></div>
+      <div class="stat"><div class="n">27.9 s</div><div class="l"><span class="t-en">to prune Qwen3-14B, 140× faster than RESP</span><span class="t-ko">Qwen3-14B 가지치기 시간, RESP보다 140배 빠름</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">When compressing a reasoning model, protect attention, which carries retrieval over the long trace, and take width from layers that barely change the hidden state. Watch generation length and token-limit hits, because a damaged reasoner starts looping before it starts failing.</span><span class="t-ko">추론 모델을 압축할 때는 긴 추론 기록에서 정보를 찾아오는 어텐션을 지키고, 은닉 상태를 거의 바꾸지 않는 층에서 폭을 덜어내자. 생성 길이와 토큰 한도 도달 비율도 지켜보자. 망가진 추론 모델은 틀리기 전에 먼저 맴돌기 시작한다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">Even the best case keeps only 65–85% of dense accuracy at 9 of 40 layers for about 1.2× speed, and there is no comparison with quantization at equal memory. AIME scores rest on 30 problems per year with seed spread up to 10 points, and calibration uses just 24 traces.</span><span class="t-ko">가장 좋은 경우도 40층 중 9층 분량을 자르면 원래 정확도의 65~85%만 남고 속도는 약 1.2배다. 같은 메모리에서 양자화와 비교하지 않았다. AIME 점수는 연도별 30문제에 기대며 시드 간 편차가 최대 10점이고, 보정에는 기록 24개만 쓴다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2610.19121">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2610.19121">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2610.19121">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2610.19121">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>P1 slot (Compressed Reasoning) · reasoning-aware structured pruning and why pruned reasoning models ramble · score 3 (priority +3), tied with seven P1 candidates and chosen on heat (HF ▲6); runner-up was the energy cost of quantized agents (2610.32417); same lab as the 10-19 PN-Mix card</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-10-26.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P1 슬롯 (Compressed Reasoning) · 추론을 고려한 구조적 가지치기와 가지치기한 추론 모델이 장황해지는 이유 · 점수 3 (우선 주제 +3), P1 후보 일곱 편과 동점이었고 화제성(HF ▲6)으로 골랐다. 차점은 양자화 에이전트의 에너지 비용 논문 (2610.32417). 10월 19일 PN-Mix 카드와 같은 연구실</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-10-26.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
