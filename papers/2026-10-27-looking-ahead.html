@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Looking Ahead</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Video & World Generation · Autoregressive Training · Future Prediction</span><span class="t-ko">Video & World Generation · 자기회귀 학습 · 미래 예측</span></span>
+      <span>2026.10.27</span>
+    </div>
+    <h1>Looking Ahead (Future Chunk Prediction)<br>
+      <span class="glow t-en">— make an autoregressive video model also guess chunks further ahead during training, and its physics improves for free at inference</span>
+      <span class="glow t-ko">— 학습할 때 몇 청크 뒤의 미래도 맞히게 하면, 추론 비용은 그대로인 채 물리적 그럴듯함이 오른다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge hot">▲ 172 HF · ★ 120 GitHub</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Ruopeng Gao</b>, Yukun Huang, Jiarui Hu, Shuai Wang, Wenbo Hu, Ying Shan, Limin Wang <span class="t-en">(corresponding: Limin Wang)</span><span class="t-ko">(교신: Limin Wang)</span></span>
+      <span>🏛 Nanjing University · Tencent ARC Lab · Zhejiang University</span>
+      <span>🗓 2026-10-21</span>
+      <span>📄 <a href="https://arxiv.org/abs/2610.29989">arXiv:2610.29989</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Under teacher forcing, neighboring chunks look so alike that an AR video model can denoise by copying, without learning how scenes evolve.</span><span class="t-ko">교사 강제 학습에서는 이웃 청크가 너무 비슷해서, AR 비디오 모델이 장면이 어떻게 변하는지 배우지 않고 베끼기만 해도 디노이징이 된다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">The farther the target from the observed history, the less local continuity helps, so predicting distant chunks forces the model to encode dynamics.</span><span class="t-ko">목표가 관찰한 과거에서 멀수록 국소적 연속성의 도움이 줄어들어, 먼 청크를 예측하게 하면 모델이 동역학을 담을 수밖에 없다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Small 3-block DiT heads read the generator's hidden states for chunk k and predict chunks k+1 to k+5 in parallel, with no text and no frames in between; their loss flows back into the generator.</b> The heads are dropped at inference.</span><span class="t-ko"><b>3블록짜리 작은 DiT 헤드가 k번째 청크에 대한 생성기의 은닉 상태를 읽어 k+1부터 k+5번째 청크를 병렬로 예측한다. 텍스트도 중간 프레임도 주지 않고, 그 손실은 생성기로 흘러간다.</b> 추론 때 헤드는 버린다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">On Physics-IQ Verified, Wan2.2-5B rises from 30.4 to 33.8 over teacher forcing, and reaches IQ 30 with 51% less compute than a full-context variant.</span><span class="t-ko">Physics-IQ Verified에서 Wan2.2-5B가 교사 강제 학습의 30.4에서 33.8로 오르고, 전체 문맥을 쓰는 변형보다 계산량 51% 적게 IQ 30에 닿는다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">If you learn to drive by watching only <b>the next second of road</b>, you can just copy the car in front. If the coach also asks <b>"where will that cyclist be in five seconds?"</b>, you have to understand how traffic moves. On test day you simply drive; the coach's questions were <b>only for practice</b>.</p>
+    <p class="t-ko"><b>바로 다음 1초의 도로</b>만 보며 운전을 배우면 앞차를 따라 하기만 해도 된다. 강사가 <b>"저 자전거는 5초 뒤에 어디 있을까?"</b>까지 물으면 교통이 어떻게 흐르는지 이해해야 한다. 시험 날에는 그냥 운전하면 되고, 강사의 질문은 <b>연습용</b>이었을 뿐이다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: side predictors that exist only in training</span><span class="t-ko">작동 방식은 학습 때만 있는 보조 예측기</span></h2>
+    <p class="vlead t-en"><b>The generator and its rollout stay exactly the same; only extra heads hang off its hidden states during training.</b> No pretrained encoder is needed, because the targets are later chunks of the same video.</p>
+    <p class="vlead t-ko"><b>생성기와 롤아웃 방식은 그대로이고, 학습 때만 은닉 상태에 보조 헤드가 붙는다.</b> 목표가 같은 영상의 뒷 청크라서 사전학습 인코더가 필요 없다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2610.29989/fcp_overview.svg" target="_blank"><img src="fig/2610.29989/fcp_overview.svg" alt="FCP architecture: the autoregressive generator's transformer blocks produce hidden state h_t for chunk t, which feeds three separate unshared DiT predictors that each denoise a future chunk f t+1, f t+2 and f t+3"></a>
+      <figcaption class="t-en"><b>Figure 1.</b> Hidden state h<sub>t</sub> feeds separate, unshared DiT heads, each predicting one future chunk.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> 은닉 상태 h<sub>t</sub>가 공유하지 않는 DiT 헤드 여러 개로 들어가고, 헤드마다 미래 청크 하나를 예측한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2610.29989</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Tap the hidden states.</span><span class="t-ko">은닉 상태 꺼내기.</span></b><span class="t-en">Features from four generator blocks for chunk k, from both the clean history and the noisy target, are fused by a small MLP.</span><span class="t-ko">k번째 청크에 대해 생성기 블록 네 곳에서 깨끗한 과거와 잡음 섞인 목표 양쪽의 특징을 꺼내 작은 MLP로 합친다.</span></li>
+      <li><b><span class="t-en">Predict in parallel.</span><span class="t-ko">병렬로 예측.</span></b><span class="t-en">One head per offset, conditioned through token-wise AdaLN; chaining heads would leak near-future information into the far ones.</span><span class="t-ko">미래 거리마다 헤드 하나를 두고 토큰 단위 AdaLN으로 조건을 준다. 헤드를 사슬로 이으면 가까운 미래 정보가 먼 헤드로 새어 나간다.</span></li>
+      <li><b><span class="t-en">Train jointly, then drop.</span><span class="t-ko">함께 학습하고 버리기.</span></b><span class="t-en">The total loss is teacher forcing plus 0.5 times each future loss; at inference only the generator runs, with 50 sampling steps per chunk.</span><span class="t-ko">전체 손실은 교사 강제 손실에 미래 손실마다 0.5를 곱해 더한 것이다. 추론 때는 생성기만 청크당 50스텝으로 돈다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key point: parallel heads, not a chain</span><span class="t-ko">핵심은 사슬이 아니라 병렬 헤드</span></h2>
+    <p class="vlead t-en"><b>Chained heads barely beat plain teacher forcing, while parallel heads add 1.7 to 3.4 points.</b> Adding offsets helps far more when each head sees only the current hidden state.</p>
+    <p class="vlead t-ko"><b>사슬형 헤드는 평범한 교사 강제 학습을 겨우 넘고, 병렬 헤드는 1.7~3.4점을 더한다.</b> 미래 거리를 늘리는 효과도 헤드가 현재 은닉 상태만 볼 때 훨씬 크다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Physics-IQ Verified, image-to-video, Wan2.2-5B</span><span class="t-ko">Physics-IQ Verified, 이미지에서 비디오로, Wan2.2-5B</span></div>
+      <div class="cs"><span class="t-en">Table 2 · IQ score · line = teacher forcing 30.4</span><span class="t-ko">Table 2 · IQ 점수 · 선 = 교사 강제 30.4</span></div>
+      <div class="bars" style="--x:76%">
+        <div class="bar" title="3 offsets, chained: 30.7"><span class="bl">3 offsets, chain</span><span class="bt"><span class="bf" style="--w:76.75%"></span></span><span class="bv">30.7</span></div>
+        <div class="bar" title="5 offsets, chained: 31.0"><span class="bl">5 offsets, chain</span><span class="bt"><span class="bf" style="--w:77.5%"></span></span><span class="bv">31.0</span></div>
+        <div class="bar hl" title="3 offsets, parallel: 32.1"><span class="bl">3 offsets, parallel</span><span class="bt"><span class="bf" style="--w:80.25%"></span></span><span class="bv">32.1</span></div>
+        <div class="bar hl" title="5 offsets, parallel: 33.8"><span class="bl">5 offsets, parallel</span><span class="bt"><span class="bf" style="--w:84.5%"></span></span><span class="bv">33.8</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–40. Same data and training budget for every row.</figcaption>
+      <figcaption class="t-ko">축 0–40. 모든 행이 같은 데이터와 학습 예산.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: better physics per FLOP</span><span class="t-ko">결과는 같은 계산량에서 더 나은 물리</span></h2>
+    <p class="vlead t-en"><b>Reading only chunk k's hidden state is both better and cheaper than reading the whole history.</b> FCP reaches IQ 29 with 42.6% and IQ 30 with 50.7% less training compute than the full-context variant.</p>
+    <p class="vlead t-ko"><b>k번째 청크의 은닉 상태만 읽는 쪽이 과거 전체를 읽는 쪽보다 성능도 낫고 비용도 싸다.</b> 전체 문맥 변형보다 학습 계산량을 42.6% 덜 써서 IQ 29에, 50.7% 덜 써서 IQ 30에 닿는다.</p>
+    <div class="vgrid">
+      <figure class="fig narrow">
+        <a class="zoom" href="fig/2610.29989/training_convergence.svg" target="_blank"><img src="fig/2610.29989/training_convergence.svg" alt="Physics-IQ score against estimated training compute for teacher forcing, FCP with full context, and FCP, with FCP reaching IQ 29 at 99.3 and IQ 30 at 145.2 exaFLOPs versus 172.9 and 294.4 for the full-context variant"></a>
+        <figcaption class="t-en"><b>Figure 4.</b> IQ vs estimated training compute, Wan2.1-1.3B.</figcaption>
+        <figcaption class="t-ko"><b>Figure 4.</b> 학습 계산량 추정치에 따른 IQ, Wan2.1-1.3B.</figcaption>
+        <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2610.29989</div>
+      </figure>
+      <div class="tablewrap">
+        <table class="ptable">
+          <caption class="t-en"><b>Table 1.</b> Physics-IQ Verified, image-to-video. Other rows come mostly from the benchmark, with different data and training. Higher is better.</caption>
+          <caption class="t-ko"><b>Table 1.</b> Physics-IQ Verified, 이미지에서 비디오로. 다른 행은 대부분 벤치마크 값이라 데이터와 학습이 다르다. 높을수록 좋음.</caption>
+          <thead><tr><th>Model</th><th>Type</th><th>IQ</th></tr></thead>
+          <tbody>
+            <tr><td>Causal Forcing++ 1.3B</td><td>AR</td><td>21.8</td></tr>
+            <tr><td>Wan2.2-5B</td><td>Bidir.</td><td>24.9</td></tr>
+            <tr><td>MAGI-1 4.5B</td><td>AR</td><td>31.1</td></tr>
+            <tr><td>Wan2.2-14B</td><td>Bidir.</td><td>32.2</td></tr>
+            <tr><td>HunyuanVideo-1.5</td><td>Bidir.</td><td>33.4</td></tr>
+            <tr><td>Wan2.2-5B + FCP</td><td>AR</td><td class="up">33.8</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">+3.4</div><div class="l"><span class="t-en">IQ over teacher forcing, 5B image-to-video</span><span class="t-ko">5B 이미지→비디오, 교사 강제 대비 IQ</span></div></div>
+      <div class="stat"><div class="n">+3.8</div><div class="l"><span class="t-en">IQ over teacher forcing, 5B video-to-video</span><span class="t-ko">5B 비디오→비디오, 교사 강제 대비 IQ</span></div></div>
+      <div class="stat"><div class="n">50.7%</div><div class="l"><span class="t-en">less compute to IQ 30 than full context</span><span class="t-ko">전체 문맥 대비 IQ 30까지 계산량 절감</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">If your autoregressive video model might be copying its neighbor, add training-only heads that predict further-out chunks from the current hidden state without text. It costs nothing at inference and pushes the representation toward dynamics instead of appearance.</span><span class="t-ko">자기회귀 비디오 모델이 이웃 청크를 베끼는 것 같다면, 현재 은닉 상태만 보고 텍스트 없이 더 먼 청크를 예측하는 학습용 헤드를 붙여 보자. 추론 비용은 들지 않고, 표현이 겉모습보다 동역학 쪽으로 향한다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">Everything is measured in the teacher-forced, 50-step setting on 5-second clips, so it is untested whether the gain survives few-step distillation for real-time streaming. Gains on the VLM-judged benchmarks are small, and cross-model rows mix different data, including an internal corpus.</span><span class="t-ko">모든 결과는 교사 강제 학습, 50스텝, 5초 클립 조건에서 잰 것이라, 실시간 스트리밍을 위한 소수 스텝 증류 뒤에도 이득이 남는지는 모른다. VLM이 판정하는 벤치마크의 향상은 작고, 다른 모델과의 비교는 내부 데이터를 포함해 학습 데이터가 서로 다르다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2610.29989">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2610.29989">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2610.29989">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2610.29989">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>P2 slot (Video &amp; World Generation) · training objective for autoregressive video diffusion that models scene evolution · score 6 (priority +3, very hot HF ▲172); tied with a 102-page video world-model survey (2610.31668, HF ▲282), skipped as a survey rather than a method, and SF² (2610.35594, NeurIPS); WorldCast's 8 came from a name collision</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-10-27.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P2 슬롯 (Video &amp; World Generation) · 장면 변화를 모델링하는 자기회귀 비디오 확산 학습 목표 · 점수 6 (우선 주제 +3, 매우 화제 HF ▲172). 102쪽짜리 비디오 월드 모델 서베이 (2610.31668, HF ▲282)와 SF² (2610.35594, NeurIPS)와 동점이었는데, 서베이는 방법 논문이 아니라 제외했다. WorldCast의 8점은 동명이인 일치에서 나온 점수</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-10-27.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
