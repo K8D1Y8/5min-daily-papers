@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · miniTE</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Compressed Reasoning · 4-bit RL Training · Train–Inference Mismatch</span><span class="t-ko">Compressed Reasoning · 4비트 RL 학습 · 학습·추론 불일치</span></span>
+      <span>2026.10.28</span>
+    </div>
+    <h1>miniTE<br>
+      <span class="glow t-en">— in 4-bit RL, matching the number format is not enough; the learner and sampler must compute the same way</span>
+      <span class="glow t-ko">— 4비트 RL에서는 수 형식만 맞춰서는 부족하고, 학습기와 샘플러가 같은 방식으로 계산해야 한다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge lab">🏛 InfiX.ai · NVIDIA</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Zhen Li</b>, Mingfa Feng, Yiming Zhang, Yang Yu, Changhai Zhou, Pengxiang Li, Dongkuan Wu, Congkai Xie, Hongxia Yang <span class="t-en">(17 contributors listed in the paper)</span><span class="t-ko">(논문에는 기여자 17명이 올라 있음)</span></span>
+      <span>🏛 InfiX.ai · NVIDIA</span>
+      <span>🗓 2026-10-07</span>
+      <span>📄 <a href="https://arxiv.org/abs/2610.23928">arXiv:2610.23928</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Native 4-bit math could speed up RL for reasoning models, but the learner and the sampler must agree on every token's probability.</span><span class="t-ko">4비트 연산으로 추론 모델의 RL을 빠르게 할 수 있지만, 학습기와 샘플러가 모든 토큰의 확률에 합의해야 한다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Even with identical weights and format, NVFP4 more than doubles the cross-engine log-prob tail, and matched expert routing still leaves output gaps.</span><span class="t-ko">가중치와 형식이 같아도 NVFP4는 두 엔진 사이 로그 확률 차이의 꼬리를 두 배 넘게 키우고, 전문가 라우팅을 맞춰도 출력 차이가 남는다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Spell out the full numerical path, give each token row its own scale, run expert matmuls as packed W4A4 with FP32 rescaling, and keep the backward pass in BF16.</b> Both engines are checked at three boundaries.</span><span class="t-ko"><b>수치 계산 경로 전체를 명시하고, 토큰 행마다 스케일을 따로 주며, 전문가 행렬곱은 묶음 W4A4로 돌린 뒤 FP32로 다시 스케일하고, 역전파는 BF16으로 둔다.</b> 두 엔진을 세 지점에서 대조한다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">After 1,000 GRPO steps on Qwen3-30B-A3B, AIME24 is 10 points above naive NVFP4 and 4.4 below BF16, with a 1.39× faster learner.</span><span class="t-ko">Qwen3-30B-A3B로 GRPO 1,000스텝을 돈 뒤 AIME24는 단순 NVFP4보다 10점 높고 BF16보다 4.4점 낮으며, 학습기는 1.39배 빠르다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Two accountants keep the same ledger in a currency with coarse coins. They agree on the currency, but one <b>rounds per page</b> and the other <b>per line</b>, so their totals drift and every audit flags errors that are not real. miniTE makes them <b>round the same rows the same way</b>, and checks the books at three places.</p>
+    <p class="t-ko">두 회계사가 동전 단위가 큰 통화로 같은 장부를 쓴다고 해 보자. 통화는 같지만 한 사람은 <b>페이지 단위로</b>, 다른 사람은 <b>줄 단위로</b> 반올림하니 합계가 어긋나고, 감사할 때마다 가짜 오류가 잡힌다. miniTE는 두 사람이 <b>같은 줄을 같은 방식으로</b> 반올림하게 하고 장부를 세 곳에서 대조한다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: same RL loop, a specified 4-bit path</span><span class="t-ko">작동 방식은 같은 RL 루프, 명시된 4비트 경로</span></h2>
+    <p class="vlead t-en"><b>The RL objective is untouched; miniTE swaps in a 4-bit expert path for the learner and adds checks against the sampler.</b> Attention and non-expert modules stay in higher precision.</p>
+    <p class="vlead t-ko"><b>RL 목적함수는 그대로이고, miniTE는 학습기에 4비트 전문가 경로를 넣고 샘플러와 대조하는 검사를 더한다.</b> 어텐션과 전문가가 아닌 모듈은 더 높은 정밀도로 남는다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2610.23928/minite_overview.png" target="_blank"><img src="fig/2610.23928/minite_overview.png" alt="miniTE overview: the existing RL pipeline with sampler and learner; cross-engine checks comparing codes and scales, expert outputs and token log-probabilities, plus a strict reference; and the training recipe with per-token quantization, packed NVFP4 grouped GEMM, FP32 epilogue rescaling and a BF16 backward pass"></a>
+      <figcaption class="t-en"><b>Figure 2.</b> (a) Learner and sampler compared at three numerical boundaries. (b) W4A4 forward with FP32 rescaling, BF16 backward.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> (a) 학습기와 샘플러를 세 수치 지점에서 비교. (b) FP32 재스케일을 쓰는 W4A4 순전파와 BF16 역전파.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2610.23928</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Diagnose at a frozen policy.</span><span class="t-ko">고정된 정책에서 진단.</span></b><span class="t-en">Both engines score identical token sequences, so any gap comes from execution, not weight lag or sampling.</span><span class="t-ko">두 엔진이 같은 토큰 시퀀스를 채점하므로, 차이가 나면 가중치 지연이나 샘플링이 아니라 계산 방식 때문이다.</span></li>
+      <li><b><span class="t-en">Per-token W4A4 forward.</span><span class="t-ko">토큰 단위 W4A4 순전파.</span></b><span class="t-en">Each token row and weight row gets its own outer scale, so one token's outlier cannot change another token's codes.</span><span class="t-ko">토큰 행과 가중치 행마다 바깥 스케일을 따로 두어, 한 토큰의 이상값이 다른 토큰의 코드를 바꾸지 못한다.</span></li>
+      <li><b><span class="t-en">BF16 backward, fused prep.</span><span class="t-ko">BF16 역전파와 준비 단계 융합.</span></b><span class="t-en">Gradients use saved BF16 operands, and quantization shares buffers and statistics with the grouped GEMM.</span><span class="t-ko">기울기는 저장해 둔 BF16 피연산자로 계산하고, 양자화는 grouped GEMM과 버퍼와 통계를 함께 쓴다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key point: a format is not an execution</span><span class="t-ko">핵심은 형식과 실제 계산은 다르다는 것</span></h2>
+    <p class="vlead t-en"><b>Before any training step, switching both engines to NVFP4 more than doubles the worst-case disagreement and nearly doubles the share of tokens past the clipping bounds.</b> In RL those tokens bend importance ratios and clipping decisions.</p>
+    <p class="vlead t-ko"><b>학습을 한 스텝도 하기 전에, 두 엔진을 NVFP4로 바꾸는 것만으로 최악의 불일치는 두 배 넘게, 클리핑 경계를 넘는 토큰 비율은 두 배 가까이 커진다.</b> RL에서는 이런 토큰이 중요도 비율과 클리핑 판단을 비튼다.</p>
+    <div class="vgrid">
+      <figure class="chart">
+        <div class="ct"><span class="t-en">Learner–sampler log-prob gap, P99</span><span class="t-ko">학습기·샘플러 로그 확률 차이, P99</span></div>
+        <div class="cs"><span class="t-en">Section 3.1 · nats · frozen Qwen3-30B-A3B · lower is better</span><span class="t-ko">3.1절 · nats · 고정된 Qwen3-30B-A3B · 낮을수록 좋음</span></div>
+        <div class="bars mono">
+          <div class="bar" title="BF16: 0.1271"><span class="bl">BF16</span><span class="bt"><span class="bf" style="--w:31.8%"></span></span><span class="bv">0.127</span></div>
+          <div class="bar" title="NVFP4: 0.2911"><span class="bl">NVFP4</span><span class="bt"><span class="bf" style="--w:72.8%"></span></span><span class="bv">0.291</span></div>
+        </div>
+        <figcaption class="t-en">Axis 0–0.4. 69,088 matched tokens.</figcaption>
+        <figcaption class="t-ko">축 0–0.4. 맞춰 비교한 토큰 69,088개.</figcaption>
+      </figure>
+      <figure class="chart">
+        <div class="ct"><span class="t-en">Tokens past the clipping bounds</span><span class="t-ko">클리핑 경계를 넘는 토큰</span></div>
+        <div class="cs"><span class="t-en">Section 3.1 · % of tokens, from numerics alone · lower is better</span><span class="t-ko">3.1절 · 토큰 비율 %, 수치 차이만으로 · 낮을수록 좋음</span></div>
+        <div class="bars mono">
+          <div class="bar" title="BF16: 0.627%"><span class="bl">BF16</span><span class="bt"><span class="bf" style="--w:41.8%"></span></span><span class="bv">0.63%</span></div>
+          <div class="bar" title="NVFP4: 1.203%"><span class="bl">NVFP4</span><span class="bt"><span class="bf" style="--w:80.2%"></span></span><span class="bv">1.20%</span></div>
+        </div>
+        <figcaption class="t-en">Axis 0–1.5%.</figcaption>
+        <figcaption class="t-ko">축 0–1.5%.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: most of the 4-bit loss on hard math comes back</span><span class="t-ko">결과는 어려운 수학에서 4비트 손실을 대부분 되찾음</span></h2>
+    <p class="vlead t-en"><b>Naive NVFP4 loses 14.4 AIME24 points to BF16; miniTE wins back 10 of them, while easy GSM8K barely moves.</b> A fully matched reference drives the gap to about 10<sup>−8</sup> and keeps reward where the unaligned run falls.</p>
+    <p class="vlead t-ko"><b>단순 NVFP4는 AIME24에서 BF16보다 14.4점을 잃고, miniTE는 그중 10점을 되찾는다. 쉬운 GSM8K는 거의 움직이지 않는다.</b> 계산을 완전히 맞춘 기준 설정은 차이를 약 10<sup>−8</sup>까지 줄이고, 맞추지 않은 실행이 무너지는 구간에서도 보상을 유지한다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2610.23928/learning_curves.svg" target="_blank"><img src="fig/2610.23928/learning_curves.svg" alt="Training curves over 1,000 steps: learner-sampler log-probability mismatch around 0.03 for both NVFP4 paths and 0.01 for BF16, and reward rising for all three with BF16 highest, miniTE in the middle and naive NVFP4 lowest late in training"></a>
+      <figcaption class="t-en"><b>Figure 3.</b> Log-prob mismatch (a) and reward (b) over 1,000 steps, one run each.</figcaption>
+      <figcaption class="t-ko"><b>Figure 3.</b> 1,000스텝 동안의 로그 확률 불일치(a)와 보상(b), 설정마다 한 번씩 실행.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2610.23928</div>
+    </figure>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1.</b> Accuracy (%) at step 999, all with TIS. Higher is better.</caption>
+        <caption class="t-ko"><b>Table 1.</b> 999스텝의 정확도(%), 모두 TIS 사용. 높을수록 좋음.</caption>
+        <thead><tr><th>Config</th><th>AIME24</th><th>AIME25</th><th>MATH-500</th><th>GSM8K</th><th>IFEval</th><th>Avg</th></tr></thead>
+        <tbody>
+          <tr><td>BF16</td><td class="up">41.11</td><td class="up">31.11</td><td class="up">90.05</td><td>93.57</td><td>38.36</td><td class="up">58.84</td></tr>
+          <tr><td>Naive NVFP4</td><td>26.67</td><td>20.56</td><td>86.90</td><td>94.71</td><td class="up">43.99</td><td>54.57</td></tr>
+          <tr><td>miniTE</td><td>36.67</td><td>24.44</td><td>87.45</td><td class="up">94.79</td><td>38.40</td><td>56.35</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">1.39×</div><div class="l"><span class="t-en">learner throughput vs BF16, 8× B300</span><span class="t-ko">B300 8장, BF16 대비 학습기 처리량</span></div></div>
+      <div class="stat"><div class="n">+10.0</div><div class="l"><span class="t-en">AIME24 points over naive NVFP4</span><span class="t-ko">단순 NVFP4 대비 AIME24 점수</span></div></div>
+      <div class="stat"><div class="n">~10⁻⁸</div><div class="l"><span class="t-en">log-prob gap with the fully matched reference</span><span class="t-ko">계산을 완전히 맞춘 기준의 로그 확률 차이</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">When you quantize the reasoning-RL loop, the format name does not define the numbers. Specify scale domains, rounding, reduction order, and cast placement in both engines, and measure the log-prob tail at a frozen policy before you train.</span><span class="t-ko">추론 RL 루프를 양자화할 때 형식 이름이 실제 숫자를 정해 주지는 않는다. 두 엔진에서 스케일 범위, 반올림, 덧셈 순서, 형 변환 위치를 명시하고, 학습 전에 고정된 정책에서 로그 확률 꼬리를 재 보자.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">Each configuration is a single 1,000-step run, and miniTE still trails BF16 by 2.5 points on average and loses 5.6 IFEval points to naive NVFP4. The 1.39× covers the learner only; in a colocated RL window weight conversion and sync grew from 9.9 to 55.3 s, so whole-iteration speed is unproven.</span><span class="t-ko">설정마다 1,000스텝 실행이 한 번뿐이고, miniTE는 평균에서 여전히 BF16보다 2.5점 낮으며 IFEval에서는 단순 NVFP4보다 5.6점 낮다. 1.39배는 학습기만의 수치다. 같은 장비에서 RL을 돌린 구간에서는 가중치 변환과 동기화가 9.9초에서 55.3초로 늘어서, 반복 전체가 빨라지는지는 입증되지 않았다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2610.23928">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2610.23928">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2610.23928">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2610.23928">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>P1 slot (Compressed Reasoning) · 4-bit compute in long-horizon reasoning RL and how quantization breaks learner–sampler agreement · score 3 (priority +3; NVIDIA co-affiliation), tied with seven P1 candidates and chosen on heat (HF ▲22); runner-up was a field report on small quantized coding agents (2610.34241, HF ▲10)</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-10-28.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P1 슬롯 (Compressed Reasoning) · 긴 추론 RL의 4비트 연산과, 양자화가 학습기·샘플러 합의를 깨는 양상 · 점수 3 (우선 주제 +3, NVIDIA 공동 소속), P1 후보 일곱 편과 동점이었고 화제성(HF ▲22)으로 골랐다. 차점은 양자화한 작은 코딩 에이전트 현장 보고서 (2610.34241, HF ▲10)</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-10-28.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
