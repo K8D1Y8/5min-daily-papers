@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Hy-Nomas</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Video & World Generation · Interactive World Model · Causal Distillation</span><span class="t-ko">Video & World Generation · 상호작용 월드 모델 · 인과 증류</span></span>
+      <span>2026.10.29</span>
+    </div>
+    <h1>Hy-Nomas<br>
+      <span class="glow t-en">— an 8B world model that takes free-form text and camera commands turn after turn, distilled to 4 steps per segment</span>
+      <span class="glow t-ko">— 자유로운 텍스트와 카메라 명령을 턴마다 받는 8B 월드 모델, 구간당 4스텝으로 증류</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Technical report</span>
+      <span class="badge hot">▲ 108 HF · ★ 355 GitHub</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Tencent Hy Visual Generation Team</b> <span class="t-en">(19 core contributors in alphabetical order, from Qiaoling Chen to Rui Zhao)</span><span class="t-ko">(핵심 기여자 19명, 알파벳순으로 Qiaoling Chen부터 Rui Zhao까지)</span></span>
+      <span>🏛 Tencent</span>
+      <span>🗓 2026-10-27</span>
+      <span>📄 <a href="https://arxiv.org/abs/2610.36729">arXiv:2610.36729</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">An interactive world model must accept commands mid-generation, keep the results of earlier actions, and mix text with camera control in one session.</span><span class="t-ko">상호작용 월드 모델은 생성 도중에 명령을 받고, 앞선 행동의 결과를 유지하며, 한 세션 안에서 텍스트와 카메라 제어를 섞어 써야 한다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">A plain segment-causal mask lets video tokens see every action in the caption, so actions play out of order or repeat in later segments.</span><span class="t-ko">구간 단위 인과 마스크만 쓰면 비디오 토큰이 캡션의 모든 행동을 보게 되어, 행동 순서가 뒤바뀌거나 다음 구간에서 되풀이된다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Split each caption into a lasting scene description and per-action text, let each action be seen only inside its time window, train on self-generated history, and distill 100 steps to 4 per segment.</b></span><span class="t-ko"><b>캡션을 계속 유지되는 장면 설명과 행동별 문장으로 나누고, 각 행동은 자기 시간 구간에서만 보이게 하며, 스스로 만든 과거로 학습한 뒤 구간당 100스텝을 4스텝으로 증류한다.</b></span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">In pairwise human tests it wins 75% of prompt-following comparisons against LingBot-World v2, but loses to Genie 3 on spatial memory, 30% to 13%.</span><span class="t-ko">사람의 짝 비교에서 지시 이행은 LingBot-World v2를 상대로 75%를 이기지만, 공간 기억에서는 Genie 3에게 30% 대 13%로 진다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Think of a stage play. The <b>set description stays on the wall</b> all night, but each <b>stage direction is shown to the actors only during its own scene</b>. Show them every direction at once and they act too early or <b>repeat the last scene's business</b>.</p>
+    <p class="t-ko">연극을 떠올려 보자. <b>무대 설정은 공연 내내 벽에 붙어 있지만</b>, <b>지시문은 해당 장면에서만 배우에게 보여 준다</b>. 모든 지시문을 한꺼번에 보여 주면 배우들은 너무 일찍 움직이거나 <b>지난 장면의 동작을 되풀이한다</b>.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: one causal DiT for text and camera</span><span class="t-ko">작동 방식은 텍스트와 카메라를 함께 받는 인과 DiT 하나</span></h2>
+    <p class="vlead t-en"><b>HunyuanVideo 1.5 is turned into a segment-by-segment generator that reads a structured prompt, the camera path, and a KV cache of its own past.</b> A vision-language Prompt Enhancer turns user requests into that prompt.</p>
+    <p class="vlead t-ko"><b>HunyuanVideo 1.5를 구간 단위 생성기로 바꿔, 구조화된 프롬프트와 카메라 경로, 자기 과거를 담은 KV 캐시를 읽게 한다.</b> 비전·언어 Prompt Enhancer가 사용자 요청을 그 프롬프트로 바꾼다.</p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2610.36729/hynomas_framework.svg" target="_blank"><img src="fig/2610.36729/hynomas_framework.svg" alt="Hy-Nomas framework: a structured prompt passes through an MLLM and token refiner, the video clip through a 3D VAE encoder and patch embed with noise, and the camera trajectory through a pose encoder; dual-stream MMDiT blocks apply segment-wise causal attention with a KV cache of history and camera cross-attention, and a 3D VAE decoder outputs generated segment k"></a>
+      <figcaption class="t-en"><b>Figure 5.</b> Structured prompt, video latents, and camera path enter dual-stream DiT blocks with segment-wise causal attention over a KV cache.</figcaption>
+      <figcaption class="t-ko"><b>Figure 5.</b> 구조화된 프롬프트, 비디오 잠재값, 카메라 경로가 KV 캐시 위에서 구간 단위 인과 어텐션을 하는 이중 흐름 DiT 블록으로 들어간다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2610.36729</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Structured captions.</span><span class="t-ko">구조화된 캡션.</span></b><span class="t-en">Style, subject, per-segment scene text, and timestamped actions, plus camera trajectories estimated from each video.</span><span class="t-ko">스타일, 주체, 구간별 장면 설명, 시각이 붙은 행동, 그리고 영상마다 추정한 카메라 궤적.</span></li>
+      <li><b><span class="t-en">Action-aware causal attention.</span><span class="t-ko">행동을 구분하는 인과 어텐션.</span></b><span class="t-en">Scene text stays visible to later segments, action text only inside its own window; camera enters through cross-attention.</span><span class="t-ko">장면 설명은 뒤 구간에서도 보이지만 행동 문장은 자기 구간 안에서만 보인다. 카메라는 교차 어텐션으로 들어간다.</span></li>
+      <li><b><span class="t-en">Own history, then distill.</span><span class="t-ko">자기 과거로 학습 후 증류.</span></b><span class="t-en">Segment Forcing builds each next context from a one-step estimate of the current segment; consistency, then distribution-matching plus adversarial distillation, cut 100 evaluations to 4.</span><span class="t-ko">Segment Forcing은 현재 구간을 한 스텝으로 추정해 다음 문맥을 만든다. 이어서 일관성 증류, 분포 일치와 적대적 증류로 평가 횟수를 100번에서 4번으로 줄인다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key point: text commands are where it pulls ahead</span><span class="t-ko">핵심은 텍스트 명령에서 크게 앞선다는 것</span></h2>
+    <p class="vlead t-en"><b>Wins on prompt following reach 65–75% with losses near 10%, while camera control mostly ends in ties.</b> The open baseline picks from VLM-generated proposals instead of taking free-form text.</p>
+    <p class="vlead t-ko"><b>지시 이행에서는 승률이 65~75%이고 패배는 10% 안팎인 반면, 카메라 제어는 대부분 무승부로 끝난다.</b> 공개 비교 모델은 자유로운 텍스트 대신 VLM이 낸 제안 중에서 고른다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Pairwise human evaluation, Hy-Nomas wins</span><span class="t-ko">사람의 짝 비교, Hy-Nomas 승률</span></div>
+      <div class="cs"><span class="t-en">Figures 13, 15, 16 · % of pairs · second number = Hy-Nomas losses</span><span class="t-ko">Figure 13, 15, 16 · 비교 쌍의 % · 뒤 숫자 = Hy-Nomas 패배</span></div>
+      <div class="bars mono" style="--vw:84px">
+        <div class="bar" title="Prompt following vs LingBot-World v2: win 75.0, loss 8.3"><span class="bl">Text vs LingBot v2</span><span class="bt"><span class="bf" style="--w:75%"></span></span><span class="bv">75 · 8.3</span></div>
+        <div class="bar" title="Prompt following vs HappyOyster-Directing: win 65.0, loss 10.0"><span class="bl">Text vs HappyOyster</span><span class="bt"><span class="bf" style="--w:65%"></span></span><span class="bv">65 · 10</span></div>
+        <div class="bar" title="Physical plausibility vs LingBot-World v2: win 68.3, loss 5.0"><span class="bl">Physics vs LingBot v2</span><span class="bt"><span class="bf" style="--w:68.3%"></span></span><span class="bv">68 · 5</span></div>
+        <div class="bar" title="Physical plausibility vs HappyOyster-Directing: win 45.0, loss 11.7"><span class="bl">Physics vs HappyOyster</span><span class="bt"><span class="bf" style="--w:45%"></span></span><span class="bv">45 · 12</span></div>
+        <div class="bar" title="Camera control vs Genie 3: win 32.0, loss 14.0"><span class="bl">Camera vs Genie 3</span><span class="bt"><span class="bf" style="--w:32%"></span></span><span class="bv">32 · 14</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–100. Ties make up the rest.</figcaption>
+      <figcaption class="t-ko">축 0–100. 나머지는 무승부.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: camera is close, memory still trails Genie 3</span><span class="t-ko">결과는 카메라는 비슷하고, 기억은 아직 Genie 3에 뒤짐</span></h2>
+    <p class="vlead t-en"><b>When the camera returns to a place, Genie 3 keeps the scene better, while Hy-Nomas roughly ties HappyOyster and clearly beats LingBot-World v2.</b> The authors suspect Genie 3's grounding in Street View data helps.</p>
+    <p class="vlead t-ko"><b>카메라가 같은 곳으로 돌아올 때 장면을 더 잘 지키는 쪽은 Genie 3이고, Hy-Nomas는 HappyOyster와 비슷하며 LingBot-World v2는 확실히 이긴다.</b> 저자들은 Genie 3이 Street View 데이터에 기반한 덕분이라고 추정한다.</p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Figures 15 and 17.</b> Pairwise human evaluation from Hy-Nomas's side (%), 100 camera trajectories and 60 memory scenarios.</caption>
+        <caption class="t-ko"><b>Figure 15, 17.</b> Hy-Nomas 입장에서 본 사람의 짝 비교(%), 카메라 궤적 100개와 기억 시나리오 60개.</caption>
+        <thead><tr><th>Task vs model</th><th>Win</th><th>Tie</th><th>Loss</th></tr></thead>
+        <tbody>
+          <tr><td>Camera vs Genie 3</td><td class="up">32.0</td><td>54.0</td><td>14.0</td></tr>
+          <tr><td>Camera vs HappyOyster</td><td class="up">36.0</td><td>54.0</td><td>10.0</td></tr>
+          <tr><td>Camera vs LingBot v2</td><td class="up">29.0</td><td>61.0</td><td>10.0</td></tr>
+          <tr><td>Memory vs Genie 3</td><td>13.3</td><td>56.7</td><td>30.0</td></tr>
+          <tr><td>Memory vs HappyOyster</td><td class="up">30.0</td><td>46.7</td><td>23.3</td></tr>
+          <tr><td>Memory vs LingBot v2</td><td class="up">58.3</td><td>40.0</td><td>1.7</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">100→4</div><div class="l"><span class="t-en">function evaluations per segment</span><span class="t-ko">구간당 함수 평가 횟수</span></div></div>
+      <div class="stat"><div class="n">20.5 GiB</div><div class="l"><span class="t-en">peak, 100 s at 1280×704 on one RTX 4090</span><span class="t-ko">RTX 4090 한 장, 1280×704 100초 최대 메모리</span></div></div>
+      <div class="stat"><div class="n">360K</div><div class="l"><span class="t-en">tokens per packed training sequence</span><span class="t-ko">묶음 학습 시퀀스당 토큰</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">For multi-turn world models, separate what should persist from what should happen once, right in the attention mask. Scene text stays visible and action text expires, which fixes action order and repetition without adding modules.</span><span class="t-ko">여러 턴을 다루는 월드 모델이라면, 계속 남아야 할 것과 한 번만 일어날 것을 어텐션 마스크에서 바로 나누자. 장면 설명은 계속 보이고 행동 문장은 만료되게 하면, 모듈을 더하지 않고도 행동 순서와 반복 문제가 고쳐진다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">Every comparison is a human preference vote on 60–100 scenarios, with no automatic metric and no reported generation speed, partly against closed systems used through their own interfaces. The RTX 4090 path adds INT8, sparse attention, and offloading, whose differences the authors note may grow over segments.</span><span class="t-ko">모든 비교는 시나리오 60~100개에 대한 사람의 선호 투표이고, 자동 지표도 생성 속도도 보고하지 않으며, 상대 일부는 자체 인터페이스로 쓴 비공개 시스템이다. RTX 4090 경로는 INT8, 희소 어텐션, 오프로딩을 더하는데, 저자들 스스로 그 차이가 구간이 쌓일수록 커질 수 있다고 적었다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2610.36729">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2610.36729">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2610.36729">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2610.36729">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>P2 slot (Video &amp; World Generation) · interactive autoregressive world model with segment forcing and 4-step causal distillation · score 6 (priority +3, very hot HF ▲108, ★355), tied with VibeVideoBench (agents writing code, not diffusion) and SF² (NeurIPS) and chosen on topic fit plus heat; the video world-model survey (HF ▲282) was skipped as a survey</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-10-29.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P2 슬롯 (Video &amp; World Generation) · Segment Forcing과 4스텝 인과 증류를 쓴 상호작용 자기회귀 월드 모델 · 점수 6 (우선 주제 +3, 매우 화제 HF ▲108, ★355). VibeVideoBench (확산이 아니라 에이전트가 코드로 영상 생성), SF² (NeurIPS)와 동점이었고 주제 적합도와 화제성으로 골랐다. 비디오 월드 모델 서베이 (HF ▲282)는 서베이라 제외</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-10-29.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
