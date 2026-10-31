@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Platonic JEPA</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">World Models · JEPA · Platonic Representation</span><span class="t-ko">World Models · JEPA · 플라토닉 표현</span></span>
+      <span>2026.10.31</span>
+    </div>
+    <h1>Proving and Improving the Platonic Representation Hypothesis with JEPAs<br>
+      <span class="glow t-en">— two descriptions of one scene, not more scale, make separately trained encoders share one map of the world</span>
+      <span class="glow t-ko">— 규모가 아니라 한 장면을 담은 두 묘사가, 따로 학습한 인코더들이 같은 세계 지도를 갖게 만든다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge lab">🏛 AMI Labs · NYU · Brown · LeCun</span>
+      <span class="badge hot">▲ 55 HF</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Randall Balestriero</b>, Yann LeCun</span>
+      <span>🏛 Brown University · New York University · AMI Labs</span>
+      <span>🗓 2026-10-29</span>
+      <span>📄 <a href="https://arxiv.org/abs/2610.39302">arXiv:2610.39302</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">The Platonic Representation Hypothesis says vision and language models converge on one picture of the world as they scale, but it was only an observation.</span><span class="t-ko">플라토닉 표현 가설은 비전과 언어 모델이 커질수록 같은 세계상으로 모인다고 말하지만, 지금까지는 관찰에 그쳤다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">They prove JEPAs trained alone on any modalities learn the same embedding up to one rotation when positives are two observations of one scene.</span><span class="t-ko">긍정 쌍이 한 장면을 따로 관찰한 두 개라면, 어떤 모달리티든 따로 학습한 JEPA들이 회전 하나 차이로 같은 임베딩을 배운다는 것을 증명한다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Train each encoder alone with "good views", such as two different captions of one image, trimmed and lightly masked.</b> Next-token prediction is shown to be a "bad view" JEPA that also learns each document's wording.</span><span class="t-ko"><b>각 인코더를 "좋은 뷰"로 따로 학습한다. 예를 들어 한 이미지의 서로 다른 캡션 두 개를 잘라 내고 살짝 가린다.</b> 다음 토큰 예측은 문서마다의 말투까지 배우는 "나쁜 뷰" JEPA임을 보인다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">A 109M text JEPA aligns with DINOv2 better than every language model tested up to 72B, and matches next-token alignment with 42× fewer samples.</span><span class="t-ko">109M 텍스트 JEPA가 72B까지 시험한 모든 언어 모델보다 DINOv2와 더 잘 정렬되고, 다음 토큰 예측과 같은 정렬에 42배 적은 샘플로 도달한다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Two mapmakers study one town, one from photos and one from written accounts. If each learns by checking <b>two different accounts of the same street</b>, both end up with the same map, just turned at a different angle. If each only fills gaps in a <b>single account</b>, they also learn that writer's quirks, which the other mapmaker can never match.</p>
+    <p class="t-ko">지도 제작자 두 명이 한 마을을 연구한다. 한 명은 사진으로, 다른 한 명은 글로 된 기록으로 본다. 둘 다 <b>같은 거리를 다룬 서로 다른 기록 두 개</b>를 맞춰 보며 배우면 결국 같은 지도를 얻고, 방향만 돌아가 있을 뿐이다. 반대로 <b>기록 하나</b>의 빈칸만 채우며 배우면 그 글쓴이의 버릇까지 익히게 되고, 그 부분은 다른 제작자와 절대 맞출 수 없다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: pick the right positives, then rotate</span><span class="t-ko">작동 방식은 올바른 긍정 쌍을 고르고 회전하는 것</span></h2>
+    <p class="vlead t-en"><b>Whether two modalities align depends on what each encoder treats as a positive pair, not on scale; two observations of one scene make them agree up to one rotation.</b></p>
+    <p class="vlead t-ko"><b>두 모달리티가 정렬되는지는 규모가 아니라 각 인코더가 무엇을 긍정 쌍으로 삼는지에 달려 있다. 한 장면의 두 관찰을 쓰면 회전 하나 차이로 일치한다.</b></p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2610.39302/teaser.png" target="_blank"><img src="fig/2610.39302/teaser.png" alt="Left: one world seen as images and texts; JEPAs trained on two photos or two captions of one scene agree up to one rotation, while masked or next-token views do not. Right: alignment with DINOv2 against training samples, where the good-view JEPA reaches .184 and needs 42 times fewer samples than next-token prediction to reach .111"></a>
+      <figcaption class="t-en"><b>Figure 1.</b> Good views versus bad views (left) and alignment with DINOv2 on WIT-1024 against samples seen (right).</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> 좋은 뷰와 나쁜 뷰(왼쪽), 그리고 본 샘플 수에 따른 WIT-1024의 DINOv2 정렬(오른쪽).</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2610.39302</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Good views.</span><span class="t-ko">좋은 뷰.</span></b><span class="t-en">For each image, draw views from different captions (or different frames of a clip), trim each to a random span, and mask 15% of tokens.</span><span class="t-ko">이미지마다 서로 다른 캡션(또는 영상의 다른 프레임)에서 뷰를 뽑고, 무작위 구간으로 잘라 토큰 15%를 가린다.</span></li>
+      <li><b><span class="t-en">Train each side alone.</span><span class="t-ko">각자 따로 학습.</span></b><span class="t-en">Same LeJEPA objective for image and text; no encoder ever sees the other modality.</span><span class="t-ko">이미지와 텍스트 모두 같은 LeJEPA 목적 함수를 쓰고, 어떤 인코더도 다른 모달리티를 보지 않는다.</span></li>
+      <li><b><span class="t-en">Find one rotation.</span><span class="t-ko">회전 하나 찾기.</span></b><span class="t-en">Fit it on image–caption pairs, or recover it from the shape of unpaired image and caption clouds.</span><span class="t-ko">이미지와 캡션 쌍으로 맞추거나, 짝이 없는 이미지와 캡션 분포의 모양만으로 찾아낸다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key point: bad views spend dimensions on wording</span><span class="t-ko">핵심은 나쁜 뷰가 말투에 차원을 쓴다는 것</span></h2>
+    <p class="vlead t-en"><b>Masked spans and next-token prediction keep more of a caption's own wording, and no rotation can match wording across modalities.</b> The paper measures this directly with five captions per Flickr image.</p>
+    <p class="vlead t-ko"><b>가린 구간 예측과 다음 토큰 예측은 캡션 고유의 말투를 더 많이 담고, 말투는 어떤 회전으로도 다른 모달리티와 맞출 수 없다.</b> 논문은 Flickr 이미지마다 있는 캡션 다섯 개로 이를 직접 잰다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Share of the text embedding explained by the scene</span><span class="t-ko">텍스트 임베딩 중 장면이 설명하는 비율</span></div>
+      <div class="cs"><span class="t-en">Section 3.1 · Flickr · top 32 directions · seed mean · higher is better</span><span class="t-ko">3.1절 · Flickr · 상위 32개 방향 · 시드 평균 · 높을수록 좋음</span></div>
+      <div class="bars">
+        <div class="bar hl" title="Good-view JEPA: 0.804"><span class="bl">Good-view JEPA</span><span class="bt"><span class="bf" style="--w:80.4%"></span></span><span class="bv">.804</span></div>
+        <div class="bar" title="Bad-view JEPA: 0.655"><span class="bl">Bad-view JEPA</span><span class="bt"><span class="bf" style="--w:65.5%"></span></span><span class="bv">.655</span></div>
+        <div class="bar" title="Next-token prediction: 0.608"><span class="bl">Next-token</span><span class="bt"><span class="bf" style="--w:60.8%"></span></span><span class="bv">.608</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–1. Measured errors against DINOv2 after the best rotation (33.5, 39.4, 40.3) follow the same order.</figcaption>
+      <figcaption class="t-ko">축 0–1. 최적 회전 뒤 DINOv2와의 실측 오차(33.5, 39.4, 40.3)도 같은 순서를 따른다.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: a small JEPA beats 70B language models</span><span class="t-ko">결과는 작은 JEPA가 70B 언어 모델을 이긴다는 것</span></h2>
+    <p class="vlead t-en"><b>Trained on the texts of 940M web images, a 109M text JEPA agrees with DINOv2 more than any language model tested.</b></p>
+    <p class="vlead t-ko"><b>웹 이미지 9.4억 장의 텍스트로 학습한 109M 텍스트 JEPA가 시험한 어떤 언어 모델보다 DINOv2와 잘 맞는다.</b></p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Alignment with frozen DINOv2 ViT-B on WIT-1024</span><span class="t-ko">WIT-1024에서 고정된 DINOv2 ViT-B와의 정렬</span></div>
+      <div class="cs"><span class="t-en">Table 3 · mutual 10-NN · higher is better · ours highlighted</span><span class="t-ko">Table 3 · 상호 10-NN · 높을수록 좋음 · 제안 방법 강조</span></div>
+      <div class="bars">
+        <div class="bar hl" title="Good-view JEPA, 109M: 0.184"><span class="bl">Good-view JEPA 109M</span><span class="bt"><span class="bf" style="--w:92%"></span></span><span class="bv">.184</span></div>
+        <div class="bar" title="Qwen2.5-72B: 0.154"><span class="bl">Qwen2.5-72B</span><span class="bt"><span class="bf" style="--w:77%"></span></span><span class="bv">.154</span></div>
+        <div class="bar" title="Llama-3-70B: 0.151"><span class="bl">Llama-3-70B</span><span class="bt"><span class="bf" style="--w:75.5%"></span></span><span class="bv">.151</span></div>
+        <div class="bar" title="CLIP B/32 text encoder: 0.124"><span class="bl">CLIP B/32 text</span><span class="bt"><span class="bf" style="--w:62%"></span></span><span class="bv">.124</span></div>
+        <div class="bar" title="Next-token, same texts, 109M: 0.111"><span class="bl">Next-token 109M</span><span class="bt"><span class="bf" style="--w:55.5%"></span></span><span class="bv">.111</span></div>
+        <div class="bar" title="Bad-view JEPA, same texts, 109M: 0.088"><span class="bl">Bad-view JEPA 109M</span><span class="bt"><span class="bf" style="--w:44%"></span></span><span class="bv">.088</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–0.2. The three 109M models saw the same 900M samples.</figcaption>
+      <figcaption class="t-ko">축 0–0.2. 109M 모델 세 개는 같은 샘플 9억 개를 봤다.</figcaption>
+    </figure>
+    <p class="vlead t-en"><b>The rotation can even be found with no pairs at all, and the JEPA then beats an 8B language model by 16.8 points on ImageNet-100.</b></p>
+    <p class="vlead t-ko"><b>회전은 짝 데이터 없이도 찾을 수 있고, 그렇게 맞추면 JEPA가 ImageNet-100에서 8B 언어 모델을 16.8점 앞선다.</b></p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 4.</b> Pair-free alignment with DINOv2 ViT-B/14 on COCO (protocol of Schnaus et al.). Zero-shot accuracy in %.</caption>
+        <caption class="t-ko"><b>Table 4.</b> COCO에서 짝 없이 DINOv2 ViT-B/14와 정렬(Schnaus 등의 프로토콜). 제로샷 정확도 %.</caption>
+        <thead><tr><th>Metric</th><th>Good-view JEPA 109M</th><th>Qwen3-8B (rerun)</th><th>Prior best</th></tr></thead>
+        <tbody>
+          <tr><td>FOSCTTM ↓</td><td>.018</td><td>.018</td><td>.02</td></tr>
+          <tr><td>CIFAR-10 top-1</td><td class="up">86.0</td><td>83.4</td><td>82</td></tr>
+          <tr><td>CIFAR-100 top-5</td><td class="up">67.2</td><td>61.7</td><td>62</td></tr>
+          <tr><td>ImageNet-100 top-5</td><td class="up">64.4</td><td>47.6</td><td>56</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">42×</div><div class="l"><span class="t-en">fewer samples to match next-token alignment</span><span class="t-ko">다음 토큰 예측과 같은 정렬에 필요한 샘플 감소</span></div></div>
+      <div class="stat"><div class="n">660×</div><div class="l"><span class="t-en">smaller than the 72B model it beats</span><span class="t-ko">이긴 72B 모델 대비 작은 크기</span></div></div>
+      <div class="stat"><div class="n">.838</div><div class="l"><span class="t-en">COCO CIDEr, only one map fitted on pairs</span><span class="t-ko">쌍으로는 사상 하나만 맞춘 COCO CIDEr</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">If you want encoders of different modalities to share one latent space, choose positives that are two observations of the same scene. That buys more alignment than model size.</span><span class="t-ko">서로 다른 모달리티의 인코더가 하나의 잠재 공간을 공유하길 원한다면, 같은 장면을 따로 관찰한 두 개를 긍정 쌍으로 고르자. 모델을 키우는 것보다 정렬을 더 많이 얻는다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">The theorem covers population optima on a finite world and an identity predictor, not action-conditioned world models. At scale, two of three texts per image come from a CLIP-based captioner; without it, WIT alignment falls from .107 to .060, so the wins over language models partly ride on image-derived text.</span><span class="t-ko">정리는 유한한 세계에서의 모집단 최적해와 항등 예측기만 다루고, 행동을 조건으로 받는 월드 모델은 다루지 않는다. 대규모 실험에서는 이미지당 텍스트 셋 중 둘을 CLIP 기반 캡셔너가 썼고, 이를 빼면 WIT 정렬이 .107에서 .060으로 떨어진다. 그래서 언어 모델을 이긴 결과는 일부 이미지에서 나온 텍스트 덕분이다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2610.39302">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2610.39302">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2610.39302">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2610.39302">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Legacy slot (shared world models) · when separately trained encoders provably converge on one shared representation of the world · score 5 (listed authors Yann LeCun and Randall Balestriero +3, hot +2 at 55 HF upvotes), top of the legacy pool ahead of the NeurIPS'26 KV-cache papers DropKV and MoEZip (3 each)</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-10-31.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>Legacy 슬롯 (공유 월드 모델) · 따로 학습한 인코더가 하나의 공유된 세계 표현으로 모인다는 것을 증명 · 점수 5 (목록 저자 Yann LeCun과 Randall Balestriero +3, HF 추천 55로 화제성 +2), legacy 후보 중 최고점으로 NeurIPS'26 KV 캐시 논문 DropKV와 MoEZip(각 3점)보다 앞섬</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-10-31.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
