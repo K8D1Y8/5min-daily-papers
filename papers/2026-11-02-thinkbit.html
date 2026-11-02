@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · ThinkBit</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Compressed Reasoning · 2-bit Quantization · Unfinished Traces</span><span class="t-ko">Compressed Reasoning · 2비트 양자화 · 끝나지 않는 추론</span></span>
+      <span>2026.11.02</span>
+    </div>
+    <h1>ThinkBit: Search Codewords, Recalibrate Scales, Select by Reasoning<br>
+      <span class="glow t-en">— 2-bit reasoning models often fail by never finishing their thoughts, which perplexity cannot see, so pick checkpoints with a reasoning test</span>
+      <span class="glow t-ko">— 2비트 추론 모델은 생각을 끝맺지 못해 틀리는 일이 많고, 이는 perplexity로 보이지 않으니 체크포인트는 추론 시험으로 고른다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge lab">🏛 Microsoft Applied Sciences Group</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Rhea Sanjay Sukthanker</b>, Pashmina Cameron</span>
+      <span>🏛 Microsoft Applied Sciences Group</span>
+      <span>🗓 2026-10-26</span>
+      <span>📄 <a href="https://arxiv.org/abs/2610.34886">arXiv:2610.34886</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Reasoning models emit thousands of tokens, each reading every weight, so 2-bit weights could cut memory traffic per token up to 8×.</span><span class="t-ko">추론 모델은 토큰을 수천 개 내고 토큰마다 모든 가중치를 읽으므로, 2비트 가중치는 토큰당 메모리 트래픽을 최대 8배 줄일 수 있다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Perplexity and multiple-choice scores barely separate 2-bit variants whose MATH-500 accuracy differs by 10+ points; many failures are traces that never finish.</span><span class="t-ko">perplexity와 객관식 점수는 MATH-500 정확도가 10점 넘게 차이 나는 2비트 변형들을 거의 구별하지 못한다. 실패의 상당수는 끝나지 않는 추론이다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Store each weight as a small integer times one bf16 scale per 128 weights, then build it in five stages: tiers by sensitivity, codeword search, scale recalibration, short QAT, and a reasoning test that picks the checkpoint.</b></span><span class="t-ko"><b>가중치마다 작은 정수에 128개당 bf16 스케일 하나를 곱해 저장하고, 다섯 단계로 만든다. 민감도에 따른 비트 배정, 코드워드 탐색, 스케일 재보정, 짧은 QAT, 그리고 체크포인트를 고르는 추론 시험이다.</b></span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">Qwen3-1.7B at 0.52 GB scores 73.0 on MATH-500, above every published 2-bit GGUF; at 14B, 3.74 GB scores 94.8 versus 97.5 for bf16.</span><span class="t-ko">0.52 GB의 Qwen3-1.7B가 MATH-500에서 73.0을 얻어 공개된 모든 2비트 GGUF보다 높다. 14B에서는 3.74 GB로 94.8을 얻고, bf16은 97.5다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Grading a compressed reasoning model by perplexity is like grading a long essay by checking each word against a dictionary. Every word can pass while the writer <b>circles the same paragraph and never reaches a conclusion</b>. ThinkBit grades by whether the essay <b>finishes and lands on the right answer</b>, and chooses its model that way.</p>
+    <p class="t-ko">압축된 추론 모델을 perplexity로 평가하는 것은 긴 글을 단어마다 사전과 대조해 채점하는 것과 같다. 단어는 모두 통과해도 글쓴이는 <b>같은 문단을 맴돌다 결론에 이르지 못할</b> 수 있다. ThinkBit은 글이 <b>끝까지 가서 맞는 답에 닿는지</b>로 채점하고, 그 기준으로 모델을 고른다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: five stages around one simple format</span><span class="t-ko">작동 방식은 단순한 형식 하나와 다섯 단계</span></h2>
+    <p class="vlead t-en"><b>Every weight is an integer codeword times a shared bf16 scale, so dequantizing is one multiply; the stages only decide which integers and scales to keep.</b></p>
+    <p class="vlead t-ko"><b>모든 가중치는 정수 코드워드에 공유 bf16 스케일을 곱한 값이라 역양자화는 곱셈 한 번이다. 다섯 단계는 어떤 정수와 스케일을 남길지만 정한다.</b></p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2610.34886/thinkbit_overview.svg" target="_blank"><img src="fig/2610.34886/thinkbit_overview.svg" alt="ThinkBit pipeline: allocate ternary, 2-bit or 3-bit tiers by KronQ sensitivity; search codewords; recalibrate scales with codewords frozen, which lowers KL from 0.64 to 0.28; QAT reassigns 6.4% of codewords; a paired test on MATH training problems keeps the better checkpoint"></a>
+      <figcaption class="t-en"><b>Figure 1a.</b> The five stages of ThinkBit. Grey cells are frozen, orange cells are trained.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1a.</b> ThinkBit의 다섯 단계. 회색 칸은 고정, 주황 칸은 학습된다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2610.34886</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Allocate and search.</span><span class="t-ko">배정과 탐색.</span></b><span class="t-en">A Hessian sensitivity score gives each layer a ternary, 2-bit, or 3-bit tier, and a block-wise search picks the integer codewords.</span><span class="t-ko">헤시안 기반 민감도 점수로 층마다 3값, 2비트, 3비트 중 하나를 배정하고, 블록 단위 탐색으로 정수 코드워드를 고른다.</span></li>
+      <li><b><span class="t-en">Recalibrate, then QAT.</span><span class="t-ko">재보정 후 QAT.</span></b><span class="t-en">With codewords frozen, only scales and norm gains learn to match the bf16 output; then a short QAT moves a few codewords one grid step.</span><span class="t-ko">코드워드를 고정한 채 스케일과 정규화 이득만 bf16 출력에 맞춰 학습한다. 이어서 짧은 QAT가 일부 코드워드를 한 칸씩 옮긴다.</span></li>
+      <li><b><span class="t-en">Select by reasoning.</span><span class="t-ko">추론으로 선택.</span></b><span class="t-en">Both checkpoints answer 313 MATH training problems four times each; only closed traces count, and a paired test keeps the better one.</span><span class="t-ko">두 체크포인트가 MATH 학습 문제 313개에 네 번씩 답하고, 닫힌 추론만 인정하며, 짝 검정으로 더 나은 쪽을 남긴다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key point: 2-bit models fail by not finishing</span><span class="t-ko">핵심은 2비트 모델이 끝맺지 못해서 틀린다는 것</span></h2>
+    <p class="vlead t-en"><b>On Qwen3-1.7B, bf16 closes 99.2% of its reasoning traces, while 2-bit checkpoints close only 55–88%.</b> Recalibrating scales mainly raises this closing rate.</p>
+    <p class="vlead t-ko"><b>Qwen3-1.7B에서 bf16은 추론의 99.2%를 닫지만, 2비트 체크포인트는 55~88%만 닫는다.</b> 스케일 재보정은 주로 이 닫힘 비율을 올린다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Share of MATH-500 traces that close &lt;/think&gt;, Qwen3-1.7B</span><span class="t-ko">MATH-500에서 &lt;/think&gt;로 닫힌 추론 비율, Qwen3-1.7B</span></div>
+      <div class="cs"><span class="t-en">Table 5 · % · bf16 head and embedding · higher is better</span><span class="t-ko">Table 5 · % · bf16 헤드와 임베딩 · 높을수록 좋음</span></div>
+      <div class="bars">
+        <div class="bar" title="bf16: 99.2%"><span class="bl">bf16</span><span class="bt"><span class="bf" style="--w:99.2%"></span></span><span class="bv">99.2</span></div>
+        <div class="bar hl" title="Recalibrated: 88.0%"><span class="bl">Recalibrated</span><span class="bt"><span class="bf" style="--w:88%"></span></span><span class="bv">88.0</span></div>
+        <div class="bar" title="Recalibrated, then QAT: 69.6%"><span class="bl">Recal. + QAT</span><span class="bt"><span class="bf" style="--w:69.6%"></span></span><span class="bv">69.6</span></div>
+        <div class="bar" title="QAT without recalibration: 57.2%"><span class="bl">QAT, no recal.</span><span class="bt"><span class="bf" style="--w:57.2%"></span></span><span class="bv">57.2</span></div>
+        <div class="bar" title="QAT only baseline: 55.4%"><span class="bl">QAT only</span><span class="bt"><span class="bf" style="--w:55.4%"></span></span><span class="bv">55.4</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–100%. Published 2-bit GGUFs close 47–56%; at 14B almost every trace closes (96.4–97.5%).</figcaption>
+      <figcaption class="t-ko">축 0–100%. 공개된 2비트 GGUF는 47~56%만 닫고, 14B에서는 거의 모든 추론이 닫힌다(96.4~97.5%).</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: more reasoning per byte</span><span class="t-ko">결과는 바이트당 더 나은 추론</span></h2>
+    <p class="vlead t-en"><b>Compared by whole-file size, the selected 2-bit Qwen3-1.7B reasons far better than every other file of similar size.</b></p>
+    <p class="vlead t-ko"><b>파일 전체 크기로 비교하면, 선택된 2비트 Qwen3-1.7B가 비슷한 크기의 다른 모든 파일보다 훨씬 잘 추론한다.</b></p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Sampled MATH-500 accuracy, Qwen3-1.7B files</span><span class="t-ko">샘플링 MATH-500 정확도, Qwen3-1.7B 파일들</span></div>
+      <div class="cs"><span class="t-en">Table 6 · % · strict scoring · file size in GB · ours highlighted</span><span class="t-ko">Table 6 · % · 엄격 채점 · 파일 크기 GB · 제안 방법 강조</span></div>
+      <div class="bars">
+        <div class="bar" title="bf16, 3.44 GB: 91.2"><span class="bl">bf16 · 3.44</span><span class="bt"><span class="bf" style="--w:91.2%"></span></span><span class="bv">91.2</span></div>
+        <div class="bar hl" title="ThinkBit, 0.52 GB: 73.0"><span class="bl">ThinkBit · 0.52</span><span class="bt"><span class="bf" style="--w:73%"></span></span><span class="bv">73.0</span></div>
+        <div class="bar" title="Ternary Bonsai, 0.46 GB: 46.4"><span class="bl">Ternary Bonsai · 0.46</span><span class="bt"><span class="bf" style="--w:46.4%"></span></span><span class="bv">46.4</span></div>
+        <div class="bar" title="GGUF Q2_K, 0.78 GB: 41.9"><span class="bl">GGUF Q2_K · 0.78</span><span class="bt"><span class="bf" style="--w:41.9%"></span></span><span class="bv">41.9</span></div>
+        <div class="bar" title="EfficientQAT with 2-bit head, 0.54 GB: 30.0"><span class="bl">EfficientQAT · 0.54</span><span class="bt"><span class="bf" style="--w:30%"></span></span><span class="bv">30.0</span></div>
+        <div class="bar" title="GGUF UD-IQ2_XXS, 0.61 GB: 1.0"><span class="bl">GGUF IQ2_XXS · 0.61</span><span class="bt"><span class="bf" style="--w:1%"></span></span><span class="bv">1.0</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–100%. ThinkBit here is the QAT checkpoint trained on complete reasoning traces.</figcaption>
+      <figcaption class="t-ko">축 0–100%. 여기서 ThinkBit은 완결된 추론 기록으로 학습한 QAT 체크포인트다.</figcaption>
+    </figure>
+    <p class="vlead t-en"><b>At 8B the lead holds on the hardest benchmark too, though AIME still trails bf16 by a wide margin.</b></p>
+    <p class="vlead t-ko"><b>8B에서도 가장 어려운 벤치마크까지 앞서지만, AIME는 여전히 bf16과 차이가 크다.</b></p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 6.</b> Qwen3-8B files. MATH-500 is sampled; AIME@16 is mean pass@1 over 16 samples. Higher is better.</caption>
+        <caption class="t-ko"><b>Table 6.</b> Qwen3-8B 파일들. MATH-500은 샘플링, AIME@16은 16개 샘플의 평균 pass@1. 높을수록 좋음.</caption>
+        <thead><tr><th>File</th><th>GB</th><th>MATH-500</th><th>AIME@16</th></tr></thead>
+        <tbody>
+          <tr><td>bf16</td><td>16.4</td><td>96.9</td><td>71.2</td></tr>
+          <tr><td>ThinkBit</td><td class="up">2.08</td><td class="up">92.2</td><td class="up">46.9</td></tr>
+          <tr><td>Ternary Bonsai</td><td>2.18</td><td>83.7</td><td>24.4</td></tr>
+          <tr><td>GGUF UD-IQ2_XXS</td><td>2.61</td><td>35.2</td><td>1.0</td></tr>
+          <tr><td>GGUF Q2_K</td><td>3.28</td><td>91.1</td><td>45.6</td></tr>
+          <tr><td>EfficientQAT</td><td>4.35</td><td>71.9</td><td>10.3</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">0.52 GB</div><div class="l"><span class="t-en">Qwen3-1.7B at 73.0 on MATH-500</span><span class="t-ko">MATH-500 73.0의 Qwen3-1.7B 크기</span></div></div>
+      <div class="stat"><div class="n">94.8</div><div class="l"><span class="t-en">MATH-500 at 14B in 3.74 GB (bf16 97.5)</span><span class="t-ko">3.74 GB 14B의 MATH-500 (bf16 97.5)</span></div></div>
+      <div class="stat"><div class="n">1.45×</div><div class="l"><span class="t-en">8B decode speed vs bf16, batch 1, one H100</span><span class="t-ko">H100 한 장, 배치 1에서 bf16 대비 8B 디코딩 속도</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">When you quantize a reasoning model, track the share of traces that close &lt;/think&gt; and select checkpoints on sampled reasoning, not perplexity. Retraining only the scales against the bf16 output is cheap and recovers much of the loss.</span><span class="t-ko">추론 모델을 양자화할 때는 &lt;/think&gt;로 닫히는 추론의 비율을 지켜보고, 체크포인트는 perplexity가 아니라 샘플링한 추론 결과로 고르자. 스케일만 bf16 출력에 맞춰 다시 학습하는 것은 싸고, 손실의 상당 부분을 되찾는다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">Selection uses math only, and code does not recover (HumanEval 25.6 vs 41.5 at 1.7B), so tool use is untested. Speed comes from 4-bit containers because the paper has no 2-bit kernel yet, and some 2-bit traces still never finish.</span><span class="t-ko">선택 시험은 수학만 쓰고 코드는 회복되지 않으며(1.7B에서 HumanEval 25.6 대 41.5), 도구 사용은 시험하지 않았다. 속도는 논문에 아직 2비트 커널이 없어 4비트 컨테이너로 잰 값이고, 일부 2비트 추론은 여전히 끝나지 않는다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2610.34886">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2610.34886">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2610.34886">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2610.34886">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>P1 slot (Compressed Reasoning) · reasoning-aware 2-bit quantization that shows compressed models fail by not finishing their traces · score 3 (priority +3), hottest of nine P1 papers at 3 (HF ▲2) so it wins the tie-break, with InterQ-RL (2610.35303) next; Blind Spots (2610.39006) showed 6, but RAAAI is a NeurIPS workshop (so 4) and it studies natively small models rather than compressed ones, and Beyond Benchmarks (2610.34241, HF ▲9) is a serving experience report, so both were set aside on topic fit</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-11-02.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P1 슬롯 (Compressed Reasoning) · 압축 모델이 추론을 끝맺지 못해 틀린다는 것을 보인 추론 인식 2비트 양자화 · 점수 3 (우선 주제 +3). 3점 P1 논문 9편 중 가장 화제(HF ▲2)라 동점 규칙으로 선정, 다음은 InterQ-RL (2610.35303). Blind Spots (2610.39006)는 6점으로 나왔지만 RAAAI는 NeurIPS 워크숍이라 4점이고, 압축 모델이 아니라 원래 작은 모델을 다룬다. Beyond Benchmarks (2610.34241, HF ▲9)는 서빙 경험 보고서라 둘 다 주제 적합성에서 제외</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-11-02.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
