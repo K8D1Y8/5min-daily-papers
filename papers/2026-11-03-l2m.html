@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Learning-to-Memorize</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Video &amp; World Generation · Long-Horizon AR Video · KV Memory</span><span class="t-ko">Video &amp; World Generation · 장기 자기회귀 비디오 · KV 기억 관리</span></span>
+      <span>2026.11.03</span>
+    </div>
+    <h1>Learning-to-Memorize: Dynamic Context Management for Long-Horizon Autoregressive Video Generation<br>
+      <span class="glow t-en">— a tiny learned router decides which past frames stay in a fixed KV cache, and its edge over "drop the oldest" grows as videos get longer</span>
+      <span class="glow t-ko">— 작은 학습형 라우터가 고정된 KV 캐시에 어떤 과거 프레임을 남길지 정하고, "가장 오래된 것 버리기"와의 격차는 영상이 길수록 커진다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge venue">NeurIPS'26</span>
+      <span class="badge lab">🏛 ByteDance Seed · Tsinghua</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Haowei Zhu</b>, Qijie Wang, Jia Li, Xing Wang, Tianyu Zhao, Jiexi Wang, Xurui Peng, Xinglong Wu, Junhai Yong, Bin Wang <span class="t-en">(corresponding: Bin Wang)</span><span class="t-ko">(교신: Bin Wang)</span></span>
+      <span>🏛 Tsinghua University · ByteDance Seed</span>
+      <span>🗓 2026-11-01</span>
+      <span>📄 <a href="https://arxiv.org/abs/2611.01858">arXiv:2611.01858</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Autoregressive video models keep past frames in a KV cache that must be capped for minute-long videos, so some history has to go.</span><span class="t-ko">자기회귀 비디오 모델은 과거 프레임을 KV 캐시에 두는데, 분 단위 영상에서는 캐시를 제한해야 하므로 일부 기록은 버려야 한다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Fixed rules, such as dropping the oldest frame or pinning the first ones forever, lose key context or anchor generation to stale frames, causing drift and frozen motion.</span><span class="t-ko">가장 오래된 프레임을 버리거나 첫 프레임을 영원히 고정하는 규칙은 중요한 맥락을 잃거나 낡은 프레임에 생성을 묶어 두어, 화면이 흐트러지거나 움직임이 멈춘다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>A small MLP router scores each cached frame against the current chunk; low scores are evicted, and an EMA of scores lets fresh, reliable frames replace old long-term anchors.</b> Only the router is trained, by distilling from a full-context teacher.</span><span class="t-ko"><b>작은 MLP 라우터가 캐시의 프레임마다 현재 청크와 비교해 점수를 매긴다. 점수가 낮으면 내보내고, 점수의 EMA로 새롭고 믿을 만한 프레임이 낡은 장기 기준 프레임을 대신하게 한다.</b> 학습하는 것은 라우터뿐이며, 전체 맥락을 보는 교사로부터 증류한다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">With a 21-frame cache on Self Forcing, 60-second quality rises from 75.23 to 80.73, and the gain grows to 12.35 points at 240 seconds.</span><span class="t-ko">Self Forcing에 21프레임 캐시를 쓸 때 60초 영상의 품질 점수가 75.23에서 80.73으로 오르고, 240초에서는 향상 폭이 12.35점까지 커진다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">An artist drawing a very long comic strip can pin only a few earlier panels to the desk. Always keeping the <b>first panels</b> fails once the story moves on, and always keeping the <b>latest panels</b> keeps their mistakes in view. L2M learns <b>which panels are worth pinning</b>, and swaps in a newer, clean panel when the scene changes.</p>
+    <p class="t-ko">아주 긴 만화를 그리는 작가는 앞선 칸 중 몇 개만 책상에 핀으로 꽂아 둘 수 있다. 늘 <b>첫 칸들</b>만 꽂아 두면 이야기가 바뀐 뒤 쓸모가 없고, 늘 <b>최근 칸들</b>만 꽂아 두면 그 칸의 실수까지 계속 보게 된다. L2M은 <b>어떤 칸을 꽂아 둘 가치가 있는지</b> 배우고, 장면이 바뀌면 더 새롭고 깨끗한 칸으로 바꿔 꽂는다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: a learned score replaces fixed eviction rules</span><span class="t-ko">작동 방식은 고정 규칙 대신 학습된 점수</span></h2>
+    <p class="vlead t-en"><b>One learned score per cached frame decides both what gets dropped and what becomes long-term memory; the video model itself stays frozen.</b></p>
+    <p class="vlead t-ko"><b>캐시 프레임마다 매긴 학습 점수 하나가 무엇을 버리고 무엇을 장기 기억으로 남길지 함께 정한다. 비디오 모델 자체는 고정된 채로 둔다.</b></p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2611.01858/l2m_overview.png" target="_blank"><img src="fig/2611.01858/l2m_overview.png" alt="L2M overview. Training: a trainable router scores context frames, Gumbel-softmax turns scores into keep or drop masks, a student DiT sees the pruned context and is distilled toward a teacher with full context, with sparsity and degradation losses. Inference: the router scores frames, low-importance frames are evicted, top frames initialize long-term sink memory, and frames that survive N steps update the sink set by EMA"></a>
+      <figcaption class="t-en"><b>Figure 1.</b> Training the router (left) and managing memory at inference (right).</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> 라우터 학습(왼쪽)과 추론 중 기억 관리(오른쪽).</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2611.01858</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Score frames.</span><span class="t-ko">프레임 점수 매기기.</span></b><span class="t-en">The router compares the current chunk with each cached frame; a student on the pruned cache is pushed to match a teacher on the full cache, plus a sparsity loss.</span><span class="t-ko">라우터가 현재 청크와 캐시의 각 프레임을 비교한다. 줄인 캐시를 보는 학생이 전체 캐시를 보는 교사를 따라가도록 학습하고, 희소성 손실을 더한다.</span></li>
+      <li><b><span class="t-en">Train on damaged history.</span><span class="t-ko">손상된 기록으로 학습.</span></b><span class="t-en">20% of past frames get noise so the router learns to distrust degraded frames; positions are shifted to close the gaps eviction leaves.</span><span class="t-ko">과거 프레임의 20%에 노이즈를 넣어 라우터가 손상된 프레임을 덜 믿게 한다. 내보낸 자리의 위치 간격은 위치 인코딩을 옮겨 메운다.</span></li>
+      <li><b><span class="t-en">Evolve memory.</span><span class="t-ko">기억 갱신.</span></b><span class="t-en">Of a 21-frame budget, 14 frames are long-term memory; a frame that survives 6 steps can replace one of them by EMA score.</span><span class="t-ko">21프레임 예산 중 14개가 장기 기억이다. 6스텝을 살아남은 프레임은 EMA 점수에 따라 그중 하나를 대신할 수 있다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key point: errors stop compounding</span><span class="t-ko">핵심은 오류가 더 쌓이지 않는다는 것</span></h2>
+    <p class="vlead t-en"><b>Over a 30-second video, text–video agreement falls 3.49 points under oldest-first eviction but only 0.74 with L2M.</b></p>
+    <p class="vlead t-ko"><b>30초 영상에서 텍스트와 영상의 일치도는 오래된 것부터 버리는 방식에서 3.49점 떨어지지만, L2M에서는 0.74점만 떨어진다.</b></p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Drop in ViCLIP score from the first to the last 5-second segment</span><span class="t-ko">첫 5초 구간에서 마지막 5초 구간까지 ViCLIP 점수 하락</span></div>
+      <div class="cs"><span class="t-en">Table 3 · 30-second videos · lower is better · ours highlighted</span><span class="t-ko">Table 3 · 30초 영상 · 낮을수록 좋음 · 제안 방법 강조</span></div>
+      <div class="bars">
+        <div class="bar" title="Self Forcing, oldest-first eviction: 3.49"><span class="bl">Self Forcing</span><span class="bt"><span class="bf" style="--w:87.3%"></span></span><span class="bv">3.49</span></div>
+        <div class="bar" title="Rolling Forcing: 2.69"><span class="bl">Rolling Forcing</span><span class="bt"><span class="bf" style="--w:67.3%"></span></span><span class="bv">2.69</span></div>
+        <div class="bar" title="CausVid: 2.52"><span class="bl">CausVid</span><span class="bt"><span class="bf" style="--w:63%"></span></span><span class="bv">2.52</span></div>
+        <div class="bar" title="Deep Forcing, fixed sink: 1.08"><span class="bl">Deep Forcing</span><span class="bt"><span class="bf" style="--w:27%"></span></span><span class="bv">1.08</span></div>
+        <div class="bar hl" title="L2M: 0.74"><span class="bl">L2M</span><span class="bt"><span class="bf" style="--w:18.5%"></span></span><span class="bv">0.74</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–4. Self Forcing, Deep Forcing and L2M all start at 25.28 in the first segment.</figcaption>
+      <figcaption class="t-ko">축 0–4. Self Forcing, Deep Forcing, L2M 모두 첫 구간은 25.28에서 시작한다.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: the longer the video, the bigger the gain</span><span class="t-ko">결과는 영상이 길수록 커지는 향상</span></h2>
+    <p class="vlead t-en"><b>Against its own Self Forcing base, L2M's quality gain grows steadily with the generation horizon, far beyond the 5-second training clips.</b></p>
+    <p class="vlead t-ko"><b>바탕 모델인 Self Forcing 대비 L2M의 품질 향상은 생성 길이가 늘수록 꾸준히 커지며, 5초짜리 학습 클립보다 훨씬 긴 구간까지 이어진다.</b></p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">VBench-Long quality score gain over Self Forcing</span><span class="t-ko">Self Forcing 대비 VBench-Long 품질 점수 향상</span></div>
+      <div class="cs"><span class="t-en">Section 4 and Appendix E · points · same 21-frame cache budget</span><span class="t-ko">4절과 부록 E · 점수 · 같은 21프레임 캐시 예산</span></div>
+      <div class="bars">
+        <div class="bar" title="30 seconds: +2.76"><span class="bl">30 s</span><span class="bt"><span class="bf" style="--w:19.7%"></span></span><span class="bv">+2.76</span></div>
+        <div class="bar" title="60 seconds: +5.50"><span class="bl">60 s</span><span class="bt"><span class="bf" style="--w:39.3%"></span></span><span class="bv">+5.50</span></div>
+        <div class="bar" title="120 seconds: +8.82"><span class="bl">120 s</span><span class="bt"><span class="bf" style="--w:63%"></span></span><span class="bv">+8.82</span></div>
+        <div class="bar hl" title="240 seconds: +12.35"><span class="bl">240 s</span><span class="bt"><span class="bf" style="--w:88.2%"></span></span><span class="bv">+12.35</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–14. At 240 s, L2M scores 80.16 while Self Forcing falls to 67.81.</figcaption>
+      <figcaption class="t-ko">축 0–14. 240초에서 L2M은 80.16, Self Forcing은 67.81로 떨어진다.</figcaption>
+    </figure>
+    <p class="vlead t-en"><b>Against other long-video methods at 60 seconds, the margins are smaller but L2M leads on motion and consistency together.</b></p>
+    <p class="vlead t-ko"><b>60초에서 다른 장편 영상 방법들과 비교하면 차이는 작아지지만, L2M은 움직임과 일관성 모두에서 앞선다.</b></p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1.</b> VBench-Long on 60-second videos, 128 MovieGen prompts. Higher is better.</caption>
+        <caption class="t-ko"><b>Table 1.</b> 60초 영상 VBench-Long, MovieGen 프롬프트 128개. 높을수록 좋음.</caption>
+        <thead><tr><th>Method</th><th>Dynamic</th><th>Subject cons.</th><th>Quality</th><th>Overall cons.</th></tr></thead>
+        <tbody>
+          <tr><td>CausVid</td><td>54.69</td><td>85.48</td><td>78.49</td><td>22.30</td></tr>
+          <tr><td>Rolling Forcing</td><td>35.94</td><td>86.74</td><td>77.66</td><td>23.01</td></tr>
+          <tr><td>Self Forcing</td><td>33.59</td><td>81.22</td><td>75.23</td><td>21.58</td></tr>
+          <tr><td>Deep Forcing</td><td>53.12</td><td>89.91</td><td>79.17</td><td>24.24</td></tr>
+          <tr><td>L2M</td><td class="up">56.25</td><td class="up">90.29</td><td class="up">80.73</td><td class="up">24.54</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">0.84%</div><div class="l"><span class="t-en">extra inference time for a 30 s video</span><span class="t-ko">30초 영상 생성 시 추가 추론 시간</span></div></div>
+      <div class="stat"><div class="n">6 h</div><div class="l"><span class="t-en">router-only training on 16 GPUs</span><span class="t-ko">GPU 16장으로 라우터만 학습하는 시간</span></div></div>
+      <div class="stat"><div class="n">24×</div><div class="l"><span class="t-en">longer than the 5 s training clips (120 s)</span><span class="t-ko">5초 학습 클립 대비 생성 길이(120초)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">For long autoregressive video or world-model rollouts under a fixed KV budget, learn which frames to keep instead of relying on oldest-first eviction or fixed sinks. The router is cheap to train and also lifted LongLive without retraining its generator.</span><span class="t-ko">고정된 KV 예산으로 긴 자기회귀 영상이나 월드 모델을 굴린다면, 오래된 것부터 버리거나 고정 기준 프레임에 기대지 말고 남길 프레임을 학습하자. 라우터는 학습 비용이 적고, 생성기를 다시 학습하지 않고도 LongLive의 성능을 올렸다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">Evidence is mostly VBench-Long and ViCLIP, the human study has only 10 raters, and degradations are hand-made noise. Temporal flickering is slightly worse than Self Forcing, and interactive, input-driven generation is left for future work.</span><span class="t-ko">근거는 주로 VBench-Long과 ViCLIP이고, 사람 평가는 평가자 10명뿐이며, 손상은 직접 설계한 노이즈다. 시간적 깜빡임 점수는 Self Forcing보다 약간 나쁘고, 사용자 입력이 개입하는 상호작용형 생성은 향후 과제로 남겼다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2611.01858">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2611.01858">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2611.01858">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2611.01858">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>P2 slot (Video &amp; World Generation) · learned KV memory for long-horizon autoregressive video under a fixed cache budget · NeurIPS main track · score 6 (priority +3, venue +3), tied with AEON (2610.28631) and Disen-Forcing (2611.02822); Disen-Forcing is a distillation plug-in like the last P2 card, and AEON's one extra HF upvote was outweighed by P2's autoregressive-first focus; next was Wave Forcing (2611.00859, 5, HF ▲82)</b> · venue: NeurIPS 2026.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-11-03.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P2 슬롯 (Video &amp; World Generation) · 고정 캐시 예산에서 장기 자기회귀 비디오를 위한 학습형 KV 기억 관리 · NeurIPS 메인 트랙 · 점수 6 (우선 주제 +3, 학회 +3). AEON (2610.28631), Disen-Forcing (2611.02822)과 동점이었다. Disen-Forcing은 직전 P2 카드처럼 증류 플러그인이고, AEON이 HF 추천 1개 앞섰지만 P2가 자기회귀를 우선하므로 L2M을 골랐다. 다음은 Wave Forcing (2611.00859, 5점, HF ▲82)</b> · venue: NeurIPS 2026.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-11-03.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
