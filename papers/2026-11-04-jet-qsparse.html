@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Jet-QSparse</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Compressed Reasoning · NVFP4 KV Cache · Sparse Attention</span><span class="t-ko">Compressed Reasoning · NVFP4 KV 캐시 · 희소 어텐션</span></span>
+      <span>2026.11.04</span>
+    </div>
+    <h1>Jet-QSparse: Accelerating Agentic LLM Inference with 4-Bit Sparse Attention<br>
+      <span class="glow t-en">— keep the whole history in 4 bits, scan it in FP4, and read only 64 blocks carefully: agent accuracy holds where other sparse methods break</span>
+      <span class="glow t-ko">— 전체 기록을 4비트로 두고 FP4로 훑은 뒤 64개 블록만 정밀하게 읽으면, 다른 희소 방법이 무너지는 에이전트 과제에서도 정확도가 유지된다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge lab">🏛 MIT · NVIDIA · Song Han · Han Cai</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Haozhan Tang</b>, Hao Kang, Meng Lu, Yecheng Wu, Zerui Wang, Seokho Han, Haocheng Xi, Shuo Yang, Song Han, Han Cai <span class="t-en">(corresponding: Han Cai)</span><span class="t-ko">(교신: Han Cai)</span></span>
+      <span>🏛 CMU · Virginia Tech · MIT · NVIDIA · Sungkyunkwan University · UC Berkeley</span>
+      <span>🗓 2026-10-31</span>
+      <span>📄 <a href="https://arxiv.org/abs/2611.01022">arXiv:2611.01022</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Reasoning and agent runs carry long histories of thoughts and tool outputs, so the KV cache caps batch size and dense attention slows every token.</span><span class="t-ko">추론과 에이전트 실행은 생각과 도구 출력의 긴 기록을 안고 가므로, KV 캐시가 배치 크기를 제한하고 밀집 어텐션이 토큰마다 속도를 늦춘다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Low precision and sparsity must be judged together on agent tasks: Quest holds GPQA and AIME but drops Qwen3.8-27B on SWE-bench Verified from 82.7 to 4.7.</span><span class="t-ko">낮은 정밀도와 희소성은 에이전트 과제에서 함께 평가해야 한다. Quest는 GPQA와 AIME는 지키지만 Qwen3.8-27B의 SWE-bench Verified를 82.7에서 4.7로 떨어뜨린다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Keep the full history in an NVFP4 cache, score every key with FP4 math, then read values only from the top 64 blocks of 128 tokens at higher precision.</b> Key centering and two BF16 pages limit quantization error.</span><span class="t-ko"><b>전체 기록을 NVFP4 캐시에 두고, 모든 키를 FP4 연산으로 점수 매긴 뒤, 128토큰 블록 중 상위 64개에서만 값을 더 높은 정밀도로 읽는다.</b> 키 중심화와 BF16 페이지 두 장이 양자화 오차를 줄인다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">Qwen3.8-27B decodes 1.94× faster at 128K on one GB300, with no detected loss on five reasoning, coding, and agent benchmarks.</span><span class="t-ko">Qwen3.8-27B가 GB300 한 장, 128K 맥락에서 1.94배 빠르게 디코딩하며, 추론·코딩·에이전트 벤치마크 다섯 개에서 손실이 검출되지 않는다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">A lawyer on a long case keeps every page of the file, but in <b>shorthand</b> to save shelf space. For each new question they <b>skim all the shorthand</b> quickly, then pull out only the few folders that matter and <b>read those carefully</b>. Skimming everything means nothing is lost; careful reading only where it counts keeps the answer exact.</p>
+    <p class="t-ko">긴 사건을 맡은 변호사는 서류를 한 장도 버리지 않지만, 공간을 아끼려고 <b>약식으로 적어</b> 둔다. 새 질문이 오면 <b>약식 기록 전체를 빠르게 훑고</b>, 중요한 폴더 몇 개만 꺼내 <b>꼼꼼히 읽는다</b>. 전부 훑으니 놓치는 것이 없고, 필요한 곳만 꼼꼼히 읽으니 답은 정확하다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: cheap scan, careful read</span><span class="t-ko">작동 방식은 싸게 훑고 정밀하게 읽기</span></h2>
+    <p class="vlead t-en"><b>Precision goes where it changes the output: 4 bits to store and score every key, higher precision only for the values that form the answer.</b></p>
+    <p class="vlead t-ko"><b>정밀도는 출력을 바꾸는 곳에 쓴다. 모든 키를 저장하고 점수 매기는 데는 4비트를, 답을 만드는 값에만 더 높은 정밀도를 쓴다.</b></p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2611.01022/jetqsparse_decode.svg" target="_blank"><img src="fig/2611.01022/jetqsparse_decode.svg" alt="Jet-QSparse decode in three steps: score all key blocks with native NVFP4 and correct statistics with first and current BF16 keys; normalize block masses per head and select one shared block list per head group under a fixed or tail budget; rescore selected blocks, compute an FP16 weighted sum with FP32 accumulation, and merge into a BF16 output"></a>
+      <figcaption class="t-en"><b>Figure 2.</b> Jet-QSparse decode. Each block pairs key and value pages for 128 tokens.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> Jet-QSparse 디코딩. 블록마다 128토큰의 키와 값 페이지가 짝을 이룬다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2611.01022</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Pack.</span><span class="t-ko">압축 저장.</span></b><span class="t-en">The cache is stored in NVFP4 in 128-token pages; keys are centered by a calibrated mean, and the first and current pages stay in BF16.</span><span class="t-ko">캐시는 128토큰 페이지 단위로 NVFP4에 저장한다. 키는 보정된 평균으로 중심을 맞추고, 첫 페이지와 현재 페이지는 BF16으로 둔다.</span></li>
+      <li><b><span class="t-en">Scan and select.</span><span class="t-ko">훑고 고르기.</span></b><span class="t-en">Native FP4 tensor cores score the whole history; query heads that share a KV head pick one list of N blocks.</span><span class="t-ko">FP4 텐서 코어가 전체 기록에 점수를 매기고, KV 헤드를 공유하는 쿼리 헤드들은 블록 N개짜리 목록 하나를 함께 고른다.</span></li>
+      <li><b><span class="t-en">Aggregate.</span><span class="t-ko">값 모으기.</span></b><span class="t-en">The weighted sum runs only over the selected blocks, in FP16 with FP32 accumulation; prefill uses FP8 in a temporary buffer.</span><span class="t-ko">가중합은 고른 블록에서만 FP16으로 계산하고 FP32로 누적한다. 프리필은 임시 버퍼에서 FP8로 처리한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key point: agents expose what short tests hide</span><span class="t-ko">핵심은 에이전트 과제가 짧은 시험이 숨기는 것을 드러낸다는 것</span></h2>
+    <p class="vlead t-en"><b>On SWE-bench Verified, Jet-QSparse matches BF16 with 29% of its KV bytes, while Quest collapses.</b> SparQ also holds accuracy but needs 1.5× BF16's memory.</p>
+    <p class="vlead t-ko"><b>SWE-bench Verified에서 Jet-QSparse는 KV 바이트의 29%만으로 BF16과 같은 수준을 내지만, Quest는 무너진다.</b> SparQ도 정확도는 지키지만 BF16의 1.5배 메모리가 든다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">SWE-bench Verified, Qwen3.8-27B</span><span class="t-ko">SWE-bench Verified, Qwen3.8-27B</span></div>
+      <div class="cs"><span class="t-en">Table 1 · % · mean of three runs · KV bytes vs BF16 in labels · ours highlighted</span><span class="t-ko">Table 1 · % · 3회 평균 · 라벨에 BF16 대비 KV 바이트 · 제안 방법 강조</span></div>
+      <div class="bars">
+        <div class="bar" title="BF16: 82.7"><span class="bl">BF16 · 1.00×</span><span class="bt"><span class="bf" style="--w:82.7%"></span></span><span class="bv">82.7</span></div>
+        <div class="bar hl" title="Jet-QSparse N=64: 83.5"><span class="bl">Jet-QSparse · 0.29×</span><span class="bt"><span class="bf" style="--w:83.5%"></span></span><span class="bv">83.5</span></div>
+        <div class="bar" title="SparQ: 83.7"><span class="bl">SparQ · 1.50×</span><span class="bt"><span class="bf" style="--w:83.7%"></span></span><span class="bv">83.7</span></div>
+        <div class="bar" title="TriAttention: 82.7"><span class="bl">TriAttention</span><span class="bt"><span class="bf" style="--w:82.7%"></span></span><span class="bv">82.7</span></div>
+        <div class="bar" title="Quest: 4.7"><span class="bl">Quest · 1.06×</span><span class="bt"><span class="bf" style="--w:4.7%"></span></span><span class="bv">4.7</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–100%. TriAttention keeps SWE-bench but drops AIME25 from 99.0 to 79.0.</figcaption>
+      <figcaption class="t-ko">축 0–100%. TriAttention은 SWE-bench는 지키지만 AIME25가 99.0에서 79.0으로 떨어진다.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: faster decode, more requests per GPU</span><span class="t-ko">결과는 더 빠른 디코딩과 GPU당 더 많은 요청</span></h2>
+    <p class="vlead t-en"><b>At 128K context and batch 16, the 64-block setting speeds up decoding on all four hybrid models, most on the Qwens.</b></p>
+    <p class="vlead t-ko"><b>128K 맥락, 배치 16에서 64블록 설정은 하이브리드 모델 네 개 모두의 디코딩을 빠르게 하며, Qwen에서 가장 크다.</b></p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">End-to-end decode speedup over dense BF16, one GB300</span><span class="t-ko">밀집 BF16 대비 전체 디코딩 속도 향상, GB300 한 장</span></div>
+      <div class="cs"><span class="t-en">Section 4.2 · N=64 · 1,024 generated tokens · line = BF16 (1.0×)</span><span class="t-ko">4.2절 · N=64 · 생성 토큰 1,024개 · 선 = BF16 (1.0배)</span></div>
+      <div class="bars" style="--x:50%">
+        <div class="bar hl" title="Qwen3.8-27B: 1.94x"><span class="bl">Qwen3.8-27B</span><span class="bt"><span class="bf" style="--w:97%"></span></span><span class="bv">1.94×</span></div>
+        <div class="bar" title="Qwen3.6-35B-A3B: 1.57x"><span class="bl">Qwen3.6-35B-A3B</span><span class="bt"><span class="bf" style="--w:78.5%"></span></span><span class="bv">1.57×</span></div>
+        <div class="bar" title="Nemotron 3.5 Lightning: 1.13x"><span class="bl">Nemotron 3.5 Lightning</span><span class="bt"><span class="bf" style="--w:56.5%"></span></span><span class="bv">1.13×</span></div>
+        <div class="bar" title="Nemotron 3 Nano: 1.11x"><span class="bl">Nemotron 3 Nano</span><span class="bt"><span class="bf" style="--w:55.5%"></span></span><span class="bv">1.11×</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–2×. At batch one the gain shrinks to 0.95–1.14×; it grows with batch and context.</figcaption>
+      <figcaption class="t-ko">축 0–2배. 배치 1에서는 향상이 0.95~1.14배로 줄고, 배치와 맥락이 커질수록 늘어난다.</figcaption>
+    </figure>
+    <p class="vlead t-en"><b>On the MoE Qwen, only Jet-QSparse is both faster and smaller than BF16 without losing agent accuracy.</b></p>
+    <p class="vlead t-ko"><b>MoE Qwen에서 에이전트 정확도를 잃지 않으면서 BF16보다 빠르고 작은 방법은 Jet-QSparse뿐이다.</b></p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1.</b> Qwen3.6-35B-A3B. Accuracy in % (mean of runs); decode speed and KV bytes relative to BF16.</caption>
+        <caption class="t-ko"><b>Table 1.</b> Qwen3.6-35B-A3B. 정확도 %(실행 평균), 디코딩 속도와 KV 바이트는 BF16 대비.</caption>
+        <thead><tr><th>Method</th><th>AIME25</th><th>TB 2.1</th><th>SWE-V</th><th>Decode</th><th>KV</th></tr></thead>
+        <tbody>
+          <tr><td>BF16</td><td>91.8</td><td>41.6</td><td>68.5</td><td>1.00</td><td>1.000</td></tr>
+          <tr><td>Jet-QSparse</td><td>91.2</td><td>41.2</td><td class="up">70.6</td><td class="up">1.57</td><td class="up">0.289</td></tr>
+          <tr><td>Quest</td><td>76.1</td><td>22.1</td><td>19.4</td><td>1.32</td><td>1.050</td></tr>
+          <tr><td>SparQ</td><td>91.1</td><td>40.1</td><td>69.3</td><td>1.09</td><td>1.502</td></tr>
+          <tr><td>TriAttention</td><td>63.7</td><td>41.9</td><td>69.3</td><td>1.00</td><td>1.000</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">2.58×</div><div class="l"><span class="t-en">KV token capacity of BF16, Qwen3.8-27B</span><span class="t-ko">Qwen3.8-27B에서 BF16 대비 KV 토큰 수용량</span></div></div>
+      <div class="stat"><div class="n">2.5</div><div class="l"><span class="t-en">median steps before NVFP4 greedy outputs diverge on SWE contexts</span><span class="t-ko">SWE 맥락에서 NVFP4 탐욕 출력이 갈라지기까지의 중앙값 스텝</span></div></div>
+      <div class="stat"><div class="n">2.4T</div><div class="l"><span class="t-en">parameter model served with no detected loss</span><span class="t-ko">손실 검출 없이 서빙한 모델 파라미터 수</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">Judge KV compression on agent tasks and completion, not on needle tests: needle retrieval stayed intact while aggregation tasks and SWE-bench dropped under aggressive sparsity. Store and score cheaply, but aggregate values in higher precision.</span><span class="t-ko">KV 압축은 바늘 찾기 시험이 아니라 에이전트 과제와 완주 여부로 평가하자. 공격적인 희소화에서 바늘 찾기는 멀쩡했지만 정보를 모으는 과제와 SWE-bench는 점수가 떨어졌다. 저장과 점수는 싸게 하되, 값을 모을 때는 높은 정밀도를 쓰자.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">"No detected loss" is a statistical claim, and Terminal-Bench cannot resolve losses under about 6 to 9 points. Gains need Blackwell FP4 cores, and with no BF16 sparse arm, sparsity's effect is not cleanly separated from quantization.</span><span class="t-ko">"손실 검출 없음"은 통계적 주장이며, Terminal-Bench로는 약 6~9점 미만의 손실을 가려내지 못한다. 속도 향상은 Blackwell FP4 코어가 있어야 하고, BF16 희소 비교군이 없어 희소화의 효과가 양자화와 깔끔하게 분리되지 않는다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2611.01022">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2611.01022">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2611.01022">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2611.01022">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>P1 slot (Compressed Reasoning) · KV-cache quantization and sparse attention built for long reasoning and agent runs, tested on SWE-bench and Terminal-Bench · score 6 (priority +3, listed author Song Han +3, confirmed as the MIT and NVIDIA group alongside Han Cai and Haocheng Xi); next was Beyond Accuracy: How Quantization Affects Coding Agents (2611.02368, 4, NeurIPS'26 workshop)</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-11-04.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P1 슬롯 (Compressed Reasoning) · 긴 추론과 에이전트 실행을 겨냥한 KV 캐시 양자화와 희소 어텐션, SWE-bench와 Terminal-Bench로 검증 · 점수 6 (우선 주제 +3, 목록 저자 Song Han +3, Han Cai와 Haocheng Xi가 함께 있어 MIT·NVIDIA 연구진임을 확인). 다음은 Beyond Accuracy: How Quantization Affects Coding Agents (2611.02368, 4점, NeurIPS'26 워크숍)</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-11-04.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
