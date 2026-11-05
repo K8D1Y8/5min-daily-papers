@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Wave Forcing</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Video &amp; World Generation · Streaming AR Video · Pipelined Denoising</span><span class="t-ko">Video &amp; World Generation · 스트리밍 자기회귀 비디오 · 파이프라인 디노이징</span></span>
+      <span>2026.11.05</span>
+    </div>
+    <h1>Wave Forcing: Towards Speed-of-Light Streaming Video Generation<br>
+      <span class="glow t-en">— stagger the denoising steps of successive chunks across GPUs like a wave, so a finished chunk comes out every forward round</span>
+      <span class="glow t-ko">— 이어지는 청크들의 디노이징 단계를 파도처럼 GPU에 엇갈려 배치해, 순전파 한 바퀴마다 완성된 청크가 하나씩 나온다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge hot">▲ 123 HF · ★ 122 GitHub</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Yijie Jin</b>, Yuxuan Liu, Jiajun Xu, Ye Huang, Chuzhi Wang, Jiayang Li, Ruiyang Chen, Chenling Hong, Xu Wang, Zhijie Deng <span class="t-en">(equal contribution: first four · corresponding: Zhijie Deng)</span><span class="t-ko">(공동 1저자: 앞의 네 명 · 교신: Zhijie Deng)</span></span>
+      <span>🏛 Shanghai Jiao Tong University · Xi'an Jiaotong University · Peking University · East China Normal University · National Tsing Hua University</span>
+      <span>🗓 2026-10-31</span>
+      <span>📄 <a href="https://arxiv.org/abs/2611.00859">arXiv:2611.00859</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Chunk-wise autoregressive video denoises one chunk at a time plus a cache-refresh pass, so even one-step denoising needs two sequential forwards per chunk.</span><span class="t-ko">청크 단위 자기회귀 비디오는 한 번에 한 청크만 디노이징하고 캐시 갱신 패스를 더하므로, 한 스텝 디노이징도 청크마다 순차 순전파 두 번이 든다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">If newer chunks may read earlier, cleaner chunks before those finish, different chunks can sit at different denoising stages at once, like a wavefront.</span><span class="t-ko">새 청크가 아직 끝나지 않은 앞선 청크의 더 깨끗한 상태를 읽어도 된다면, 여러 청크가 동시에 서로 다른 디노이징 단계에 있을 수 있다. 파면처럼 말이다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Give each denoising stage and the cache refresh its own full-model GPU replica, stagger chunks across them, and deliver K/V early, so one chunk completes per concurrent round.</b> A three-stage DMD recipe adapts the model to this causal schedule.</span><span class="t-ko"><b>디노이징 단계마다, 그리고 캐시 갱신에 각각 전체 모델 GPU 복제본을 두고, 청크들을 엇갈려 흘리며 K/V를 미리 전달해, 동시 실행 한 바퀴마다 청크 하나를 완성한다.</b> 3단계 DMD 학습으로 모델을 이 인과적 일정에 맞춘다.</span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">On Wan2.1-1.3B, 4-step WF streams 134.8 FPS end to end on eight H200s (7.07× one GPU); 5-step WF matches Rolling Forcing's quality with far more motion.</span><span class="t-ko">Wan2.1-1.3B에서 4스텝 WF는 H200 8장으로 전체 134.8 FPS를 내고(GPU 한 장의 7.07배), 5스텝 WF는 Rolling Forcing과 같은 품질에 훨씬 많은 움직임을 보인다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">A car wash with five bays usually moves one car through every bay before the next car enters. Wave Forcing lets the next car in as soon as the first leaves <b>bay one</b>, so <b>five cars sit in five bays at once</b>. Each car still gets every wash step; the exit simply sees a clean car every cycle.</p>
+    <p class="t-ko">칸이 다섯 개인 세차장은 보통 차 한 대를 모든 칸에 다 통과시킨 뒤 다음 차를 들인다. Wave Forcing은 첫 차가 <b>첫 칸</b>을 나서자마자 다음 차를 들여, <b>다섯 대가 다섯 칸에 동시에</b> 있게 한다. 차마다 세차 단계는 모두 거치고, 출구에서는 한 주기마다 깨끗한 차가 한 대씩 나온다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: a causal wavefront of chunks</span><span class="t-ko">작동 방식은 청크들의 인과적 파면</span></h2>
+    <p class="vlead t-en"><b>The work per chunk is unchanged; what changes is that different chunks occupy different denoising stages at the same time.</b></p>
+    <p class="vlead t-ko"><b>청크 하나에 드는 계산은 그대로다. 달라진 것은 여러 청크가 동시에 서로 다른 디노이징 단계를 차지한다는 점이다.</b></p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2611.00859/wavefront.svg" target="_blank"><img src="fig/2611.00859/wavefront.svg" alt="Wave Forcing with four denoising stages plus store: (a) chunks advance along anti-diagonals so stage s of chunk i runs in round i plus s, with width at most five; (b) each stage has one full-model replica and the consumer reads K/V from cleaner sources delivered before use; (c) Self Forcing with one replica outputs one chunk per five rounds, while Wave Forcing with five replicas outputs five chunks in five rounds after fill"></a>
+      <figcaption class="t-en"><b>Figure 1.</b> The causal wavefront with four denoising stages plus store, and its continuous output.</figcaption>
+      <figcaption class="t-ko"><b>Figure 1.</b> 디노이징 4단계와 저장 단계로 이뤄진 인과적 파면과 연속 출력.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2611.00859</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Causal wavefront.</span><span class="t-ko">인과적 파면.</span></b><span class="t-en">Chunk i runs stage s in round i+s, and attends to itself and every cleaner predecessor, never to later chunks.</span><span class="t-ko">청크 i는 i+s 바퀴에서 단계 s를 실행하고, 자신과 더 깨끗한 앞선 청크들만 보며 뒤 청크는 보지 않는다.</span></li>
+      <li><b><span class="t-en">One replica per stage.</span><span class="t-ko">단계마다 복제본 하나.</span></b><span class="t-en">The runtime publishes each layer's K/V early and overlaps transfer with compute, so consumers rarely wait.</span><span class="t-ko">런타임은 층마다 K/V를 미리 보내고 전송과 계산을 겹쳐, 받는 쪽이 기다리는 일을 줄인다.</span></li>
+      <li><b><span class="t-en">Train for the schedule.</span><span class="t-ko">일정에 맞춘 학습.</span></b><span class="t-en">Mixed-noise DMD, then DMD plus LPIPS on teacher chunks, then on-policy DMD on self-generated history.</span><span class="t-ko">혼합 노이즈 DMD, 이어서 교사 청크에 DMD와 LPIPS, 마지막으로 스스로 만든 기록으로 온폴리시 DMD를 한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key point: motion comes back without losing the subject</span><span class="t-ko">핵심은 주인공을 잃지 않고 움직임을 되찾는다는 것</span></h2>
+    <p class="vlead t-en"><b>On 100-second videos, 5-step WF moves 2.5× as much as Rolling Forcing while keeping its subject in view.</b> Causal Forcing moves more but loses the subject.</p>
+    <p class="vlead t-ko"><b>100초 영상에서 5스텝 WF는 Rolling Forcing보다 2.5배 많이 움직이면서도 주인공을 화면에 붙잡아 둔다.</b> Causal Forcing은 더 많이 움직이지만 주인공을 잃는다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">VBench-Long Dynamic Degree, 100-second videos</span><span class="t-ko">VBench-Long 동적 정도, 100초 영상</span></div>
+      <div class="cs"><span class="t-en">Table 1 · Wan2.1-T2V-1.3B · 200 MovieGen prompts · ours highlighted</span><span class="t-ko">Table 1 · Wan2.1-T2V-1.3B · MovieGen 프롬프트 200개 · 제안 방법 강조</span></div>
+      <div class="bars">
+        <div class="bar" title="Causal Forcing: 96.61, subject preservation 71.11"><span class="bl">Causal Forcing</span><span class="bt"><span class="bf" style="--w:96.6%"></span></span><span class="bv">96.6</span></div>
+        <div class="bar hl" title="Wave Forcing, 5 steps: 91.45"><span class="bl">WF, 5 steps</span><span class="bt"><span class="bf" style="--w:91.5%"></span></span><span class="bv">91.5</span></div>
+        <div class="bar" title="Wave Forcing, 4 steps: 74.97"><span class="bl">WF, 4 steps</span><span class="bt"><span class="bf" style="--w:75%"></span></span><span class="bv">75.0</span></div>
+        <div class="bar" title="Rolling Forcing: 36.63"><span class="bl">Rolling Forcing</span><span class="bt"><span class="bf" style="--w:36.6%"></span></span><span class="bv">36.6</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–100. Subject preservation: Causal Forcing 71.1, Rolling Forcing 92.8, WF 5-step 97.1.</figcaption>
+      <figcaption class="t-ko">축 0–100. 주인공 유지 점수는 Causal Forcing 71.1, Rolling Forcing 92.8, WF 5스텝 97.1.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: real-time many times over</span><span class="t-ko">결과는 실시간의 몇 배</span></h2>
+    <p class="vlead t-en"><b>Using eight GPUs well, 4-step WF streams 134.8 frames per second end to end, against 19.1 for single-GPU Causal Forcing.</b></p>
+    <p class="vlead t-ko"><b>GPU 8장을 잘 활용해 4스텝 WF는 전체 초당 134.8프레임을 내고, GPU 한 장의 Causal Forcing은 19.1프레임이다.</b></p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">End-to-end FPS at 832×480, Wan2.1-1.3B</span><span class="t-ko">832×480 전체 FPS, Wan2.1-1.3B</span></div>
+      <div class="cs"><span class="t-en">Table 1 · H200 · GPU count in labels · line = 16 FPS playback</span><span class="t-ko">Table 1 · H200 · 라벨에 GPU 수 · 선 = 16 FPS 재생</span></div>
+      <div class="bars" style="--x:10.7%">
+        <div class="bar hl" title="Wave Forcing 4 steps, 8 GPUs: 134.81"><span class="bl">WF 4 steps · 8</span><span class="bt"><span class="bf" style="--w:89.9%"></span></span><span class="bv">134.8</span></div>
+        <div class="bar" title="Wave Forcing 5 steps, 8 GPUs: 96.46"><span class="bl">WF 5 steps · 8</span><span class="bt"><span class="bf" style="--w:64.3%"></span></span><span class="bv">96.5</span></div>
+        <div class="bar" title="Rolling Forcing with causal attention, 8 GPUs: 96.56"><span class="bl">RF causal · 8</span><span class="bt"><span class="bf" style="--w:64.4%"></span></span><span class="bv">96.6</span></div>
+        <div class="bar" title="Causal Forcing, 1 GPU: 19.06"><span class="bl">Causal Forcing · 1</span><span class="bt"><span class="bf" style="--w:12.7%"></span></span><span class="bv">19.1</span></div>
+        <div class="bar" title="Rolling Forcing, 1 GPU: 17.46"><span class="bl">Rolling Forcing · 1</span><span class="bt"><span class="bf" style="--w:11.6%"></span></span><span class="bv">17.5</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–150 FPS. Videos play at 16 FPS. At 14B the gain over one GPU is 6.08×.</figcaption>
+      <figcaption class="t-ko">축 0–150 FPS. 영상은 16 FPS로 재생된다. 14B에서는 GPU 한 장 대비 6.08배다.</figcaption>
+    </figure>
+    <p class="vlead t-en"><b>Quality stays level with Rolling Forcing, while Causal Forcing's subject loss and camera drift make it unusable for long streams.</b></p>
+    <p class="vlead t-ko"><b>품질은 Rolling Forcing과 비슷하게 유지되고, Causal Forcing은 주인공을 잃고 카메라가 이탈해 긴 스트림에 쓰기 어렵다.</b></p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1.</b> VBench Total (short), VBench-Long Quality, subject preservation, camera drift (lower is better), end-to-end FPS.</caption>
+        <caption class="t-ko"><b>Table 1.</b> VBench Total(짧은 영상), VBench-Long 품질, 주인공 유지, 카메라 이탈(낮을수록 좋음), 전체 FPS.</caption>
+        <thead><tr><th>Method</th><th>Total</th><th>Long Q.</th><th>Subject</th><th>Drift</th><th>FPS</th></tr></thead>
+        <tbody>
+          <tr><td>Rolling Forcing, 1 GPU</td><td>81.15</td><td>81.18</td><td>92.75</td><td>0.17</td><td>17.46</td></tr>
+          <tr><td>Causal Forcing, 1 GPU</td><td>79.61</td><td>82.15</td><td>71.11</td><td>11.14</td><td>19.06</td></tr>
+          <tr><td>RF + causal attn, 8 GPUs</td><td>80.89</td><td>80.50</td><td>91.26</td><td>0.40</td><td>96.56</td></tr>
+          <tr><td>WF 4-step, 8 GPUs</td><td>80.74</td><td>80.89</td><td>91.88</td><td>0.36</td><td class="up">134.81</td></tr>
+          <tr><td>WF 5-step, 8 GPUs</td><td class="up">81.64</td><td>81.26</td><td class="up">97.10</td><td>0.37</td><td>96.46</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">7.07×</div><div class="l"><span class="t-en">end-to-end speedup over one GPU, 1.3B</span><span class="t-ko">GPU 한 장 대비 전체 속도 향상, 1.3B</span></div></div>
+      <div class="stat"><div class="n">2.53×</div><div class="l"><span class="t-en">best throughput over context parallelism (Sage+W8A8)</span><span class="t-ko">컨텍스트 병렬화 대비 최대 처리량(Sage+W8A8)</span></div></div>
+      <div class="stat"><div class="n">2.5×</div><div class="l"><span class="t-en">long-video motion vs Rolling Forcing, 5-step</span><span class="t-ko">5스텝 기준 Rolling Forcing 대비 장편 영상 움직임</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">For streaming video on several GPUs, pipeline the denoising steps of successive chunks instead of splitting attention across devices. Judge long rollouts with subject and drift checks too, since VBench rewarded a model that lost its subject.</span><span class="t-ko">GPU 여러 장으로 스트리밍 비디오를 만든다면, 어텐션을 장치에 쪼개기보다 이어지는 청크의 디노이징 단계를 파이프라인으로 흘리자. 긴 생성은 주인공 유지와 이탈 지표로도 확인하자. VBench는 주인공을 잃은 모델에 높은 점수를 줬다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">The speedup comes from eight GPUs, and parallelism is capped by the step count. Throughput is not input-to-output latency, the timing runs used dummy weights, and prompt or action changes mid-stream are untested.</span><span class="t-ko">속도 향상은 GPU 8장에서 나오고, 병렬화 폭은 스텝 수로 제한된다. 처리량은 입력에서 출력까지의 지연과 다르고, 속도 측정은 임의 가중치로 했으며, 생성 중 프롬프트나 행동이 바뀌는 상황은 시험하지 않았다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2611.00859">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2611.00859">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2611.00859">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2611.00859">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>P2 slot (Video &amp; World Generation) · efficient streaming autoregressive video by pipelining denoising across GPUs · score 6 (priority +3, very hot +3 at HF ▲123), tied with AEON (2610.28631) and Disen-Forcing (2611.02822); Disen-Forcing overlaps yesterday's long-horizon memory axis, and Wave Forcing is far hotter than AEON (HF ▲1)</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-11-05.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P2 슬롯 (Video &amp; World Generation) · GPU에 디노이징을 파이프라인으로 나눠 스트리밍 자기회귀 비디오를 빠르게 함 · 점수 6 (우선 주제 +3, 매우 화제 +3, HF ▲123). AEON (2610.28631), Disen-Forcing (2611.02822)과 동점이었다. Disen-Forcing은 어제 다룬 장기 기억 축과 겹치고, Wave Forcing이 AEON(HF ▲1)보다 훨씬 화제라 골랐다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-11-05.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
