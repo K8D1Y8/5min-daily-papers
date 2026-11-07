@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · No Long Context</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Efficient Sequence Models · Context Compaction · Semantic State</span><span class="t-ko">Efficient Sequence Models · 맥락 압축 · 의미 상태</span></span>
+      <span>2026.11.07</span>
+    </div>
+    <h1>You don't need long context<br>
+      <span class="glow t-en">— compact the history often, even after every single action, and frontier agents keep their accuracy while the live context stays under about 10K tokens</span>
+      <span class="glow t-ko">— 기록을 자주, 심지어 행동 하나마다 압축해도 최상위 에이전트는 정확도를 지키고, 실제로 쓰는 맥락은 약 1만 토큰 아래로 유지된다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Technical report</span>
+      <span class="badge lab">🏛 NVIDIA · Molchanov</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Peter Belcak</b>, Saurav Muralidharan, Jindong Jiang, Yonggan Fu, Wonmin Byeon, Hanrong Ye, Ryan Angilly, Ali Taghibakhshi, Shih-Yang Liu, Siru Ouyang, Greg Heinrich, Pavlo Molchanov</span>
+      <span>🏛 NVIDIA Research</span>
+      <span>🗓 2026-11-03</span>
+      <span>📄 <a href="https://arxiv.org/abs/2611.05306">arXiv:2611.05306</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Later tokens cost more: serving a 256K context window instead of 16K makes each generated token 3.6–7× more expensive on H100s.</span><span class="t-ko">뒤쪽 토큰일수록 비싸다. H100에서 맥락 창을 16K 대신 256K로 서빙하면 생성 토큰 하나의 비용이 3.6~7배가 된다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Long contexts come from long-horizon histories and long inputs, but neither has to sit in the context all at once.</span><span class="t-ko">긴 맥락은 장기 과제의 기록과 긴 입력에서 생기지만, 둘 다 한꺼번에 맥락에 들어 있을 필요는 없다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Compact the agent's history into a short task state whenever a threshold is crossed, read long inputs selectively with shell tools, and at the extreme keep only a semantic state between single actions.</b></span><span class="t-ko"><b>기준을 넘을 때마다 에이전트의 기록을 짧은 과제 상태로 압축하고, 긴 입력은 셸 도구로 골라 읽으며, 극단적으로는 행동 하나 사이에 의미 상태만 남긴다.</b></span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">Across 13 benchmarks, Opus 4.5 and GPT 5.6 Sol mostly hold or beat full-history accuracy, and single-action compaction keeps median peak context at 7–9K tokens.</span><span class="t-ko">벤치마크 13개에서 Opus 4.5와 GPT 5.6 Sol은 대체로 전체 기록 방식의 정확도를 지키거나 넘고, 행동 단위 압축은 최대 맥락의 중앙값을 7~9K 토큰으로 유지한다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">A detective on a long case does not carry every page of every interview into each meeting. They keep a <b>one-page case summary</b>, update it after each lead, and pull a specific file from the archive <b>only when a detail is needed</b>. The report shows frontier models can work the same way.</p>
+    <p class="t-ko">긴 사건을 맡은 형사는 모든 조서를 들고 회의에 들어가지 않는다. <b>한 장짜리 사건 요약</b>을 들고 다니며 단서가 나올 때마다 고쳐 쓰고, <b>세부가 필요할 때만</b> 보관함에서 특정 서류를 꺼낸다. 이 보고서는 최상위 모델도 같은 방식으로 일할 수 있음을 보인다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: three ways to manage context</span><span class="t-ko">작동 방식은 맥락을 다루는 세 가지 방법</span></h2>
+    <p class="vlead t-en"><b>The study only changes what the harness shows the model, from the whole history to a single state plus one action.</b></p>
+    <p class="vlead t-ko"><b>이 연구는 하네스가 모델에게 보여 주는 것만 바꾼다. 전체 기록에서 시작해 상태 하나와 행동 하나까지 줄인다.</b></p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2611.05306/context_regimes.svg" target="_blank"><img src="fig/2611.05306/context_regimes.svg" alt="Three context-management regimes. FHA accumulates the full history in one growing conversation. EoCC compacts at a threshold and starts a new conversation with the task and the compaction. SAC takes one action per conversation, then asks for an updated semantic state and starts a new conversation with it"></a>
+      <figcaption class="t-en"><b>Figure 3.</b> Full-history accumulation (FHA), end-of-conversation compaction (EoCC), and single-action compaction (SAC).</figcaption>
+      <figcaption class="t-ko"><b>Figure 3.</b> 전체 기록 누적(FHA), 대화 끝 압축(EoCC), 행동 단위 압축(SAC).</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2611.05306</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Compact at a threshold.</span><span class="t-ko">기준에서 압축.</span></b><span class="t-en">When the conversation passes a limit such as 18K tokens, the model writes a bounded summary and a fresh conversation resumes from it.</span><span class="t-ko">대화가 18K 토큰 같은 한도를 넘으면 모델이 길이가 정해진 요약을 쓰고, 새 대화가 그 요약에서 이어진다.</span></li>
+      <li><b><span class="t-en">Read inputs on demand.</span><span class="t-ko">입력은 필요할 때 읽기.</span></b><span class="t-en">Long documents become files the agent reads with sed, awk, and head, which turns a long-input task into a long-horizon one.</span><span class="t-ko">긴 문서는 파일로 두고 에이전트가 sed, awk, head로 읽게 해, 긴 입력 과제를 장기 과제로 바꾼다.</span></li>
+      <li><b><span class="t-en">One action per context.</span><span class="t-ko">맥락당 행동 하나.</span></b><span class="t-en">Each conversation gets the task and current state, takes one action, writes an updated state, and is discarded.</span><span class="t-ko">대화마다 과제와 현재 상태를 받아 행동 하나를 하고, 갱신된 상태를 쓴 뒤 버려진다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key point: context length is a cost multiplier</span><span class="t-ko">핵심은 맥락 길이가 비용을 곱한다는 것</span></h2>
+    <p class="vlead t-en"><b>Cutting the context window from 256K to 16K yields 3.6–7× more decoded tokens per second on the same H100 node.</b> That rivals what aggressive quantization or sparsity buys.</p>
+    <p class="vlead t-ko"><b>맥락 창을 256K에서 16K로 줄이면 같은 H100 노드에서 초당 디코딩 토큰이 3.6~7배 늘어난다.</b> 이는 공격적인 양자화나 희소화로 얻는 이득과 맞먹는다.</p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Decode throughput at a 16K window relative to 256K</span><span class="t-ko">256K 대비 16K 맥락 창의 디코딩 처리량</span></div>
+      <div class="cs"><span class="t-en">Figure 4 · vLLM on H100 · peak sustained throughput · line = 1×</span><span class="t-ko">Figure 4 · H100에서 vLLM · 최대 지속 처리량 · 선 = 1배</span></div>
+      <div class="bars" style="--x:12.5%">
+        <div class="bar hl" title="Qwen 3 Coder Next, BF16: 7x"><span class="bl">Qwen 3 Coder Next</span><span class="bt"><span class="bf" style="--w:87.5%"></span></span><span class="bv">7.0×</span></div>
+        <div class="bar" title="Kimi K2.6, INT4 experts with FP8 KV cache: 5.6x"><span class="bl">Kimi K2.6</span><span class="bt"><span class="bf" style="--w:70%"></span></span><span class="bv">5.6×</span></div>
+        <div class="bar" title="GLM 5.2, INT4 experts: 3.6x"><span class="bl">GLM 5.2</span><span class="bt"><span class="bf" style="--w:45%"></span></span><span class="bv">3.6×</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–8×. On a local DGX Spark, later tokens take about twice as long for several models.</figcaption>
+      <figcaption class="t-ko">축 0–8배. 로컬 DGX Spark에서는 여러 모델에서 뒤쪽 토큰 생성이 약 두 배 오래 걸린다.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: accuracy holds while live context collapses</span><span class="t-ko">결과는 맥락이 줄어도 유지되는 정확도</span></h2>
+    <p class="vlead t-en"><b>With one action per context, the largest prompt any task ever needed drops from 130–200K tokens to 15–37K.</b></p>
+    <p class="vlead t-ko"><b>맥락당 행동 하나로 바꾸면, 과제가 한 번이라도 필요로 한 가장 큰 프롬프트가 13만~20만 토큰에서 1.5만~3.7만 토큰으로 줄어든다.</b></p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Maximum peak context per task, full history vs single-action compaction</span><span class="t-ko">과제별 최대 맥락, 전체 기록 대 행동 단위 압축</span></div>
+      <div class="cs"><span class="t-en">Table 2 · K tokens · lower is better · SAC highlighted</span><span class="t-ko">Table 2 · K 토큰 · 낮을수록 좋음 · SAC 강조</span></div>
+      <div class="bars">
+        <div class="bar" title="Opus 4.5 SWE-bench Verified, full history: 200K"><span class="bl">Opus · SWE · full</span><span class="bt"><span class="bf" style="--w:100%"></span></span><span class="bv">200</span></div>
+        <div class="bar hl" title="Opus 4.5 SWE-bench Verified, SAC: 16K"><span class="bl">Opus · SWE · SAC</span><span class="bt"><span class="bf" style="--w:8%"></span></span><span class="bv">16</span></div>
+        <div class="bar" title="GPT 5.6 Sol SWE-bench Verified, full history: 173K"><span class="bl">GPT · SWE · full</span><span class="bt"><span class="bf" style="--w:86.5%"></span></span><span class="bv">173</span></div>
+        <div class="bar hl" title="GPT 5.6 Sol SWE-bench Verified, SAC: 15K"><span class="bl">GPT · SWE · SAC</span><span class="bt"><span class="bf" style="--w:7.5%"></span></span><span class="bv">15</span></div>
+        <div class="bar" title="GPT 5.6 Sol Terminal-Bench, full history: 133K"><span class="bl">GPT · TB · full</span><span class="bt"><span class="bf" style="--w:66.5%"></span></span><span class="bv">133</span></div>
+        <div class="bar hl" title="GPT 5.6 Sol Terminal-Bench, SAC: 37K"><span class="bl">GPT · TB · SAC</span><span class="bt"><span class="bf" style="--w:18.5%"></span></span><span class="bv">37</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–200K. Opus on Terminal-Bench falls from 130K to 19K.</figcaption>
+      <figcaption class="t-ko">축 0–200K. Terminal-Bench의 Opus는 130K에서 19K로 줄어든다.</figcaption>
+    </figure>
+    <p class="vlead t-en"><b>Accuracy barely moves: compaction at a threshold even beats full history in all four settings.</b></p>
+    <p class="vlead t-ko"><b>정확도는 거의 변하지 않는다. 기준 압축은 네 설정 모두에서 오히려 전체 기록 방식보다 높다.</b></p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 2.</b> Accuracy (%) with mini-swe-agent, and median peak context (K tokens) for full history and SAC.</caption>
+        <caption class="t-ko"><b>Table 2.</b> mini-swe-agent 정확도(%)와 전체 기록 및 SAC의 맥락 중앙값(K 토큰).</caption>
+        <thead><tr><th>Model · task</th><th>Full</th><th>Best EoCC</th><th>SAC</th><th>Median peak</th></tr></thead>
+        <tbody>
+          <tr><td>Opus 4.5 · SWE-V</td><td>70.0</td><td class="up">74.8</td><td class="up">70.2</td><td>32 → 8</td></tr>
+          <tr><td>Opus 4.5 · TB 2.1</td><td>47.2</td><td class="up">52.8</td><td class="up">51.8</td><td>27 → 9</td></tr>
+          <tr><td>GPT 5.6 Sol · SWE-V</td><td>84.4</td><td class="up">88.8</td><td>82.4</td><td>18 → 7</td></tr>
+          <tr><td>GPT 5.6 Sol · TB 2.1</td><td>87.6</td><td class="up">88.8</td><td>84.3</td><td>17 → 8</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">7×</div><div class="l"><span class="t-en">more decode throughput at 16K vs 256K</span><span class="t-ko">256K 대비 16K에서 늘어난 디코딩 처리량</span></div></div>
+      <div class="stat"><div class="n">7–9K</div><div class="l"><span class="t-en">median peak context with one action per context</span><span class="t-ko">맥락당 행동 하나일 때 최대 맥락의 중앙값</span></div></div>
+      <div class="stat"><div class="n">+40.0</div><div class="l"><span class="t-en">best long-input accuracy gain (points, Opus 4.5)</span><span class="t-ko">긴 입력 과제의 최대 정확도 향상(점, Opus 4.5)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">For long-horizon agents, treat context like scarce memory: compact often, keep a short task state, and read long inputs on demand. The savings rival quantization or sparsity, and for strong models accuracy mostly holds.</span><span class="t-ko">장기 과제 에이전트는 맥락을 귀한 메모리처럼 다루자. 자주 압축하고, 짧은 과제 상태를 유지하고, 긴 입력은 필요할 때 읽자. 절약 폭은 양자화나 희소화에 맞먹고, 강한 모델에서는 정확도도 대체로 유지된다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">The main results use two closed frontier models. Smaller quantized open models are less robust: Qwen 3 Coder Next falls from 53.0% to 3.6% on SWE-bench Verified at a 16K limit. Cost savings are estimated, and semantic state-space models are proposed, not trained.</span><span class="t-ko">주요 결과는 비공개 최상위 모델 두 개에서 나왔다. 더 작은 양자화 공개 모델은 덜 견고해서, Qwen 3 Coder Next는 16K 한도에서 SWE-bench Verified가 53.0%에서 3.6%로 떨어진다. 비용 절감은 추정치이고, 의미 상태 공간 모델은 제안일 뿐 학습되지 않았다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2611.05306">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2611.05306">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2611.05306">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2611.05306">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>Legacy slot (efficient sequence models) · whether long context is needed at all, with compaction and a proposed semantic state-space model · score 6 (listed author Pavlo Molchanov +3, NVIDIA technical report +3; HF ▲16), top of the legacy pool; Latent-Lens (2610.41751, NeurIPS'26) showed 6 only through a P1 bonus that does not count on a legacy day, leaving it at 3</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-11-07.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>Legacy 슬롯 (효율 시퀀스 모델) · 긴 맥락이 정말 필요한지 묻고, 맥락 압축과 의미 상태 공간 모델을 제안 · 점수 6 (목록 저자 Pavlo Molchanov +3, NVIDIA 기술 보고서 +3, HF ▲16), legacy 후보 중 최고점. Latent-Lens (2610.41751, NeurIPS'26)는 6점으로 나왔지만 legacy 날에는 세지 않는 P1 가산 덕분이라 실제로는 3점</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-11-07.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
