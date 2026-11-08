@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · AEON</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Video &amp; World Generation · 4D Gaussian Worlds · Latent Translation</span><span class="t-ko">Video &amp; World Generation · 4D 가우시안 세계 · 잠재 공간 변환</span></span>
+      <span>2026.11.08</span>
+    </div>
+    <h1>AEON: Unifying Video and 3D World Models<br>
+      <span class="glow t-en">— translate a video model's latent straight into moving 4D Gaussians, so the generated world can be re-rendered from any camera and kept for simulation</span>
+      <span class="glow t-ko">— 비디오 모델의 잠재 표현을 움직이는 4D 가우시안으로 바로 옮겨, 생성된 세계를 어느 카메라로든 다시 렌더링하고 시뮬레이션에 계속 쓴다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge venue">NeurIPS'26</span>
+      <span class="badge lab">🏛 Tsinghua University</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Weiqi Zhang</b>, Wenyuan Zhang, Yu-Shen Liu, Junsheng Zhou <span class="t-en">(corresponding: Yu-Shen Liu, Junsheng Zhou)</span><span class="t-ko">(교신: Yu-Shen Liu, Junsheng Zhou)</span></span>
+      <span>🏛 School of Software, Tsinghua University</span>
+      <span>🗓 2026-10-20</span>
+      <span>📄 <a href="https://arxiv.org/abs/2610.28631">arXiv:2610.28631</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Video world models look real but are neither 3D consistent nor persistent; 3D world models are consistent but static and less realistic.</span><span class="t-ko">비디오 월드 모델은 사실적이지만 3D로 일관되지도 지속되지도 않고, 3D 월드 모델은 일관되지만 정적이고 덜 사실적이다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Decoding generated frames and then reconstructing them stacks VAE and generation artifacts, so the bridge should go from latent to latent.</span><span class="t-ko">생성한 프레임을 디코딩한 뒤 다시 복원하면 VAE와 생성 오류가 겹친다. 그래서 다리는 잠재 공간에서 잠재 공간으로 놓아야 한다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Train a 4D reconstruction model that predicts 4D Gaussians and cameras from video, then teach an adapter and a student copy to produce the same Gaussians straight from a frozen video DiT's latent.</b></span><span class="t-ko"><b>영상에서 4D 가우시안과 카메라를 예측하는 4D 복원 모델을 먼저 학습한 뒤, 어댑터와 학생 복사본이 고정된 비디오 DiT의 잠재 표현에서 바로 같은 가우시안을 만들도록 가르친다.</b></span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">On Wan 2.2, AEON beats Lyra and 4DNex on all four VBench scores, and its video-to-4D PSNR on DaVis is 24.66, about 0.2 below its teacher.</span><span class="t-ko">Wan 2.2 기반 AEON은 VBench 네 항목 모두에서 Lyra와 4DNex를 앞서고, 영상에서 4D로의 복원은 DaVis에서 PSNR 24.66으로 교사 모델보다 약 0.2 낮을 뿐이다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">A film crew can shoot a scene beautifully, but you cannot <b>walk around inside the footage</b>. A set builder can build a walkable set, but it looks staged and nothing moves. AEON reads the director's <b>notes before they become film</b> and builds a moving set from them, so you get the real look and a place you can revisit.</p>
+    <p class="t-ko">촬영팀은 장면을 아름답게 찍지만, 그 <b>필름 안을 걸어 다닐 수는</b> 없다. 세트 제작자는 걸어 다닐 수 있는 세트를 짓지만, 어색하고 아무것도 움직이지 않는다. AEON은 <b>필름이 되기 전의 감독 메모</b>를 읽고 거기서 움직이는 세트를 짓는다. 그래서 사실적인 모습과 다시 찾아갈 수 있는 장소를 함께 얻는다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: reconstruct first, then translate latents</span><span class="t-ko">작동 방식은 먼저 복원하고 잠재 표현을 옮기기</span></h2>
+    <p class="vlead t-en"><b>AEON never decodes frames to build the world: the video latent is mapped into the input space of a 4D reconstruction model.</b></p>
+    <p class="vlead t-ko"><b>AEON은 세계를 만들 때 프레임을 디코딩하지 않는다. 비디오 잠재 표현을 4D 복원 모델의 입력 공간으로 옮긴다.</b></p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2610.28631/aeon_overview.png" target="_blank"><img src="fig/2610.28631/aeon_overview.png" alt="AEON overview. Top: a 4D Gaussian reconstruction model takes monocular video through DINOv2 and a spatio-temporal ViT with depth, Gaussian, evolution and camera heads, producing a 4DGS world rendered into RGB, depth and normals. Bottom: text or image goes through a frozen video DiT; a domain adapter with linear and Perceiver branches translates the video latent into a 4D latent for a student 4DRM distilled from a frozen teacher, giving a 4DGS world used for many applications"></a>
+      <figcaption class="t-en"><b>Figure 2.</b> The 4D reconstruction model (top) and generative world modeling through a domain adapter (bottom).</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> 4D 복원 모델(위)과 도메인 어댑터를 거친 생성형 월드 모델링(아래).</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2610.28631</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Reconstruct.</span><span class="t-ko">복원.</span></b><span class="t-en">From video, four heads predict depth, Gaussian appearance, each Gaussian's timing and velocity, and camera poses, trained on videos with depth and normal labels.</span><span class="t-ko">영상에서 네 개의 헤드가 깊이, 가우시안의 모양, 가우시안별 등장 시점과 속도, 카메라 자세를 예측한다. 깊이와 법선 라벨이 있는 영상으로 학습한다.</span></li>
+      <li><b><span class="t-en">Translate.</span><span class="t-ko">변환.</span></b><span class="t-en">A linear branch plus a Perceiver bridge map the video latent into the reconstruction model's tokens; a student copies a frozen teacher's Gaussians, geometry and features.</span><span class="t-ko">선형 가지와 Perceiver 다리가 비디오 잠재 표현을 복원 모델의 토큰으로 옮기고, 학생 모델은 고정된 교사의 가우시안, 기하, 특징을 따라 한다.</span></li>
+      <li><b><span class="t-en">Refine.</span><span class="t-ko">다듬기.</span></b><span class="t-en">Fine-tune end to end through a differentiable rasterizer against frames decoded from the video latent.</span><span class="t-ko">비디오 잠재 표현에서 디코딩한 프레임을 기준으로, 미분 가능한 래스터라이저를 거쳐 끝까지 미세 조정한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key point: the adapter and the teacher do the work</span><span class="t-ko">핵심은 어댑터와 교사가 일을 한다는 것</span></h2>
+    <p class="vlead t-en"><b>Replacing the adapter with a single Conv3D layer roughly halves DaVis PSNR, and dropping the teacher's distillation costs about 8 points.</b></p>
+    <p class="vlead t-ko"><b>어댑터를 Conv3D 층 하나로 바꾸면 DaVis PSNR이 약 절반으로 떨어지고, 교사 증류를 빼면 약 8점을 잃는다.</b></p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Ablations on DaVis video-to-4D reconstruction</span><span class="t-ko">DaVis 영상-4D 복원 절제 실험</span></div>
+      <div class="cs"><span class="t-en">Table 5 · PSNR · higher is better · full model highlighted</span><span class="t-ko">Table 5 · PSNR · 높을수록 좋음 · 전체 모델 강조</span></div>
+      <div class="bars">
+        <div class="bar hl" title="Full AEON: 24.661"><span class="bl">Full AEON</span><span class="bt"><span class="bf" style="--w:82.2%"></span></span><span class="bv">24.66</span></div>
+        <div class="bar" title="Without Gaussian duration: 22.057"><span class="bl">No duration</span><span class="bt"><span class="bf" style="--w:73.5%"></span></span><span class="bv">22.06</span></div>
+        <div class="bar" title="Without distillation: 16.718"><span class="bl">No distillation</span><span class="bt"><span class="bf" style="--w:55.7%"></span></span><span class="bv">16.72</span></div>
+        <div class="bar" title="Conv3D projection instead of adapter: 12.813"><span class="bl">Conv3D adapter</span><span class="bt"><span class="bf" style="--w:42.7%"></span></span><span class="bv">12.81</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–30 dB. Letting Gaussians fade in and out over time matters for transient motion.</figcaption>
+      <figcaption class="t-ko">축 0–30 dB. 가우시안이 시간에 따라 나타났다 사라지게 하는 것이 일시적 움직임에 중요하다.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: better worlds from text, images and video</span><span class="t-ko">결과는 텍스트, 이미지, 영상에서 더 나은 세계</span></h2>
+    <p class="vlead t-en"><b>Rendered along the same cameras, AEON's generated 4D worlds score higher aesthetics than per-frame baselines, on either Wan backbone without changes.</b></p>
+    <p class="vlead t-ko"><b>같은 카메라 경로로 렌더링하면, AEON이 만든 4D 세계는 프레임별 기준선보다 미적 점수가 높고, 두 Wan 백본 모두에서 구조를 바꾸지 않고 통한다.</b></p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Image-to-4D aesthetic quality, 30 scenes</span><span class="t-ko">이미지-4D 생성의 미적 품질, 장면 30개</span></div>
+      <div class="cs"><span class="t-en">Table 2 · VBench · higher is better · ours highlighted</span><span class="t-ko">Table 2 · VBench · 높을수록 좋음 · 제안 방법 강조</span></div>
+      <div class="bars">
+        <div class="bar hl" title="AEON with Wan 2.2: 0.531"><span class="bl">AEON · Wan 2.2</span><span class="bt"><span class="bf" style="--w:88.5%"></span></span><span class="bv">0.531</span></div>
+        <div class="bar" title="AEON with Wan 2.1: 0.519"><span class="bl">AEON · Wan 2.1</span><span class="bt"><span class="bf" style="--w:86.5%"></span></span><span class="bv">0.519</span></div>
+        <div class="bar" title="Lyra, per-frame 3DGS: 0.459"><span class="bl">Lyra</span><span class="bt"><span class="bf" style="--w:76.5%"></span></span><span class="bv">0.459</span></div>
+        <div class="bar" title="4DNex, per-frame point clouds: 0.342"><span class="bl">4DNex</span><span class="bt"><span class="bf" style="--w:57%"></span></span><span class="bv">0.342</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–0.6. Subject consistency follows the same order: 0.875 vs 0.864 and 0.790.</figcaption>
+      <figcaption class="t-ko">축 0–0.6. 주체 일관성도 같은 순서다. 0.875 대 0.864, 0.790.</figcaption>
+    </figure>
+    <p class="vlead t-en"><b>Turning a real video into a 4D world, AEON beats dedicated reconstructors without needing poses or depth at inference.</b></p>
+    <p class="vlead t-ko"><b>실제 영상을 4D 세계로 바꿀 때도, AEON은 추론 시 카메라 자세나 깊이 없이 전용 복원 모델들을 앞선다.</b></p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 3.</b> Video-to-4D reconstruction. PSNR and SSIM higher is better, LPIPS lower is better.</caption>
+        <caption class="t-ko"><b>Table 3.</b> 영상-4D 복원. PSNR과 SSIM은 높을수록, LPIPS는 낮을수록 좋음.</caption>
+        <thead><tr><th>Method</th><th>Dycheck PSNR</th><th>DaVis PSNR</th><th>DaVis SSIM</th><th>DaVis LPIPS</th></tr></thead>
+        <tbody>
+          <tr><td>4DGT</td><td>12.27</td><td>20.36</td><td>0.667</td><td>0.313</td></tr>
+          <tr><td>MoVies</td><td>11.84</td><td>20.74</td><td>0.688</td><td>0.307</td></tr>
+          <tr><td>StreamSplat</td><td>11.88</td><td>23.75</td><td>0.712</td><td>0.273</td></tr>
+          <tr><td>NeoVerse</td><td>14.27</td><td>23.93</td><td>0.735</td><td>0.283</td></tr>
+          <tr><td>AEON</td><td class="up">14.49</td><td class="up">24.66</td><td class="up">0.771</td><td class="up">0.243</td></tr>
+          <tr><td>Teacher 4DRM</td><td>14.41</td><td>24.89</td><td>0.775</td><td>0.241</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">24.66</div><div class="l"><span class="t-en">DaVis PSNR, no poses or depth at inference</span><span class="t-ko">추론 시 자세·깊이 없이 얻은 DaVis PSNR</span></div></div>
+      <div class="stat"><div class="n">~0.2 dB</div><div class="l"><span class="t-en">gap to the teacher despite the latent bottleneck</span><span class="t-ko">잠재 표현 병목에도 남은 교사와의 차이</span></div></div>
+      <div class="stat"><div class="n">2</div><div class="l"><span class="t-en">video backbones used without architecture changes</span><span class="t-ko">구조 변경 없이 쓴 비디오 백본 수</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">If you want generated worlds an agent can revisit, translate the video model's latent into an explicit 4D scene instead of decoding frames. Persistent Gaussians give depth, motion and new camera views for free.</span><span class="t-ko">에이전트가 다시 찾아갈 수 있는 세계를 만들고 싶다면, 프레임을 디코딩하지 말고 비디오 모델의 잠재 표현을 명시적인 4D 장면으로 옮기자. 지속되는 가우시안이 깊이와 움직임, 새로운 시점을 덤으로 준다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">World length is capped by the video model's clip length, and unseen regions leave holes. Real-time exploration is claimed without a measured speed, the generation test has only 30 scenes and two baselines, and the first stage needs depth and normal labels.</span><span class="t-ko">세계의 길이는 비디오 모델의 클립 길이에 묶이고, 보이지 않은 영역은 구멍으로 남는다. 실시간 탐색을 주장하지만 속도를 재지 않았고, 생성 실험은 장면 30개와 기준선 두 개뿐이며, 첫 단계에는 깊이와 법선 라벨이 필요하다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2610.28631">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2610.28631">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2610.28631">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2610.28631">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>P2 slot (Video &amp; World Generation) · turning video-diffusion latents into explicit, persistent 4D Gaussian worlds · NeurIPS main track · score 6 (priority +3, venue +3), tied with Disen-Forcing (2611.02822) and Householder Motion Embedding (2611.07294); none overlaps the last two cards, AEON is the only one with HF interest (▲1), and the last two P2 cards were already autoregressive video; VFlash (2611.08449) showed 9 but is VLM coordinate decoding, not video or world generation</b> · venue: NeurIPS 2026.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-11-08.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P2 슬롯 (Video &amp; World Generation) · 비디오 확산 모델의 잠재 표현을 지속되는 명시적 4D 가우시안 세계로 바꿈 · NeurIPS 메인 트랙 · 점수 6 (우선 주제 +3, 학회 +3). Disen-Forcing (2611.02822), Householder Motion Embedding (2611.07294)과 동점이었다. 셋 다 최근 두 카드와 겹치지 않고, HF 관심이 있는 것은 AEON(▲1)뿐이며, 직전 P2 카드 두 장이 이미 자기회귀 비디오였다. VFlash (2611.08449)는 9점이지만 VLM 좌표 디코딩이라 비디오·월드 생성이 아니다</b> · venue: NeurIPS 2026.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-11-08.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
