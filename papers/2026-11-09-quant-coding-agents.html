@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Quantized Coding Agents</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Compressed Reasoning · 4-bit Coding Agents · Behavior Shift</span><span class="t-ko">Compressed Reasoning · 4비트 코딩 에이전트 · 행동 변화</span></span>
+      <span>2026.11.09</span>
+    </div>
+    <h1>Beyond Accuracy: How Quantization Affects Coding Agents<br>
+      <span class="glow t-en">— 4-bit weights leave the final score statistically unchanged, but change how the agent gets there and how it fails</span>
+      <span class="glow t-ko">— 4비트 가중치는 최종 점수를 통계적으로 바꾸지 않지만, 에이전트가 답에 이르는 방식과 실패하는 방식을 바꾼다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Workshop · SLM-Agents @ NeurIPS'26</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Areej Mehboob</b>, Muhammad Ali Shafique, Muhammad Usman Qadeer, Hamza Farooq</span>
+      <span>🏛 Traversaal AI · Kansas State University</span>
+      <span>🗓 2026-11-02</span>
+      <span>📄 <a href="https://arxiv.org/abs/2611.02368">arXiv:2611.02368</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Coding agents make many model calls in an execute-and-revise loop, so 4-bit weights are tempting, yet quantization studies usually score single-pass outputs.</span><span class="t-ko">코딩 에이전트는 실행하고 고치는 루프에서 모델을 여러 번 부르므로 4비트 가중치가 매력적이다. 하지만 양자화 연구는 대개 한 번 생성한 출력만 채점한다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">In an agent, quantization can change tool use, revision, and how runs end, not only whether the final program passes.</span><span class="t-ko">에이전트에서는 양자화가 최종 프로그램의 통과 여부뿐 아니라 도구 사용, 수정 과정, 실행이 끝나는 방식까지 바꿀 수 있다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Run BF16, AWQ and GPTQ 4-bit versions of Qwen2.5-Coder 7B/14B/32B and Devstral 24B on 115 OJBench problems with a Python executor, three seeds, and paired tests on solves, trajectories and failure types.</b></span><span class="t-ko"><b>Qwen2.5-Coder 7B/14B/32B와 Devstral 24B의 BF16, AWQ, GPTQ 4비트 버전을 파이썬 실행기와 함께 OJBench 115문제에 돌리고, 시드 3개로 풀이 수와 궤적, 실패 유형을 짝 검정한다.</b></span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">No agent loses significant accuracy, yet Qwen-7B's one-shot solves drop from 17 to 0 under AWQ while loop-based solves rise from 10 to 25.</span><span class="t-ko">어떤 에이전트도 유의한 정확도 손실은 없지만, AWQ에서 Qwen-7B의 한 번에 푼 문제는 17에서 0으로 줄고 루프로 푼 문제는 10에서 25로 는다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Two students get the same grade on a programming exam. One wrote correct code <b>straight away</b>; the other had to <b>run it several times and fix bugs</b>. The grade hides the difference, which matters when test runs are slow or limited. A 4-bit model can keep the grade while turning into the second student.</p>
+    <p class="t-ko">두 학생이 프로그래밍 시험에서 같은 점수를 받았다. 한 명은 <b>처음부터</b> 맞는 코드를 썼고, 다른 한 명은 <b>여러 번 실행하며 버그를 고쳤다</b>. 점수는 이 차이를 숨기지만, 실행이 느리거나 횟수가 제한되면 그 차이가 중요하다. 4비트 모델은 점수는 지키면서 두 번째 학생처럼 바뀔 수 있다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: one agent loop, three precisions</span><span class="t-ko">작동 방식은 하나의 에이전트 루프와 세 가지 정밀도</span></h2>
+    <p class="vlead t-en"><b>Every precision runs the same loop on the same problems and seeds, so each outcome can be compared pair by pair.</b></p>
+    <p class="vlead t-ko"><b>모든 정밀도가 같은 문제와 시드로 같은 루프를 돌기 때문에, 결과를 하나씩 짝지어 비교할 수 있다.</b></p>
+    <div class="diagram">
+      <svg viewBox="0 0 720 210" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto" role="img" aria-label="Agent loop: an OJBench problem goes to the coder model in BF16, AWQ or GPTQ; the model either submits directly, a one-shot solve, or calls a Python executor and revises up to five times, a loop-based solve; the judge returns pass or one failure type: IR, WA, TLE, CE or MLE">
+        <defs>
+          <marker id="qa" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" style="fill:var(--clay)"/></marker>
+        </defs>
+        <rect x="6" y="78" width="104" height="54" rx="8" style="fill:var(--card-2);stroke:var(--line)"/>
+        <text x="58" y="101" text-anchor="middle" font-size="13" font-weight="700" style="fill:var(--ink)">OJBench</text>
+        <text x="58" y="119" text-anchor="middle" font-size="11" style="fill:var(--muted)">115 problems</text>
+        <line x1="112" y1="105" x2="146" y2="105" stroke-width="2" style="stroke:var(--clay)" marker-end="url(#qa)"/>
+        <rect x="150" y="66" width="148" height="78" rx="8" style="fill:var(--clay)"/>
+        <text x="224" y="92" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">Coder LLM</text>
+        <text x="224" y="111" text-anchor="middle" font-size="11" fill="#fff">BF16 · AWQ · GPTQ</text>
+        <text x="224" y="127" text-anchor="middle" font-size="11" fill="#fff">4-bit weights, W4A16</text>
+        <path d="M300 88 C340 60, 380 40, 430 40" fill="none" stroke-width="2" style="stroke:var(--clay)" marker-end="url(#qa)"/>
+        <rect x="434" y="20" width="132" height="40" rx="8" style="fill:var(--card-2);stroke:var(--line)"/>
+        <text x="500" y="38" text-anchor="middle" font-size="12" font-weight="700" style="fill:var(--ink)">submit directly</text>
+        <text x="500" y="53" text-anchor="middle" font-size="10.5" style="fill:var(--muted)">one-shot solve</text>
+        <path d="M300 124 C340 150, 380 170, 430 170" fill="none" stroke-width="2" style="stroke:var(--clay)" marker-end="url(#qa)"/>
+        <rect x="434" y="146" width="132" height="48" rx="8" style="fill:var(--card-2);stroke:var(--clay)" stroke-dasharray="4 3"/>
+        <text x="500" y="166" text-anchor="middle" font-size="11.5" font-weight="700" style="fill:var(--ink)">python_executor</text>
+        <text x="500" y="182" text-anchor="middle" font-size="10.5" style="fill:var(--muted)">run, read, revise ≤ 5×</text>
+        <path d="M434 160 C400 140, 330 140, 300 132" fill="none" stroke-width="1.4" stroke-dasharray="3 3" style="stroke:var(--clay)" marker-end="url(#qa)"/>
+        <line x1="568" y1="40" x2="600" y2="92" stroke-width="2" style="stroke:var(--clay)" marker-end="url(#qa)"/>
+        <line x1="568" y1="170" x2="600" y2="120" stroke-width="2" style="stroke:var(--clay)" marker-end="url(#qa)"/>
+        <rect x="604" y="74" width="112" height="62" rx="8" fill="#2B2620"/>
+        <text x="660" y="96" text-anchor="middle" font-size="12.5" font-weight="700" fill="#fff">Judge</text>
+        <text x="660" y="112" text-anchor="middle" font-size="10.5" fill="#ddd">pass, or</text>
+        <text x="660" y="127" text-anchor="middle" font-size="10" fill="#ddd">IR·WA·TLE·CE·MLE</text>
+      </svg>
+    </div>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Quantize.</span><span class="t-ko">양자화.</span></b><span class="t-en">AWQ and GPTQ make 4-bit-weight copies of each model with 256 calibration samples, cutting checkpoints about 3.4×.</span><span class="t-ko">AWQ와 GPTQ로 보정 샘플 256개를 써서 모델마다 4비트 가중치 사본을 만든다. 체크포인트는 약 3.4배 작아진다.</span></li>
+      <li><b><span class="t-en">Run the loop.</span><span class="t-ko">루프 실행.</span></b><span class="t-en">The agent can test code on the examples and revise, with up to five tool calls per problem and a 32K context.</span><span class="t-ko">에이전트는 예제로 코드를 시험하고 고칠 수 있으며, 문제당 도구 호출은 최대 5번, 맥락은 32K다.</span></li>
+      <li><b><span class="t-en">Compare in pairs.</span><span class="t-ko">짝지어 비교.</span></b><span class="t-en">McNemar tests on 345 problem–seed pairs for accuracy, plus solve paths and five failure categories.</span><span class="t-ko">문제와 시드 쌍 345개에 McNemar 검정을 적용해 정확도를 비교하고, 풀이 경로와 다섯 가지 실패 유형도 본다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key point: same score, different path</span><span class="t-ko">핵심은 같은 점수, 다른 경로</span></h2>
+    <p class="vlead t-en"><b>Quantized Qwen-7B almost never solves a problem on its first try; it reaches a similar total by leaning on the execution loop.</b></p>
+    <p class="vlead t-ko"><b>양자화한 Qwen-7B는 첫 시도로 문제를 거의 풀지 못하고, 실행 루프에 기대어 비슷한 총합에 도달한다.</b></p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">How Qwen2.5-Coder-7B solves problems, by precision</span><span class="t-ko">정밀도별 Qwen2.5-Coder-7B의 풀이 방식</span></div>
+      <div class="cs"><span class="t-en">Section 4 · solves summed over 3 seeds · one-shot = no tool call</span><span class="t-ko">4절 · 시드 3개 합계 풀이 수 · 한 번에 = 도구 호출 없음</span></div>
+      <div class="bars">
+        <div class="bar" title="BF16 one-shot solves: 17"><span class="bl">BF16 · one-shot</span><span class="bt"><span class="bf" style="--w:56.7%"></span></span><span class="bv">17</span></div>
+        <div class="bar" title="BF16 loop-based solves: 10"><span class="bl">BF16 · loop</span><span class="bt"><span class="bf" style="--w:33.3%"></span></span><span class="bv">10</span></div>
+        <div class="bar hl" title="AWQ one-shot solves: 0"><span class="bl">AWQ · one-shot</span><span class="bt"><span class="bf" style="--w:0%"></span></span><span class="bv">0</span></div>
+        <div class="bar hl" title="AWQ loop-based solves: 25"><span class="bl">AWQ · loop</span><span class="bt"><span class="bf" style="--w:83.3%"></span></span><span class="bv">25</span></div>
+        <div class="bar" title="GPTQ one-shot solves: 3"><span class="bl">GPTQ · one-shot</span><span class="bt"><span class="bf" style="--w:10%"></span></span><span class="bv">3</span></div>
+        <div class="bar" title="GPTQ loop-based solves: 20"><span class="bl">GPTQ · loop</span><span class="bt"><span class="bf" style="--w:66.7%"></span></span><span class="bv">20</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–30. The shift holds on problems solved by both precisions and when each problem counts once.</figcaption>
+      <figcaption class="t-ko">축 0–30. 두 정밀도가 모두 푼 문제만 보거나 문제마다 한 번씩만 세어도 이 변화는 유지된다.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: failures change shape, scores hold</span><span class="t-ko">결과는 점수는 유지되고 실패의 모양이 바뀜</span></h2>
+    <p class="vlead t-en"><b>For Devstral, quantization moves failures away from runtime crashes toward wrong answers and timeouts, the clearest shift in the study.</b></p>
+    <p class="vlead t-ko"><b>Devstral에서는 양자화가 실패를 실행 중 오류에서 오답과 시간 초과 쪽으로 옮긴다. 연구에서 가장 뚜렷한 변화다.</b></p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Devstral-Small failure types, BF16 vs GPTQ</span><span class="t-ko">Devstral-Small 실패 유형, BF16 대 GPTQ</span></div>
+      <div class="cs"><span class="t-en">Figure 1(d) · failed problems per seed · GPTQ highlighted</span><span class="t-ko">Figure 1(d) · 시드당 실패 문제 수 · GPTQ 강조</span></div>
+      <div class="bars">
+        <div class="bar" title="Invalid return, BF16: 53.3"><span class="bl">Runtime error · BF16</span><span class="bt"><span class="bf" style="--w:88.8%"></span></span><span class="bv">53.3</span></div>
+        <div class="bar hl" title="Invalid return, GPTQ: 39.3"><span class="bl">Runtime error · GPTQ</span><span class="bt"><span class="bf" style="--w:65.5%"></span></span><span class="bv">39.3</span></div>
+        <div class="bar" title="Wrong answer, BF16: 44.7"><span class="bl">Wrong answer · BF16</span><span class="bt"><span class="bf" style="--w:74.5%"></span></span><span class="bv">44.7</span></div>
+        <div class="bar hl" title="Wrong answer, GPTQ: 51.7"><span class="bl">Wrong answer · GPTQ</span><span class="bt"><span class="bf" style="--w:86.2%"></span></span><span class="bv">51.7</span></div>
+        <div class="bar" title="Time limit exceeded, BF16: 7.0"><span class="bl">Timeout · BF16</span><span class="bt"><span class="bf" style="--w:11.7%"></span></span><span class="bv">7.0</span></div>
+        <div class="bar hl" title="Time limit exceeded, GPTQ: 14.3"><span class="bl">Timeout · GPTQ</span><span class="bt"><span class="bf" style="--w:23.8%"></span></span><span class="bv">14.3</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–60. Devstral also tries the tool less: 42.0% of problems at BF16, 21.4% under GPTQ.</figcaption>
+      <figcaption class="t-ko">축 0–60. Devstral은 도구를 시도하는 비율도 BF16의 42.0%에서 GPTQ의 21.4%로 줄어든다.</figcaption>
+    </figure>
+    <p class="vlead t-en"><b>Final accuracy moves by at most about 3 points, and no drop survives correction for multiple tests.</b></p>
+    <p class="vlead t-ko"><b>최종 정확도는 많아야 약 3점 움직이고, 다중 검정 보정을 거치면 유의한 하락은 하나도 남지 않는다.</b></p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1.</b> OJBench accuracy on Easy and Medium (%), mean of 3 seeds. Hard is excluded because every model scored 0.</caption>
+        <caption class="t-ko"><b>Table 1.</b> OJBench Easy와 Medium 정확도(%), 시드 3개 평균. Hard는 모든 모델이 0점이라 제외.</caption>
+        <thead><tr><th>Model</th><th>BF16</th><th>AWQ</th><th>GPTQ</th></tr></thead>
+        <tbody>
+          <tr><td>Qwen2.5-Coder-7B</td><td>7.83</td><td>7.25</td><td>6.67</td></tr>
+          <tr><td>Qwen2.5-Coder-14B</td><td>11.30</td><td>9.28</td><td>9.86</td></tr>
+          <tr><td>Qwen2.5-Coder-32B</td><td>13.91</td><td>10.72</td><td>11.01</td></tr>
+          <tr><td>Devstral-Small 24B</td><td>4.64</td><td class="up">6.09</td><td class="up">5.51</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">17 → 0</div><div class="l"><span class="t-en">Qwen-7B one-shot solves, BF16 to AWQ</span><span class="t-ko">BF16에서 AWQ로 바뀔 때 Qwen-7B의 한 번에 푼 문제 수</span></div></div>
+      <div class="stat"><div class="n">0 / 8</div><div class="l"><span class="t-en">quantized comparisons with a significant accuracy loss</span><span class="t-ko">유의한 정확도 손실이 나온 양자화 비교 수</span></div></div>
+      <div class="stat"><div class="n">3.4×</div><div class="l"><span class="t-en">smaller checkpoints with 4-bit weights</span><span class="t-ko">4비트 가중치로 줄어든 체크포인트 크기</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">When you quantize an agent, log tool calls, revision rounds and failure types, not just pass rate. A model that now needs more loops costs more time and calls even at the same accuracy.</span><span class="t-ko">에이전트를 양자화할 때는 통과율만 보지 말고 도구 호출, 수정 횟수, 실패 유형을 기록하자. 정확도가 같아도 루프가 더 필요해진 모델은 시간과 호출을 더 쓴다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">A small study: 115 problems, three seeds, and accuracy under 14%, so there are few solves to compare. "No significant loss" partly reflects low power; Qwen-32B drops about 3 points with p = 0.051 at the problem level.</span><span class="t-ko">작은 연구다. 문제 115개, 시드 3개에 정확도가 14% 아래라 비교할 풀이 수가 적다. "유의한 손실 없음"은 검정력이 낮은 탓도 있으며, Qwen-32B는 약 3점 떨어지고 문제 단위 p는 0.051이다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2611.02368">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2611.02368">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2611.02368">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2611.02368">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>P1 slot (Compressed Reasoning) · how 4-bit weights change coding agents' solve paths, tool use and failure modes · score 4 (priority +3, workshop +1), top P1 candidate; DictLLM (2611.08082, NeurIPS main track, 6) is general-purpose compression without a reasoning or agent setting, as judged on 11-06 · the paper has no image figures, so the loop is drawn inline</b> · venue: Workshop @ NeurIPS'26.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-11-09.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P1 슬롯 (Compressed Reasoning) · 4비트 가중치가 코딩 에이전트의 풀이 경로, 도구 사용, 실패 방식을 어떻게 바꾸는지 · 점수 4 (우선 주제 +3, 워크숍 +1), P1 후보 중 최고점. DictLLM (2611.08082, NeurIPS 메인 트랙, 6점)은 11월 6일에 판단한 대로 추론이나 에이전트 설정이 없는 범용 압축이다 · 논문에 이미지 그림이 없어 루프를 직접 그렸다</b> · venue: Workshop @ NeurIPS'26.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-11-09.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
