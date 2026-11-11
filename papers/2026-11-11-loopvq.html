@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · LoopVQ</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Compressed Reasoning · Looped LMs · Sub 1-bit KV Cache</span><span class="t-ko">Compressed Reasoning · 루프 언어 모델 · 1비트 미만 KV 캐시</span></span>
+      <span>2026.11.11</span>
+    </div>
+    <h1>LoopVQ: Sub 1-bit KV Cache Quantization for Looped Transformers<br>
+      <span class="glow t-en">— a looped model writes almost the same cache at every pass, so code the passes together and let one index serve four</span>
+      <span class="glow t-ko">— 루프 모델은 매 반복마다 거의 같은 캐시를 쓰니, 반복들을 함께 부호화해 인덱스 하나가 넷을 맡게 한다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge lab">🏛 Seoul National University · Sungjoo Yoo</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Minsoo Cheong</b>, Sungjoo Yoo</span>
+      <span>🏛 Seoul National University</span>
+      <span>🗓 2026-11-03</span>
+      <span>📄 <a href="https://arxiv.org/abs/2611.05304">arXiv:2611.05304</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Looped LMs reuse the same layers several times, but each loop step keeps its own KV cache, so Ouro-1.4B stores six times the per-token cache of Llama-3.1-8B.</span><span class="t-ko">루프 언어 모델은 같은 층을 여러 번 다시 쓰지만 반복마다 KV 캐시를 따로 저장한다. 그래서 Ouro-1.4B의 토큰당 캐시는 Llama-3.1-8B의 여섯 배다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">The cache barely changes across loop steps (adjacent correlation 0.69 rising to 0.94), and an error at the first step hurts the output about five times more than one at the third.</span><span class="t-ko">캐시는 반복 사이에 거의 변하지 않고(인접 반복 상관 0.69에서 0.94로 증가), 첫 반복의 오류가 출력에 주는 피해는 세 번째 반복의 약 다섯 배다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Code the same channels of four loop steps together so one 8-bit index serves all four, then fine-tune the codebooks so the quantized model's output matches the full-precision one.</b></span><span class="t-ko"><b>네 반복의 같은 채널을 한꺼번에 부호화해 8비트 인덱스 하나가 넷을 맡게 하고, 양자화 모델의 출력이 원래 정밀도 모델과 같아지도록 코드북을 미세 조정한다.</b></span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">At 0.5 bit, Ouro-1.4B-Thinking keeps 50.8 of its 56.4 long-reasoning average (54.9 with TaSQ), where earlier quantizers fall below 20, and serving throughput rises up to 4.3×.</span><span class="t-ko">0.5비트에서 Ouro-1.4B-Thinking은 긴 추론 평균 56.4 가운데 50.8을 지킨다(TaSQ와 함께면 54.9). 기존 양자화는 20 아래로 떨어지고, 서빙 처리량은 최대 4.3배 오른다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Picture a student who rewrites the same notes <b>four times</b>. Filing every copy on its own wastes space, since the copies mostly match. LoopVQ files <b>the same line from all four copies under one label</b>, then watches the first draft most, because its slips carry into every later copy.</p>
+    <p class="t-ko">같은 노트를 <b>네 번</b> 고쳐 쓰는 학생을 떠올려 보자. 내용이 거의 같으니 사본마다 따로 보관하면 공간이 아깝다. LoopVQ는 <b>네 사본의 같은 줄을 라벨 하나로</b> 묶어 보관하고, 첫 초안을 가장 신경 쓴다. 첫 초안의 실수는 이후 모든 사본에 옮겨 가기 때문이다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: the loop becomes a compression axis</span><span class="t-ko">작동 방식은 반복 축을 압축 축으로 쓰기</span></h2>
+    <p class="vlead t-en"><b>Instead of one codebook per loop step, LoopVQ builds codes that span the same channels across four steps, at the same bits per element.</b></p>
+    <p class="vlead t-ko"><b>LoopVQ는 반복마다 코드북을 따로 두지 않고, 네 반복에 걸친 같은 채널을 하나의 코드로 묶는다. 원소당 비트 수는 그대로다.</b></p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2611.05304/loopvq_overview.png" target="_blank"><img src="fig/2611.05304/loopvq_overview.png" alt="Left: a looped LM applies shared layers F theta four times and stores a KV cache at each loop step t equals 1 to 4. Middle: standard VQ codes G channels of one loop step with a codebook per step, while LoopVQ codes G over T_c channels across T_c loop steps with a shared codebook. Right: codebooks are fine-tuned with a KL loss between the full-precision output and the output computed from the quantized cache, with weights frozen"></a>
+      <figcaption class="t-en"><b>Figure 3 (top).</b> Each loop step writes its own cache. LoopVQ shares one code across loop steps and tunes the codebooks against the full-precision output.</figcaption>
+      <figcaption class="t-ko"><b>Figure 3 (위쪽).</b> 반복마다 캐시를 따로 쓴다. LoopVQ는 여러 반복이 코드 하나를 나눠 쓰게 하고, 원래 정밀도 출력에 맞춰 코드북을 조정한다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure, top half</span><span class="t-ko">출처: 논문 원본 그림 위쪽 절반</span> · arXiv:2611.05304</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Couple loop steps.</span><span class="t-ko">반복 묶기.</span></b><span class="t-en">A 16-value code now holds 4 channels from each of 4 loop steps. With plain k-means this roughly halves the reconstruction error at 0.5 bit on Ouro-1.4B.</span><span class="t-ko">16개 값짜리 코드 하나가 네 반복에서 채널 4개씩을 담는다. 단순 k-means만으로도 Ouro-1.4B의 0.5비트 복원 오차가 대략 절반이 된다.</span></li>
+      <li><b><span class="t-en">Tune the codebooks.</span><span class="t-ko">코드북 조정.</span></b><span class="t-en">Starting from Fisher-weighted k-means, train the entries to minimize KL to the full-precision output while every loop step reads the quantized cache. This takes minutes on one GPU.</span><span class="t-ko">Fisher 가중 k-means에서 출발해, 모든 반복이 양자화된 캐시를 읽는 상태에서 원래 출력과의 KL이 최소가 되도록 코드북을 학습한다. GPU 한 장으로 몇 분이면 된다.</span></li>
+      <li><b><span class="t-en">Serve in SGLang.</span><span class="t-ko">SGLang 서빙.</span></b><span class="t-en">Sink and recent tokens stay in bf16. Older pages become shared indices that each loop step reads through its own codebook slice.</span><span class="t-ko">앞부분과 최근 토큰은 bf16으로 두고, 오래된 페이지는 공유 인덱스로 바꾼다. 각 반복은 코드북에서 자기 몫의 조각으로 이를 읽는다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key point: long reasoning breaks first</span><span class="t-ko">핵심은 긴 추론이 가장 먼저 무너진다는 것</span></h2>
+    <p class="vlead t-en"><b>Long chain of thought is where low-bit caches fail hardest. Earlier vector quantizers lose most of the accuracy, while LoopVQ keeps about 90% of it.</b></p>
+    <p class="vlead t-ko"><b>긴 사고 사슬에서 저비트 캐시가 가장 크게 무너진다. 기존 벡터 양자화는 정확도 대부분을 잃지만 LoopVQ는 약 90%를 지킨다.</b></p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Long reasoning average, Ouro-1.4B-Thinking at 0.5 bit</span><span class="t-ko">긴 추론 평균 정확도, Ouro-1.4B-Thinking, 0.5비트</span></div>
+      <div class="cs"><span class="t-en">Table 3 · AIME'24, AIME'25, GPQA-D, HumanEval+, MBPP+ · 3 seeds · %</span><span class="t-ko">Table 3 · AIME'24, AIME'25, GPQA-D, HumanEval+, MBPP+ · 시드 3개 · %</span></div>
+      <div class="bars">
+        <div class="bar" title="BF16: 56.4"><span class="bl">BF16</span><span class="bt"><span class="bf" style="--w:56.4%"></span></span><span class="bv">56.4</span></div>
+        <div class="bar hl" title="TaSQ+LoopVQ: 54.9"><span class="bl">TaSQ+LoopVQ</span><span class="bt"><span class="bf" style="--w:54.9%"></span></span><span class="bv">54.9</span></div>
+        <div class="bar hl" title="LoopVQ: 50.8"><span class="bl">LoopVQ</span><span class="bt"><span class="bf" style="--w:50.8%"></span></span><span class="bv">50.8</span></div>
+        <div class="bar" title="TaSQ: 19.5"><span class="bl">TaSQ</span><span class="bt"><span class="bf" style="--w:19.5%"></span></span><span class="bv">19.5</span></div>
+        <div class="bar" title="CQ: 15.7"><span class="bl">CQ</span><span class="bt"><span class="bf" style="--w:15.7%"></span></span><span class="bv">15.7</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–100%. On AIME'24 the baselines drop to 1.1 and 4.4.</figcaption>
+      <figcaption class="t-ko">축 0–100%. AIME'24에서 기준선은 1.1과 4.4로 떨어진다.</figcaption>
+    </figure>
+    <p class="vlead t-en"><b>The damage also shows up as length. With CQ or TaSQ most GPQA-Diamond runs never finish before the 32K token cap, while LoopVQ hits the cap no more often than BF16.</b></p>
+    <p class="vlead t-ko"><b>피해는 길이로도 드러난다. CQ나 TaSQ를 쓰면 GPQA-Diamond 풀이 대부분이 3만 2천 토큰 상한까지 끝나지 않는다. LoopVQ가 상한에 닿는 비율은 BF16보다 높지 않다.</b></p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">GPQA-Diamond runs that hit the 32K cap, Ouro-1.4B-Thinking at 0.5 bit</span><span class="t-ko">3만 2천 토큰 상한에 닿은 GPQA-Diamond 풀이 비율, Ouro-1.4B-Thinking, 0.5비트</span></div>
+      <div class="cs"><span class="t-en">Figure 10 · share of problems · %</span><span class="t-ko">Figure 10 · 문제 비율 · %</span></div>
+      <div class="bars">
+        <div class="bar" title="TaSQ: 65"><span class="bl">TaSQ</span><span class="bt"><span class="bf" style="--w:65%"></span></span><span class="bv">65</span></div>
+        <div class="bar" title="CQ: 58"><span class="bl">CQ</span><span class="bt"><span class="bf" style="--w:58%"></span></span><span class="bv">58</span></div>
+        <div class="bar" title="BF16: 17"><span class="bl">BF16</span><span class="bt"><span class="bf" style="--w:17%"></span></span><span class="bv">17</span></div>
+        <div class="bar hl" title="LoopVQ: 10"><span class="bl">LoopVQ</span><span class="bt"><span class="bf" style="--w:10%"></span></span><span class="bv">10</span></div>
+        <div class="bar hl" title="TaSQ+LoopVQ: 9"><span class="bl">TaSQ+LoopVQ</span><span class="bt"><span class="bf" style="--w:9%"></span></span><span class="bv">9</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–100%. The baselines generate about twice as many tokens as BF16, so a faster cache does not mean a faster answer.</figcaption>
+      <figcaption class="t-ko">축 0–100%. 기준선은 BF16보다 토큰을 두 배쯤 더 만들기 때문에 캐시가 빨라도 답이 빨라지지 않는다.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: holding up at a quarter bit</span><span class="t-ko">결과는 0.25비트에서도 버티기</span></h2>
+    <p class="vlead t-en"><b>Adding TaSQ's key transforms keeps about 85% of BF16 long-reasoning accuracy even at 0.25 bit, where every method alone collapses.</b></p>
+    <p class="vlead t-ko"><b>TaSQ의 키 변환을 더하면 0.25비트에서도 BF16 긴 추론 정확도의 약 85%가 남는다. 이 비트에서는 어느 방법도 혼자서는 버티지 못한다.</b></p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 3.</b> Long reasoning average (%) for the Ouro Thinking models, mean of 3 seeds.</caption>
+        <caption class="t-ko"><b>Table 3.</b> Ouro Thinking 모델의 긴 추론 평균 정확도(%), 시드 3개 평균.</caption>
+        <thead><tr><th>Method</th><th>1.4B · 0.5 bit</th><th>1.4B · 0.25 bit</th><th>2.6B · 0.5 bit</th><th>2.6B · 0.25 bit</th></tr></thead>
+        <tbody>
+          <tr><td>BF16</td><td>56.4</td><td>56.4</td><td>64.9</td><td>64.9</td></tr>
+          <tr><td>CQ</td><td>15.7</td><td>14.4</td><td>16.6</td><td>16.7</td></tr>
+          <tr><td>TaSQ</td><td>19.5</td><td>14.8</td><td>28.3</td><td>18.1</td></tr>
+          <tr><td>LoopVQ</td><td class="up">50.8</td><td>20.0</td><td class="up">58.1</td><td>24.1</td></tr>
+          <tr><td>TaSQ+LoopVQ</td><td class="up">54.9</td><td class="up">48.1</td><td class="up">63.8</td><td class="up">56.0</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">90%</div><div class="l"><span class="t-en">of BF16 long reasoning kept by LoopVQ alone at 0.5 bit</span><span class="t-ko">0.5비트에서 LoopVQ 단독으로 지킨 BF16 긴 추론 성능</span></div></div>
+      <div class="stat"><div class="n">4.3×</div><div class="l"><span class="t-en">peak serving throughput over BF16, Ouro-1.4B (6.1× on 2.6B)</span><span class="t-ko">BF16 대비 최대 서빙 처리량, Ouro-1.4B (2.6B는 6.1배)</span></div></div>
+      <div class="stat"><div class="n">½</div><div class="l"><span class="t-en">decode latency of BF16 at a 32K context, batch 1</span><span class="t-ko">3만 2천 토큰 문맥, 배치 1에서 BF16 대비 디코딩 지연</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">If you serve a looped model, treat the loop axis as room to compress, not just a cost. And measure answer length next to accuracy. A cache that makes the model ramble to the cap can cancel its own speedup.</span><span class="t-ko">루프 모델을 서빙한다면 반복 축을 비용으로만 보지 말고 압축할 여지로 보자. 그리고 정확도 옆에 답의 길이도 재자. 모델이 상한까지 횡설수설하게 만드는 캐시는 스스로 얻은 속도 이득을 지워 버린다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">Only small looped models are tested (Ouro 1.4B and 2.6B, Huginn 3.5B). Speed is compared with BF16 only, and scalar KV methods built for looped models are left out.</span><span class="t-ko">시험한 모델은 작은 루프 모델뿐이다(Ouro 1.4B와 2.6B, Huginn 3.5B). 속도는 BF16과만 비교했고, 루프 모델용 스칼라 KV 양자화 방법은 비교에서 빠졌다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2611.05304">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2611.05304">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2611.05304">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2611.05304">🔎 alphaXiv</a>
+      <a href="https://github.com/mscheong01/LoopVQ">💻 Code</a>
+    </div>
+    <span class="t-en">Why picked — <b>P1 slot (Compressed Reasoning) · KV cache quantization below one bit for looped reasoning models, with a look at how cache errors stretch or cut long reasoning · preprint · score 3 (priority +3), tied with PACE (2611.10240), SteerDistill (2611.13410) and others; SteerDistill repeats the last P1 axis, and LoopVQ draws the most interest (▲10 HF, ★3 GitHub)</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-11-11.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P1 슬롯 (Compressed Reasoning) · 루프형 추론 모델을 위한 1비트 미만 KV 캐시 양자화, 캐시 오류가 긴 추론을 늘이거나 끊는 양상까지 분석 · 프리프린트 · 점수 3 (우선 주제 +3). PACE (2611.10240), SteerDistill (2611.13410) 등과 동점이었다. SteerDistill은 직전 P1 카드와 같은 축이고, LoopVQ의 관심도가 가장 높다(HF ▲10, GitHub ★3)</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-11-11.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
