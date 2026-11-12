@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Householder Motion Embedding</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Video &amp; World Generation · Motion Control · Noise Modulation</span><span class="t-ko">Video &amp; World Generation · 모션 제어 · 노이즈 변조</span></span>
+      <span>2026.11.12</span>
+    </div>
+    <h1>Householder Motion Embedding: Noise Modulation for Motion-Controllable Video Generation<br>
+      <span class="glow t-en">— instead of dragging the noise along with the motion, rotate it in place, so every frame stays perfect Gaussian noise</span>
+      <span class="glow t-ko">— 노이즈를 움직임 따라 끌고 다니지 말고 제자리에서 회전시키면, 모든 프레임이 온전한 가우시안 노이즈로 남는다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge venue">NeurIPS'26</span>
+      <span class="badge lab">🏛 ANU · Vertex Lab · Hongdong Li</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Tao Jun Lin</b>, Jinhong Ni, Ruyi Zha, Yifu Wang, Xibin Song, Pan Ji, Hongdong Li</span>
+      <span>🏛 The Australian National University · Vertex Lab</span>
+      <span>🗓 2026-11-05</span>
+      <span>📄 <a href="https://arxiv.org/abs/2611.07294">arXiv:2611.07294</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Noise warping steers video diffusion by moving the starting noise along optical flow, but the move breaks its i.i.d. Gaussian structure and needs costly correction.</span><span class="t-ko">노이즈 워핑은 시작 노이즈를 광류를 따라 옮겨 비디오 확산 모델을 조종한다. 하지만 옮기는 순간 i.i.d. 가우시안 구조가 깨져 비싼 보정이 필요하다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">An orthogonal map keeps Gaussian noise Gaussian. Applied per location, it can link frames through motion while leaving each frame exactly i.i.d.</span><span class="t-ko">직교 변환은 가우시안 노이즈를 가우시안 그대로 둔다. 위치마다 따로 적용하면 각 프레임을 정확히 i.i.d.로 유지하면서 움직임으로 프레임들을 이을 수 있다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Turn each location's local flow into two Householder reflections through fixed random projections, and rotate that location's channel noise from one frame to the next.</b></span><span class="t-ko"><b>각 위치의 국소 광류를 고정된 무작위 사영으로 하우스홀더 반사 두 개로 바꾸고, 그 위치의 채널 노이즈를 프레임마다 회전시킨다.</b></span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">Noise is built 2.7× faster than with Go-with-the-Flow, and on DAVIS motion transfer all three variants beat six baselines on all ten metrics.</span><span class="t-ko">노이즈 생성은 Go-with-the-Flow보다 2.7배 빠르고, DAVIS 모션 전이에서는 세 변형 모두 여섯 기준선을 열 개 지표 전부에서 앞선다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Think of the starting noise as a grid of dice. Warping <b>slides the dice</b> to follow the motion, and sliding smears them, so someone has to re-roll and fix the result. HME leaves every die <b>where it is and turns it</b> by an amount set by the local motion. A turned die is still a fair die, yet the next frame now remembers how this spot moved.</p>
+    <p class="t-ko">시작 노이즈를 주사위 격자라고 생각해 보자. 워핑은 움직임을 따라 <b>주사위를 밀어 옮긴다</b>. 밀다 보면 번지고 뭉개져서 다시 굴리고 고쳐야 한다. HME는 모든 주사위를 <b>제자리에 둔 채 돌린다</b>. 돌리는 양은 그 자리의 움직임이 정한다. 돌린 주사위도 여전히 공정한 주사위지만, 다음 프레임은 이 자리가 어떻게 움직였는지 기억한다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: flow becomes a rotation</span><span class="t-ko">작동 방식은 광류를 회전으로 바꾸기</span></h2>
+    <p class="vlead t-en"><b>HME only changes the starting noise. The diffusion model, its loss and its architecture stay the same.</b></p>
+    <p class="vlead t-ko"><b>HME는 시작 노이즈만 바꾼다. 확산 모델의 구조와 손실 함수는 그대로다.</b></p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2611.07294/hme_pipeline.png" target="_blank"><img src="fig/2611.07294/hme_pipeline.png" alt="Three stages: optical flow is estimated from a reference video and resampled to the latent grid; motion is injected to build temporally correlated noise; an image-to-video model turns the initial frame and this noise into a motion-aligned video. Below, the per-location flow is projected into Householder reflection vectors, composed into an orthogonal transform Q, and applied to the channel noise at that location to get the next noise frame, repeated frame by frame"></a>
+      <figcaption class="t-en"><b>Figure 2.</b> Flow is estimated, turned into per-location orthogonal transforms, and used to build the noise for an image-to-video model.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> 광류를 추정해 위치별 직교 변환으로 바꾸고, 이를 이미지 기반 비디오 생성 모델의 노이즈를 만드는 데 쓴다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2611.07294</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Get the flow.</span><span class="t-ko">광류 얻기.</span></b><span class="t-en">RAFT estimates frame-to-frame flow, averaged down to the latent grid. It can come from a reference clip, a camera path or a user drag.</span><span class="t-ko">RAFT로 프레임 사이 광류를 구해 잠재 격자 크기로 평균 낸다. 참조 영상, 카메라 경로, 사용자 드래그 어디서 와도 된다.</span></li>
+      <li><b><span class="t-en">Rotate the noise.</span><span class="t-ko">노이즈 회전.</span></b><span class="t-en">Fixed random projections lift each 2D flow vector into K reflection directions. Their product rotates the 16 channel values at that spot, frame after frame.</span><span class="t-ko">고정된 무작위 사영이 2차원 광류 벡터를 반사 방향 K개로 바꾼다. 이들의 곱이 그 자리의 16개 채널 값을 프레임마다 회전시킨다.</span></li>
+      <li><b><span class="t-en">Fine-tune once.</span><span class="t-ko">한 번 미세 조정.</span></b><span class="t-en">CogVideoX-5B is LoRA-tuned on 100K videos with this noise, so it learns to read the cross-frame links as motion.</span><span class="t-ko">CogVideoX-5B를 이 노이즈로 영상 10만 개에 LoRA 학습시켜, 프레임 사이 연결을 움직임으로 읽게 만든다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key point: no correction, so it is cheap</span><span class="t-ko">핵심은 보정이 없으니 싸다는 것</span></h2>
+    <p class="vlead t-en"><b>Because the rotation is Gaussian by construction, HME skips the correction step that makes warping expensive.</b></p>
+    <p class="vlead t-ko"><b>회전은 처음부터 가우시안을 보존하므로, HME는 워핑을 비싸게 만드는 보정 단계를 건너뛴다.</b></p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Noise construction time per latent, 1024×1024</span><span class="t-ko">잠재 하나당 노이즈 생성 시간, 1024×1024</span></div>
+      <div class="cs"><span class="t-en">Table 6 · RTX PRO 6000 Blackwell · ms, lower is better · ours highlighted</span><span class="t-ko">Table 6 · RTX PRO 6000 Blackwell · ms, 낮을수록 좋음 · 제안 방법 강조</span></div>
+      <div class="bars">
+        <div class="bar" title="HIWYN: 38.00 ms"><span class="bl">HIWYN</span><span class="bt"><span class="bf" style="--w:95%"></span></span><span class="bv">38.0</span></div>
+        <div class="bar" title="InfRes: 23.94 ms"><span class="bl">InfRes</span><span class="bt"><span class="bf" style="--w:59.9%"></span></span><span class="bv">23.9</span></div>
+        <div class="bar" title="GWTF: 7.63 ms"><span class="bl">GWTF</span><span class="bt"><span class="bf" style="--w:19.1%"></span></span><span class="bv">7.6</span></div>
+        <div class="bar hl" title="HME, K=2: 2.80 ms"><span class="bl">HME · K=2</span><span class="bt"><span class="bf" style="--w:7%"></span></span><span class="bv">2.8</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–40 ms. Extra memory is 1 MB for HME at K=2, against 76 MB for GWTF and about 49 GB for HIWYN.</figcaption>
+      <figcaption class="t-ko">축 0–40 ms. 추가 메모리는 K=2인 HME가 1 MB, GWTF가 76 MB, HIWYN은 약 49 GB다.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: tighter motion with less data</span><span class="t-ko">결과는 더 적은 데이터로 더 정확한 움직임</span></h2>
+    <p class="vlead t-en"><b>On DAVIS motion transfer, HME follows the reference motion most closely, though it was tuned on about 40× fewer videos than GWTF.</b></p>
+    <p class="vlead t-ko"><b>DAVIS 모션 전이에서 HME가 참조 움직임을 가장 잘 따른다. GWTF보다 약 40분의 1의 영상으로 학습했는데도 그렇다.</b></p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Optical flow error against the reference video, DAVIS</span><span class="t-ko">참조 영상 대비 광류 오차, DAVIS</span></div>
+      <div class="cs"><span class="t-en">Table 1 · 45 videos · EPE, lower is better · ours highlighted</span><span class="t-ko">Table 1 · 영상 45개 · EPE, 낮을수록 좋음 · 제안 방법 강조</span></div>
+      <div class="bars">
+        <div class="bar" title="MotionClone: 26.451"><span class="bl">MotionClone</span><span class="bt"><span class="bf" style="--w:88.2%"></span></span><span class="bv">26.5</span></div>
+        <div class="bar" title="ImageConductor: 20.382"><span class="bl">ImageConductor</span><span class="bt"><span class="bf" style="--w:67.9%"></span></span><span class="bv">20.4</span></div>
+        <div class="bar" title="MotionPro: 19.692"><span class="bl">MotionPro</span><span class="bt"><span class="bf" style="--w:65.6%"></span></span><span class="bv">19.7</span></div>
+        <div class="bar" title="TTM: 13.871"><span class="bl">TTM</span><span class="bt"><span class="bf" style="--w:46.2%"></span></span><span class="bv">13.9</span></div>
+        <div class="bar" title="DisMo: 11.189"><span class="bl">DisMo</span><span class="bt"><span class="bf" style="--w:37.3%"></span></span><span class="bv">11.2</span></div>
+        <div class="bar" title="GWTF: 5.644"><span class="bl">GWTF</span><span class="bt"><span class="bf" style="--w:18.8%"></span></span><span class="bv">5.6</span></div>
+        <div class="bar hl" title="HME, gamma 0.3: 4.433"><span class="bl">HME · γ=0.3</span><span class="bt"><span class="bf" style="--w:14.8%"></span></span><span class="bv">4.4</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–30. CoTracker mIoU also rises from 0.464 for GWTF to 0.546.</figcaption>
+      <figcaption class="t-ko">축 0–30. CoTracker mIoU도 GWTF의 0.464에서 0.546으로 오른다.</figcaption>
+    </figure>
+    <p class="vlead t-en"><b>Under camera control on DL3DV, HME is best on all seven metrics, including trajectory error.</b></p>
+    <p class="vlead t-ko"><b>DL3DV 카메라 제어에서 HME는 궤적 오차를 포함한 일곱 지표 모두에서 가장 좋다.</b></p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 3.</b> Camera-controlled image-to-video on 200 DL3DV scenes. ATE is normalized trajectory error.</caption>
+        <caption class="t-ko"><b>Table 3.</b> DL3DV 장면 200개의 카메라 제어 이미지 기반 비디오 생성. ATE는 정규화한 궤적 오차.</caption>
+        <thead><tr><th>Method</th><th>FID ↓</th><th>FVD ↓</th><th>PSNR ↑</th><th>LPIPS ↓</th><th>ATE ↓</th></tr></thead>
+        <tbody>
+          <tr><td>MotionPro</td><td>37.2</td><td>291.5</td><td>12.70</td><td>0.545</td><td>0.825</td></tr>
+          <tr><td>DisMo</td><td>22.5</td><td>187.1</td><td>12.26</td><td>0.506</td><td>1.155</td></tr>
+          <tr><td>TTM</td><td>21.4</td><td>196.5</td><td>12.76</td><td>0.443</td><td>0.464</td></tr>
+          <tr><td>GWTF</td><td>23.4</td><td>235.3</td><td>12.63</td><td>0.431</td><td>0.473</td></tr>
+          <tr><td>HME</td><td class="up">20.3</td><td class="up">175.1</td><td class="up">13.66</td><td class="up">0.402</td><td class="up">0.421</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">2.7×</div><div class="l"><span class="t-en">faster noise construction than GWTF</span><span class="t-ko">GWTF 대비 노이즈 생성 속도</span></div></div>
+      <div class="stat"><div class="n">96</div><div class="l"><span class="t-en">fixed projection values in total (3·K·C, K=2, C=16)</span><span class="t-ko">고정 사영 값의 총개수 (3·K·C, K=2, C=16)</span></div></div>
+      <div class="stat"><div class="n">100K</div><div class="l"><span class="t-en">tuning videos, against about 4M for GWTF</span><span class="t-ko">학습 영상 수, GWTF는 약 400만 개</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">The noise itself can carry a control signal, as long as the change preserves its distribution. Rotations do that for free, so they are a natural tool whenever you want to inject structure into diffusion noise.</span><span class="t-ko">분포만 지킨다면 노이즈 자체가 제어 신호를 실어 나를 수 있다. 회전은 이를 공짜로 해 주므로, 확산 노이즈에 구조를 넣고 싶을 때 자연스러운 도구다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">The 2.7× covers noise construction only, not sampling, and the model still needs LoRA tuning (40 GPU days). On MC-Bench, supervised controllers track trajectories more tightly. Baselines use their released checkpoints, and fast non-rigid motion stays hard.</span><span class="t-ko">2.7배는 노이즈 생성 단계만의 이야기이고 샘플링 시간은 아니다. 모델은 여전히 LoRA 학습(GPU 40일)이 필요하다. MC-Bench에서는 지도 학습 제어기가 궤적을 더 정확히 따른다. 기준선은 공개 체크포인트를 그대로 썼고, 빠른 비강체 움직임은 여전히 어렵다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2611.07294">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2611.07294">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2611.07294">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2611.07294">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>P2 slot (Video &amp; World Generation) · motion-controllable video diffusion that moves control into the starting noise with Householder rotations · NeurIPS main track · score 6 (priority +3, venue +3), tied with Disen-Forcing (2611.02822), which is autoregressive video like the last P2 card, so HME wins on axis; next was Few-Step Streaming Video Generation (2611.14033, 5, ▲84 HF)</b> · venue: NeurIPS 2026.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-11-12.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P2 슬롯 (Video &amp; World Generation) · 하우스홀더 회전으로 제어 신호를 시작 노이즈에 담는 모션 제어 비디오 확산 · NeurIPS 메인 트랙 · 점수 6 (우선 주제 +3, 학회 +3). Disen-Forcing (2611.02822)과 동점이었지만 직전 P2 카드와 같은 자기회귀 비디오 축이라 HME를 골랐다. 다음은 Few-Step Streaming Video Generation (2611.14033, 5점, HF ▲84)</b> · venue: NeurIPS 2026.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-11-12.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
