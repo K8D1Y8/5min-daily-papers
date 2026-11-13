@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · SteerDistill</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Compressed Reasoning · Quantized Agents · Teacher Steering</span><span class="t-ko">Compressed Reasoning · 양자화 에이전트 · 교사 조향</span></span>
+      <span>2026.11.13</span>
+    </div>
+    <h1>SteerDistill: Quantizing LLM Agents via Closed-Loop Teacher Steering<br>
+      <span class="glow t-en">— a 4-bit agent fails because it skips a requirement, so let the full model point at what it skipped and let the student fix it itself</span>
+      <span class="glow t-ko">— 4비트 에이전트는 조건 하나를 놓쳐서 실패한다. 원래 모델이 놓친 곳을 짚어 주고, 고치는 일은 학생 모델이 직접 하게 한다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge hot">▲ 34 HF · ★ 10 GitHub</span>
+      <span class="badge lab">🏛 Tsinghua AIR · Ting Cao</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Genming Cui</b>, <b>Xiangyu Li</b>, Zixu Hao, Xin Ding, Yunxin Liu, Ting Cao <span class="t-en">(corresponding: Ting Cao)</span><span class="t-ko">(교신: Ting Cao)</span></span>
+      <span>🏛 Institute for AI Industry Research (AIR), Tsinghua University · USTC</span>
+      <span>🗓 2026-11-10</span>
+      <span>📄 <a href="https://arxiv.org/abs/2611.13410">arXiv:2611.13410</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Low-bit quantization makes agents cheaper but costs task success, and the usual repair data rarely covers the exact moments the quantized agent goes wrong.</span><span class="t-ko">저비트 양자화는 에이전트를 싸게 만들지만 과제 성공률을 깎는다. 그리고 흔히 쓰는 복구용 데이터는 양자화 에이전트가 틀리는 바로 그 순간을 거의 담지 못한다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Quantized agents overlook a requirement or an environment condition, so the environment drifts from the full model's path. Retrying alone finds a correct action at only 9.6% of these turns.</span><span class="t-ko">양자화 에이전트는 과제 조건이나 환경 조건을 놓쳐서 환경이 원래 모델의 경로에서 벗어난다. 혼자 다시 시도하면 이런 턴의 9.6%에서만 올바른 행동을 찾는다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>At the first divergent turn, the full-precision teacher writes a short hint, the 4-bit student revises and executes, and only locally verified fixes are distilled back without the hint.</b></span><span class="t-ko"><b>처음 어긋난 턴에서 원래 정밀도 교사가 짧은 힌트를 쓰고, 4비트 학생이 고쳐서 실행한다. 그 자리에서 검증된 수정만 힌트 없이 학생에게 증류한다.</b></span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">Under W4A16 on five agent benchmarks, the average stays within one point of BF16 for all three models, beating QeRL by 1.67 to 2.18 points.</span><span class="t-ko">W4A16에서 다섯 에이전트 벤치마크 평균이 세 모델 모두 BF16과 1점 이내로 유지되고, QeRL보다 1.67에서 2.18점 높다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">A driving instructor does not grab the wheel the moment a learner misses a turn. They <b>rewind to just before the mistake</b>, say "check the sign first", and let the learner drive it again. Only when the learner gets it right on their own does that lesson count. SteerDistill trains a 4-bit agent the same way.</p>
+    <p class="t-ko">운전 강사는 연수생이 길을 잘못 들었다고 바로 핸들을 뺏지 않는다. <b>실수 직전으로 되돌아가</b> "표지판부터 봐" 한마디만 하고 다시 운전하게 한다. 연수생이 스스로 제대로 해냈을 때만 그 장면을 수업으로 친다. SteerDistill은 4비트 에이전트를 이렇게 가르친다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: rewind, hint, verify, distill</span><span class="t-ko">작동 방식은 되감기, 힌트, 검증, 증류</span></h2>
+    <p class="vlead t-en"><b>The teacher never takes over. It explains what was missed, and the student's own corrected turn becomes the training target.</b></p>
+    <p class="vlead t-ko"><b>교사는 대신 행동하지 않는다. 무엇을 놓쳤는지 설명할 뿐이고, 학생이 직접 고친 턴이 학습 목표가 된다.</b></p>
+    <figure class="fig narrow">
+      <a class="zoom" href="fig/2611.13410/steerdistill_cycle.png" target="_blank"><img src="fig/2611.13410/steerdistill_cycle.png" alt="One training cycle. The student snapshot rolls out in the environment. A failed rollout is aligned with a successful frozen-teacher reference to find the behavioral divergence at step y4. A steering prompt G from the teacher guides the student to revise y4; a local failure leads to refined guidance and a retry, a local pass is retained. The revised trajectory is then distilled with forward KL to the steered snapshot at corrected turns and reverse KL to the frozen teacher at other turns"></a>
+      <figcaption class="t-en"><b>Figure 2.</b> One training cycle. Forward KL to the steered student at corrected turns, reverse KL to the teacher elsewhere.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> 한 번의 학습 주기. 고친 턴에서는 힌트를 받은 학생에게 순방향 KL, 나머지 턴에서는 교사에게 역방향 KL을 쓴다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2611.13410</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Find the divergence.</span><span class="t-ko">어긋난 곳 찾기.</span></b><span class="t-en">Align a failed student run with a successful teacher run by environment state, not by action text, and stop at the first turn where the states differ.</span><span class="t-ko">실패한 학생 실행과 성공한 교사 실행을 행동 문장이 아니라 환경 상태로 맞춰 보고, 상태가 처음 달라지는 턴에서 멈춘다.</span></li>
+      <li><b><span class="t-en">Steer in a loop.</span><span class="t-ko">반복 조향.</span></b><span class="t-en">From the restored state, the teacher gives a structured hint and the student retries. Failed attempts feed back into a better hint, up to four tries.</span><span class="t-ko">복원한 상태에서 교사가 구조화된 힌트를 주고 학생이 다시 시도한다. 실패하면 그 결과를 반영해 힌트를 고치고, 최대 네 번까지 반복한다.</span></li>
+      <li><b><span class="t-en">Internalize.</span><span class="t-ko">내재화.</span></b><span class="t-en">Keep locally verified fixes even if the task later fails, then train the student without the hint so it acts this way unassisted.</span><span class="t-ko">과제가 끝내 실패해도 그 자리에서 검증된 수정은 남긴다. 그다음 힌트 없이 학생을 학습시켜 혼자서도 그렇게 행동하게 만든다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key point: hints unlock what retries cannot</span><span class="t-ko">핵심은 재시도로 못 찾는 답을 힌트가 연다는 것</span></h2>
+    <p class="vlead t-en"><b>At the turns where the quantized agent diverges, its own retries almost never hit the right action. A teacher hint raises that to most turns.</b></p>
+    <p class="vlead t-ko"><b>양자화 에이전트가 어긋난 턴에서 스스로 다시 해 보면 올바른 행동을 거의 찾지 못한다. 교사의 힌트가 있으면 대부분의 턴에서 찾는다.</b></p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Divergent turns with a correct action in four attempts</span><span class="t-ko">네 번의 시도 안에 올바른 행동이 나온 어긋난 턴의 비율</span></div>
+      <div class="cs"><span class="t-en">BFCL V4 multi-turn diagnostic · turn-level Pass@4 · %</span><span class="t-ko">BFCL V4 멀티턴 진단 · 턴 단위 Pass@4 · %</span></div>
+      <div class="bars">
+        <div class="bar" title="Unguided retries: 9.6%"><span class="bl">Unguided retry</span><span class="bt"><span class="bf" style="--w:9.6%"></span></span><span class="bv">9.6</span></div>
+        <div class="bar hl" title="Teacher steering: 82.3%"><span class="bl">Teacher steering</span><span class="bt"><span class="bf" style="--w:82.3%"></span></span><span class="bv">82.3</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–100%. In training, steering also beats having the teacher write the action directly, by 1.78 BFCL points.</figcaption>
+      <figcaption class="t-ko">축 0–100%. 학습 결과로 봐도 조향이 교사가 행동을 직접 써 주는 방식보다 BFCL 점수가 1.78점 높다.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: the gap widens at 2 bits</span><span class="t-ko">결과는 2비트에서 더 벌어지는 격차</span></h2>
+    <p class="vlead t-en"><b>At 2-bit weights, every method loses ground, but SteerDistill keeps a 3.39 point lead over the next best.</b></p>
+    <p class="vlead t-ko"><b>가중치를 2비트로 낮추면 모든 방법이 밀리지만, SteerDistill은 차점보다 3.39점 앞선다.</b></p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Five-benchmark average, Qwen3-8B at W2A16</span><span class="t-ko">다섯 벤치마크 평균, Qwen3-8B, W2A16</span></div>
+      <div class="cs"><span class="t-en">Table 1 · BFCL V4, τ²-Bench, WebShop, ALFWorld, Search QA · ours highlighted</span><span class="t-ko">Table 1 · BFCL V4, τ²-Bench, WebShop, ALFWorld, Search QA · 제안 방법 강조</span></div>
+      <div class="bars">
+        <div class="bar" title="BF16: 53.54"><span class="bl">BF16</span><span class="bt"><span class="bf" style="--w:89.2%"></span></span><span class="bv">53.5</span></div>
+        <div class="bar hl" title="SteerDistill: 42.97"><span class="bl">SteerDistill</span><span class="bt"><span class="bf" style="--w:71.6%"></span></span><span class="bv">43.0</span></div>
+        <div class="bar" title="On-Policy QAD: 39.58"><span class="bl">On-Policy QAD</span><span class="bt"><span class="bf" style="--w:66%"></span></span><span class="bv">39.6</span></div>
+        <div class="bar" title="BitDistiller: 39.40"><span class="bl">BitDistiller</span><span class="bt"><span class="bf" style="--w:65.7%"></span></span><span class="bv">39.4</span></div>
+        <div class="bar" title="QeRL: 38.10"><span class="bl">QeRL</span><span class="bt"><span class="bf" style="--w:63.5%"></span></span><span class="bv">38.1</span></div>
+        <div class="bar" title="GPTQ: 18.86"><span class="bl">GPTQ</span><span class="bt"><span class="bf" style="--w:31.4%"></span></span><span class="bv">18.9</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–60. Still about ten points under BF16, so 2-bit agents remain far from free.</figcaption>
+      <figcaption class="t-ko">축 0–60. 그래도 BF16보다 10점가량 낮아서, 2비트 에이전트는 아직 손실이 크다.</figcaption>
+    </figure>
+    <p class="vlead t-en"><b>At 4 bits the recovery is near complete on all three models.</b></p>
+    <p class="vlead t-ko"><b>4비트에서는 세 모델 모두 거의 완전히 회복한다.</b></p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1.</b> Five-benchmark average under W4A16 (%).</caption>
+        <caption class="t-ko"><b>Table 1.</b> W4A16 다섯 벤치마크 평균(%).</caption>
+        <thead><tr><th>Model</th><th>BF16</th><th>GPTQ</th><th>On-Policy QAD</th><th>QeRL</th><th>SteerDistill</th></tr></thead>
+        <tbody>
+          <tr><td>Qwen3-8B</td><td>53.54</td><td>46.36</td><td>50.38</td><td>51.00</td><td class="up">53.18</td></tr>
+          <tr><td>Qwen3.5-4B</td><td>61.68</td><td>54.22</td><td>58.59</td><td>59.24</td><td class="up">60.95</td></tr>
+          <tr><td>Gemma 4 12B</td><td>65.13</td><td>57.66</td><td>62.02</td><td>62.64</td><td class="up">64.31</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">0.36</div><div class="l"><span class="t-en">points below BF16, Qwen3-8B at W4A16</span><span class="t-ko">Qwen3-8B, W4A16에서 BF16과의 차이(점)</span></div></div>
+      <div class="stat"><div class="n">67%</div><div class="l"><span class="t-en">fewer training GPU hours than QeRL on τ²-Bench, with higher success</span><span class="t-ko">τ²-Bench에서 QeRL보다 적은 학습 GPU 시간, 성공률은 더 높음</span></div></div>
+      <div class="stat"><div class="n">4.0K</div><div class="l"><span class="t-en">output tokens per solved τ² task (BF16 3.9K, baselines up to 5.2K)</span><span class="t-ko">τ² 과제 하나를 푸는 데 쓴 출력 토큰 (BF16 3.9K, 기준선 최대 5.2K)</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">For compressed agents, find the turn where things go off track and supervise there. Random intervention turns scored below plain On-Policy QAD in the ablation, so the location matters as much as the teacher.</span><span class="t-ko">압축 에이전트는 일이 틀어지는 턴을 찾아 그곳을 지도하자. 어블레이션에서 무작위 턴에 개입하면 평범한 On-Policy QAD보다도 낮았다. 교사만큼 개입 위치가 중요하다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">It needs a successful teacher run, a restorable environment state and a reliable local check. Teacher and student start from task-specific GRPO-tuned BF16 checkpoints, and no latency or memory numbers are reported.</span><span class="t-ko">성공한 교사 실행, 되돌릴 수 있는 환경 상태, 믿을 만한 국소 검증이 모두 있어야 한다. 교사와 학생은 과제별로 GRPO 학습한 BF16 체크포인트에서 출발하고, 지연 시간이나 메모리 수치는 보고하지 않는다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2611.13410">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2611.13410">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2611.13410">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2611.13410">🔎 alphaXiv</a>
+      <a href="https://github.com/air-embodied-brain/SteerDistill">💻 Code</a>
+    </div>
+    <span class="t-en">Why picked — <b>P1 slot (Compressed Reasoning) · why 4-bit agents fail in multi-turn tasks and a quantization-aware training method built on that failure analysis · preprint · score 5 (priority +3, HF hot +2); SignRot (2611.16502, 6, NeurIPS'26) ranked higher but is general LLM quantization with no reasoning or agent setting; On-Policy QAD appears here only as a baseline, so this is not an on-policy distillation paper</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-11-13.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P1 슬롯 (Compressed Reasoning) · 4비트 에이전트가 멀티턴 과제에서 실패하는 이유와, 그 실패 분석 위에 세운 양자화 인지 학습 방법 · 프리프린트 · 점수 5 (우선 주제 +3, HF 화제 +2). SignRot (2611.16502, 6점, NeurIPS'26)이 점수는 더 높았지만 추론이나 에이전트 설정이 없는 범용 양자화다. On-Policy QAD는 여기서 비교 기준선일 뿐이라 온폴리시 증류 논문으로 보지 않았다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-11-13.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
