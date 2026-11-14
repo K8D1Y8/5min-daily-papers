@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Looped CED</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Efficient Sequence Models · Looped LMs · Cross-Round KV Sharing</span><span class="t-ko">Efficient Sequence Models · 루프 언어 모델 · 반복 간 KV 공유</span></span>
+      <span>2026.11.14</span>
+    </div>
+    <h1>Looping Deeper Without Growing the KV Cache: Recurrent Depth for Causal Encoder-Decoders<br>
+      <span class="glow t-en">— loop the layers that write the shared cache, train them to settle, and eight passes cost no more memory than one</span>
+      <span class="glow t-ko">— 공유 캐시를 쓰는 층을 반복시키고 한 점으로 수렴하도록 학습하면, 여덟 번 돌아도 메모리는 한 번 도는 모델과 같다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge lab">🏛 UCSD · Hao Zhang</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Jiaqi Leng</b>, Minshen Zhang, Zhaofeng Sun, Yu-Yang Qian, Peng Zhao, Hao Zhang <span class="t-en">(corresponding: Jiaqi Leng)</span><span class="t-ko">(교신: Jiaqi Leng)</span></span>
+      <span>🏛 UC San Diego · Tsinghua University · Nanjing University</span>
+      <span>🗓 2026-11-09</span>
+      <span>📄 <a href="https://arxiv.org/abs/2611.13378">arXiv:2611.13378</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Looped LMs add depth without parameters, but caching KV for every layer and every round caps how many requests a server can hold.</span><span class="t-ko">루프 언어 모델은 파라미터 없이 깊이를 더하지만, 층마다 반복마다 KV를 저장하면 서버가 동시에 받을 수 있는 요청 수가 막힌다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">In a causal encoder-decoder, only a few encoder layers write global KV. Loops gain only when they refine that source, not when they re-read a frozen copy.</span><span class="t-ko">인과 인코더-디코더에서는 인코더의 몇 층만 전역 KV를 쓴다. 반복은 그 원천을 다듬을 때만 효과가 있고, 고정된 사본을 다시 읽기만 해서는 효과가 거의 없다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Loop the encoder block that writes global KV, train with a random number of rounds so it settles to a fixed point, and cache only the last round's KV.</b></span><span class="t-ko"><b>전역 KV를 쓰는 인코더 블록을 반복시키고, 반복 횟수를 무작위로 바꿔 가며 학습해 고정점에 수렴하게 한 뒤, 마지막 반복의 KV만 저장한다.</b></span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">With 1/6 the global KV it keeps 86–93% of a looped Transformer's gain. On a looped 552B model the cache shrinks 36.8× and throughput rises 3.6×.</span><span class="t-ko">전역 KV를 6분의 1만 쓰고도 루프 트랜스포머 이득의 86–93%를 유지한다. 루프를 건 552B 모델에서는 캐시가 36.8배 줄고 처리량이 3.6배 오른다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Think of a team that revises one shared brief eight times. If everyone files every draft, the cabinet overflows. If the editor keeps polishing until the brief <b>stops changing</b>, only the final version needs filing. And the polishing must happen on the brief itself, not on readers rereading an old copy.</p>
+    <p class="t-ko">공유 보고서 하나를 여덟 번 고치는 팀을 생각해 보자. 초안을 전부 보관하면 캐비닛이 넘친다. 편집자가 보고서가 <b>더 이상 바뀌지 않을 때까지</b> 다듬는다면 최종본 하나만 보관하면 된다. 그리고 다듬는 대상은 보고서 자체여야 한다. 독자가 옛 사본을 다시 읽는 것으로는 나아지지 않는다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: where and how to loop</span><span class="t-ko">작동 방식은 어디를, 어떻게 반복할지</span></h2>
+    <p class="vlead t-en"><b>Two kinds of sharing stack up. CED shares global KV across layers, and the fixed point shares it across rounds.</b></p>
+    <p class="vlead t-ko"><b>두 가지 공유가 겹친다. CED는 층 사이에서 전역 KV를 공유하고, 고정점은 반복 사이에서 공유하게 만든다.</b></p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Global KV per token in a 12-layer model looped 8 rounds</span><span class="t-ko">12층 모델을 8번 반복할 때 토큰당 전역 KV</span></div>
+      <div class="cs"><span class="t-en">Figure 1b · in units of one full-context layer · ours highlighted</span><span class="t-ko">Figure 1b · 전체 문맥 층 하나 단위 · 제안 방법 강조</span></div>
+      <div class="bars">
+        <div class="bar" title="Dense, per-round KV: 40"><span class="bl">Dense · per-round</span><span class="bt"><span class="bf" style="--w:100%"></span></span><span class="bv">40</span></div>
+        <div class="bar" title="Dense, last-round KV: 12"><span class="bl">Dense · last-round</span><span class="bt"><span class="bf" style="--w:30%"></span></span><span class="bv">12</span></div>
+        <div class="bar" title="CED, per-round KV: 9"><span class="bl">CED · per-round</span><span class="bt"><span class="bf" style="--w:22.5%"></span></span><span class="bv">9</span></div>
+        <div class="bar hl" title="Looped CED, last-round KV: 2"><span class="bl">Looped CED</span><span class="bt"><span class="bf" style="--w:5%"></span></span><span class="bv">2</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–40. Looped CED keeps the same 2 entries per token as an unlooped CED, at any number of rounds.</figcaption>
+      <figcaption class="t-ko">축 0–40. Looped CED는 반복 횟수와 상관없이 반복하지 않는 CED와 같은 토큰당 2개만 저장한다.</figcaption>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Loop the encoder.</span><span class="t-ko">인코더 반복.</span></b><span class="t-en">Repeat layers 2–5, which include the global KV source. A decoder loop, which only reads a frozen cache, captures 16–40% of the gain.</span><span class="t-ko">전역 KV 원천이 들어 있는 2–5층을 반복한다. 고정된 캐시를 읽기만 하는 디코더 반복은 이득의 16–40%밖에 얻지 못한다.</span></li>
+      <li><b><span class="t-en">Train with random depth.</span><span class="t-ko">무작위 깊이로 학습.</span></b><span class="t-en">Sample the round count from a Poisson with mean 8. The core then contracts to a fixed point, while a fixed 8-round model falls into a period-4 cycle.</span><span class="t-ko">반복 횟수를 평균 8인 푸아송 분포에서 뽑는다. 그러면 코어가 고정점으로 수렴하고, 8번으로 고정해 학습한 모델은 주기 4의 순환에 빠진다.</span></li>
+      <li><b><span class="t-en">Cache the last round.</span><span class="t-ko">마지막 반복만 저장.</span></b><span class="t-en">Every round of a new token reads past tokens' final-round KV. BPB moves by at most 0.0002.</span><span class="t-ko">새 토큰의 모든 반복이 이전 토큰들의 마지막 반복 KV를 읽는다. BPB 변화는 최대 0.0002다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key point: memory, not compute, was the wall</span><span class="t-ko">핵심은 막힌 곳이 연산이 아니라 메모리였다는 것</span></h2>
+    <p class="vlead t-en"><b>On one 4×GB200 node, caching KV per layer and per round cannot fit a single 128K request. Looped CED fits 38.</b></p>
+    <p class="vlead t-ko"><b>4×GB200 노드 하나에서 층마다 반복마다 KV를 저장하면 128K 요청 하나도 들어가지 않는다. Looped CED는 38개가 들어간다.</b></p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2611.13378/looped_ced_serving.png" target="_blank"><img src="fig/2611.13378/looped_ced_serving.png" alt="Three panels for a looped DeepSeek-V4.1-Flash on 4 GB200 GPUs. (a) Throughput versus concurrent requests on 8K-in 1K-out: the per-layer per-round baseline flattens at 51 and 127 tokens per second per GPU, CED with per-round KV at 142 and 308, while last-round CED reaches 185 and 392. (b) Peak throughput by workload, with gains of 3.1x, 3.6x, 5.0x, 16.5x, and 38 requests versus out of memory at 128K, T equals 8. (c) Median time to first token on an agent trace rising to 345 seconds for per-round KV and staying at 11.6 seconds for last-round KV at 512 sessions"></a>
+      <figcaption class="t-en"><b>Figure 4.</b> Serving a looped DeepSeek-V4.1-Flash. Last-round KV versus per-round KV.</figcaption>
+      <figcaption class="t-ko"><b>Figure 4.</b> 루프를 건 DeepSeek-V4.1-Flash 서빙. 마지막 반복 KV와 반복별 KV 비교.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2611.13378</div>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: the serving bill</span><span class="t-ko">결과는 서빙 비용표</span></h2>
+    <p class="vlead t-en"><b>Every serving metric improves because more requests fit, not because each step runs faster.</b></p>
+    <p class="vlead t-ko"><b>서빙 지표가 모두 좋아진 이유는 한 단계가 빨라져서가 아니라 더 많은 요청이 들어가기 때문이다.</b></p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 4.</b> Looped DeepSeek-V4.1-Flash, 8 rounds, one 4×GB200 node, SGLang.</caption>
+        <caption class="t-ko"><b>Table 4.</b> 8번 반복하는 DeepSeek-V4.1-Flash, 4×GB200 노드 하나, SGLang.</caption>
+        <thead><tr><th>Metric</th><th>Per-layer, per-round</th><th>CED, per-round</th><th>Looped CED</th></tr></thead>
+        <tbody>
+          <tr><td>Global KV per token (KB)</td><td>60.0</td><td>8.5</td><td class="up">1.6</td></tr>
+          <tr><td>KV pool (M tokens)</td><td>0.13</td><td>0.98</td><td class="up">5.11</td></tr>
+          <tr><td>8K/1K tok/s per GPU</td><td>50.9</td><td>142.5</td><td class="up">185.1</td></tr>
+          <tr><td>128K requests that fit</td><td>0 (OOM)</td><td>7</td><td class="up">38</td></tr>
+          <tr><td>Agent TTFT, 512 sessions</td><td>—</td><td>345.1 s</td><td class="up">11.6 s</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">36.8×</div><div class="l"><span class="t-en">less KV per token than per-layer, per-round caching</span><span class="t-ko">층별·반복별 저장 대비 토큰당 KV 감소</span></div></div>
+      <div class="stat"><div class="n">≤0.0002</div><div class="l"><span class="t-en">BPB change from sharing only the last round's KV</span><span class="t-ko">마지막 반복 KV만 공유할 때의 BPB 변화</span></div></div>
+      <div class="stat"><div class="n">3.95×</div><div class="l"><span class="t-en">per-step decode latency at 8 rounds, the cost that remains</span><span class="t-ko">8번 반복 시 단계당 디코딩 지연, 남는 비용</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">The LoopVQ card (Nov 11) compressed a cache that grows with every loop. This paper avoids that growth by training the loop to converge. If you build looped models, try stochastic depth before reaching for cache compression.</span><span class="t-ko">11월 11일 LoopVQ 카드는 반복마다 커지는 캐시를 압축했다. 이 논문은 반복이 수렴하도록 학습해서 캐시가 커지는 것 자체를 피한다. 루프 모델을 만든다면 캐시 압축 전에 무작위 깊이 학습부터 시도해 보자.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">Quality is shown only on models up to 340M with a 2,048-token context. The 552B runs use weights never trained to loop, so they measure cost, not quality. The encoder loop also makes prefill pricier on prompt-heavy workloads.</span><span class="t-ko">품질은 340M 이하 모델과 2,048 토큰 문맥에서만 보였다. 552B 실험은 루프 학습을 하지 않은 가중치를 썼으므로 품질이 아니라 비용만 잰 것이다. 인코더 반복 탓에 프롬프트가 긴 작업에서는 프리필 비용도 커진다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2611.13378">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2611.13378">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2611.13378">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2611.13378">🔎 alphaXiv</a>
+    </div>
+    <span class="t-en">Why picked — <b>legacy slot (every 7th card, earlier axes: efficient sequence models and KV compression) · looped LMs that keep the memory of an unlooped model · preprint · score 3 (listed author Hao Zhang, confirmed as UCSD), tied with Latent-Lens (2610.41751, NeurIPS'26, P1 bonus not counted on a legacy day), MoEZip (2610.30206, NeurIPS'26) and Hyperdimensional Symbolic Messages (2610.23092, NeurIPS'26); none had HF interest, so the newest won</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-11-14.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>레거시 슬롯 (7장마다 한 번, 예전 관심 축인 효율적 시퀀스 모델과 KV 압축) · 반복하지 않는 모델과 같은 메모리로 도는 루프 언어 모델 · 프리프린트 · 점수 3 (목록 저자 Hao Zhang, UCSD 본인 확인). Latent-Lens (2610.41751, NeurIPS'26, 레거시 날이라 P1 가점 제외), MoEZip (2610.30206, NeurIPS'26), Hyperdimensional Symbolic Messages (2610.23092, NeurIPS'26)와 동점이었고, 모두 HF 반응이 없어 가장 최신 논문을 골랐다</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-11-14.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
