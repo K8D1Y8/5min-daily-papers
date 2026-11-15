@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · BirdDreams</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Video &amp; World Generation · Driving World Model · Joint BEV Prediction</span><span class="t-ko">Video &amp; World Generation · 주행 월드 모델 · BEV 공동 예측</span></span>
+      <span>2026.11.15</span>
+    </div>
+    <h1>BirdDreams: Joint Perspective and BEV Video Generation for a Plausible, Reactive Driving World Model<br>
+      <span class="glow t-en">— generate a simple top-down map video next to the camera video, and the other cars start reacting to you</span>
+      <span class="glow t-ko">— 카메라 영상 옆에 단순한 위에서 본 지도 영상을 함께 생성하면, 다른 차들이 내 움직임에 반응하기 시작한다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge hot">▲ 50 HF</span>
+      <span class="badge lab">🏛 NVIDIA · KAIST</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Junyoung Seo</b>, Jaewoo Seo, Seungryong Kim, Laura Leal-Taixé, Xiuming Zhang, Seung Wook Kim</span>
+      <span>🏛 NVIDIA · KAIST</span>
+      <span>🗓 2026-11-10</span>
+      <span>📄 <a href="https://arxiv.org/abs/2611.14815">arXiv:2611.14815</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Driving world models usually replay other cars' logged paths as input, so those cars cannot react when the ego vehicle drives differently.</span><span class="t-ko">주행 월드 모델은 보통 다른 차들의 기록된 경로를 입력으로 재생한다. 그래서 내 차가 다르게 움직여도 그 차들은 반응하지 못한다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Learning car motion from camera video alone is hard. Motion is tangled with appearance, cars hide each other, and the same pixel shift means different speeds at different depths.</span><span class="t-ko">카메라 영상만으로 차의 움직임을 배우기는 어렵다. 움직임이 외관과 얽혀 있고, 차들이 서로를 가리며, 같은 픽셀 이동도 거리에 따라 다른 속도를 뜻한다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Two causal video transformers, one for the camera view and one for a schematic BEV, generate both videos together through joint attention. The BEV is also shifted along the input trajectory to steer the ego car.</b></span><span class="t-ko"><b>카메라 시점용과 도식화된 BEV용 인과 비디오 트랜스포머 두 개가 공동 어텐션으로 두 영상을 함께 생성한다. 입력 궤적을 따라 BEV를 옮겨 내 차를 조종하는 데에도 쓴다.</b></span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">Given an ego trajectory, ADE drops 35–36% against camera-ray OmniDreams on both benchmarks, and people prefer its traffic behavior 57% to 24%.</span><span class="t-ko">내 차 궤적을 주면 두 벤치마크 모두에서 ADE가 카메라 광선 방식 OmniDreams보다 35–36% 낮고, 사람들은 주변 차 움직임을 57% 대 24%로 더 낫다고 본다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">A driving instructor watching through the windshield can lose track of the car behind a truck. Give them a <b>live overhead map with every car as a box</b>, and who is cutting in becomes obvious. BirdDreams draws that map while it draws the video, and lets each picture check the other.</p>
+    <p class="t-ko">앞유리로만 보는 운전 강사는 트럭 뒤에 숨은 차를 놓치기 쉽다. <b>모든 차를 상자로 그린 실시간 조감도</b>를 주면 누가 끼어드는지 바로 보인다. BirdDreams는 영상을 그리면서 이 지도도 함께 그리고, 두 그림이 서로를 확인하게 한다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: two streams, one rollout</span><span class="t-ko">작동 방식은 두 스트림, 하나의 롤아웃</span></h2>
+    <p class="vlead t-en"><b>The BEV turns traffic into simple shapes at a fixed metric scale, so the model learns motion without fighting lighting or occlusion.</b></p>
+    <p class="vlead t-ko"><b>BEV는 교통 상황을 고정된 미터 축척의 단순한 도형으로 바꾼다. 그래서 모델은 조명이나 가림과 싸우지 않고 움직임을 배운다.</b></p>
+    <figure class="fig narrow">
+      <a class="zoom" href="fig/2611.14815/birddreams_overview.png" target="_blank"><img src="fig/2611.14815/birddreams_overview.png" alt="A camera observation enters a dual-stream causal DiT. A perspective video stream and a schematic BEV stream exchange information through joint attention and output a perspective video and a schematic BEV video. A history cache feeds earlier chunks back in, and in BEV-aware action conditioning the latest BEV frame is reprojected along an optional ego action to condition the next chunk in a closed-loop rollout"></a>
+      <figcaption class="t-en"><b>Figure 2.</b> Two causal DiTs share joint attention. The latest BEV frame, reprojected along the ego action, conditions the next chunk.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> 두 인과 DiT가 공동 어텐션을 공유한다. 내 차 행동을 따라 다시 투영한 최신 BEV 프레임이 다음 청크의 조건이 된다.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2611.14815</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Pair the videos.</span><span class="t-ko">영상 짝짓기.</span></b><span class="t-en">For about 670 hours of driving, render a 69.3 m square BEV from map and box annotations, synced with the front camera.</span><span class="t-ko">약 670시간 분량의 주행 데이터에서 지도와 박스 라벨로 69.3 m 정사각형 BEV를 그리고 전방 카메라와 맞춘다.</span></li>
+      <li><b><span class="t-en">Noise each stream separately.</span><span class="t-ko">스트림별 노이즈.</span></b><span class="t-en">Diffusion Forcing samples noise per chunk and per stream, so one view often guides the other. Resampling Forcing then exposes the model to its own rollout errors.</span><span class="t-ko">Diffusion Forcing으로 청크마다, 스트림마다 노이즈를 따로 뽑아 한쪽 시점이 다른 쪽을 이끄는 경우를 자주 만든다. 그다음 Resampling Forcing으로 자기 롤아웃의 오류에 익숙해지게 한다.</span></li>
+      <li><b><span class="t-en">Steer through the map.</span><span class="t-ko">지도로 조종.</span></b><span class="t-en">Shift and rotate the last BEV frame along the input trajectory and feed it as a soft condition. Only the ego moves in it, so the model must predict how others respond.</span><span class="t-ko">마지막 BEV 프레임을 입력 궤적대로 옮기고 돌려 약한 조건으로 넣는다. 그 안에서는 내 차만 움직이므로, 다른 차의 반응은 모델이 예측해야 한다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key point: the map makes steering precise</span><span class="t-ko">핵심은 지도가 조종을 정확하게 만든다는 것</span></h2>
+    <p class="vlead t-en"><b>Steering through a metric BEV beats steering through camera-ray embeddings. The ego car stays much closer to the requested path.</b></p>
+    <p class="vlead t-ko"><b>미터 단위 BEV로 조종하는 편이 카메라 광선 임베딩으로 조종하는 것보다 낫다. 내 차가 요청한 경로에 훨씬 가깝게 달린다.</b></p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Trajectory error with ego-action conditioning, PhysicalAI-AV</span><span class="t-ko">내 차 행동 조건을 줄 때의 궤적 오차, PhysicalAI-AV</span></div>
+      <div class="cs"><span class="t-en">Table 2 · ADE from generated video, lower is better · ours highlighted</span><span class="t-ko">Table 2 · 생성 영상에서 복원한 ADE, 낮을수록 좋음 · 제안 방법 강조</span></div>
+      <div class="bars">
+        <div class="bar" title="UniFuture: 10.33"><span class="bl">UniFuture</span><span class="bt"><span class="bf" style="--w:86.1%"></span></span><span class="bv">10.33</span></div>
+        <div class="bar" title="DrivingDojo: 9.87"><span class="bl">DrivingDojo</span><span class="bt"><span class="bf" style="--w:82.3%"></span></span><span class="bv">9.87</span></div>
+        <div class="bar" title="Vista: 9.65"><span class="bl">Vista</span><span class="bt"><span class="bf" style="--w:80.4%"></span></span><span class="bv">9.65</span></div>
+        <div class="bar" title="GEM: 6.59"><span class="bl">GEM</span><span class="bt"><span class="bf" style="--w:54.9%"></span></span><span class="bv">6.59</span></div>
+        <div class="bar" title="OmniDreams (Plücker): 5.88"><span class="bl">OmniDreams · Plücker</span><span class="bt"><span class="bf" style="--w:49%"></span></span><span class="bv">5.88</span></div>
+        <div class="bar hl" title="BirdDreams: 3.83"><span class="bl">BirdDreams</span><span class="bt"><span class="bf" style="--w:31.9%"></span></span><span class="bv">3.83</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–12. Trajectories are recovered from generated and real video with Depth Anything 3. On nuScenes the drop against OmniDreams is 36%.</figcaption>
+      <figcaption class="t-ko">축 0–12. 궤적은 Depth Anything 3로 생성 영상과 실제 영상에서 복원했다. nuScenes에서는 OmniDreams 대비 36% 줄었다.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: traffic that reacts</span><span class="t-ko">결과는 반응하는 교통</span></h2>
+    <p class="vlead t-en"><b>In counterfactual drives with the same road map, raters flag impossible motion three times less often for BirdDreams.</b></p>
+    <p class="vlead t-ko"><b>같은 도로 지도로 기록과 다르게 운전시켰을 때, 평가자가 불가능한 움직임을 지적한 비율은 BirdDreams 쪽이 3분의 1이다.</b></p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Figure 8.</b> Pairwise human study, 25 raters, 375 judgments. Issues flagged in the non-preferred video (% of all judgments).</caption>
+        <caption class="t-ko"><b>Figure 8.</b> 평가자 25명, 판단 375건의 쌍대 비교. 선호하지 않은 영상에서 지적한 문제(전체 판단 대비 %).</caption>
+        <thead><tr><th>Measure</th><th>OmniDreams (HDMap)</th><th>BirdDreams (HDMap)</th></tr></thead>
+        <tbody>
+          <tr><td>Preferred</td><td>24</td><td class="up">57</td></tr>
+          <tr><td>Impossible motion</td><td>27</td><td class="up">9</td></tr>
+          <tr><td>Unnatural driving</td><td>24</td><td class="up">6</td></tr>
+          <tr><td>No reaction to others</td><td>19</td><td class="up">11</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">35%</div><div class="l"><span class="t-en">lower ADE than OmniDreams with ego actions (PhysicalAI-AV)</span><span class="t-ko">내 차 행동 조건에서 OmniDreams 대비 ADE 감소 (PhysicalAI-AV)</span></div></div>
+      <div class="stat"><div class="n">37%</div><div class="l"><span class="t-en">lower minADE than OmniDreams without actions, nuScenes</span><span class="t-ko">행동 조건 없이 nuScenes에서 OmniDreams 대비 minADE 감소</span></div></div>
+      <div class="stat"><div class="n">~4B</div><div class="l"><span class="t-en">dual-branch causal DiT, built on OmniDreams</span><span class="t-ko">OmniDreams 기반 듀얼 브랜치 인과 DiT 규모</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">For world models, a cheap structured side view can teach dynamics that pixels hide. Predicting the layout instead of taking it as input is what lets other agents react.</span><span class="t-ko">월드 모델에서는 값싼 구조화 시점 하나가 픽셀이 숨기는 동역학을 가르쳐 줄 수 있다. 배치를 입력으로 받지 않고 직접 예측하기 때문에 다른 차들이 반응할 수 있다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">Reactivity is judged by examples and a 25-person study, with road geometry given. Training needs map and 3D box labels, only the front camera is modeled, and no generation speed is reported.</span><span class="t-ko">반응성은 사례와 25명 평가로만 판단했고, 이때 도로 형상은 주어졌다. 학습에 지도와 3D 박스 라벨이 필요하고, 전방 카메라 하나만 다루며, 생성 속도는 보고하지 않는다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2611.14815">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2611.14815">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2611.14815">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2611.14815">🔎 alphaXiv</a>
+      <a href="https://research.nvidia.com/labs/sil/projects/birddreams/">🌐 Project</a>
+    </div>
+    <span class="t-en">Why picked — <b>P2 slot (Video &amp; World Generation) · an autoregressive driving world model that predicts a top-down BEV video with the camera video · preprint · score 8 (priority +3, listed lab NVIDIA +3, HF hot +2 with ▲50); next were Disen-Forcing (2611.02822), Track4D (2611.15287) and vid2vid-long (2611.17298), 6 each from venue</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-11-15.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P2 슬롯 (Video &amp; World Generation) · 카메라 영상과 함께 위에서 본 BEV 영상까지 예측하는 자기회귀 주행 월드 모델 · 프리프린트 · 점수 8 (우선 주제 +3, 목록 연구소 NVIDIA +3, HF ▲50으로 화제 +2). 다음은 Disen-Forcing (2611.02822), Track4D (2611.15287), vid2vid-long (2611.17298)으로 모두 학회 가점으로 6점</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-11-15.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
