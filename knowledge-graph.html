@@ -106,7 +106,9 @@ const DATA = {
         ['CacheBack','method','The receiver tells the sender what it needs; the sender\'s attention filters its KV cache before transfer (75% less state)','2609.32046'],
         ['Latent Comm Safety','concept','Even benign training of latent links raises harmful compliance over text; an RL attack lifts it from 27.9 to 76.9 while keeping utility','2609.39788'],
         ['Platonic JEPA','concept','Proves JEPAs trained alone on any modality with "good views" learn the same embedding up to one rotation','2610.39302'],
-        ['Internal-State Sharing 2x2','concept','Publish internal state once to a shared pool instead of fitting per-pair bridges; KV caches must be augmented (cross-attend while keeping your own), not swapped in','2610.22026'] ]},
+        ['Internal-State Sharing 2x2','concept','Publish internal state once to a shared pool instead of fitting per-pair bridges; KV caches must be augmented (cross-attend while keeping your own), not swapped in','2610.22026'],
+        ['Fidelity-Consumability','concept','Swapping a sender\'s KV cache into a frozen reader fails: the reader only uses caches near its own (a tolerable set), geometric closeness does not predict usability, and 8 substitution methods sit at baseline','2610.22016'],
+        ['Hybrid KV Translation','method','Hands a conversation to another model by mapping caches beyond GQA: MLA latents via token-wise linear maps, linear-attention states copied with a closed-form correction or re-synthesized','2611.12062'] ]},
       { name:'Efficient MAS Serving', blurb:'Cache reuse, prefix sharing and compression to cut MAS cost.', nodes:[
         ['KVFlow','method','Prefix caching that accelerates multi-agent workflows','2507.07400'],
         ['TokenDance','method','Collective KV-cache sharing for scalable serving','2604.03143'],
@@ -199,7 +201,8 @@ const DATA = {
         ['LeapQuant','method','Training-free 8-bit recurrent-state quantization for GDN/KDA hybrids: quantize once per window, keep outlier rows precise','2609.38166'],
         ['Triadic Linear Attention','method','Writes a key-key-value outer product into a 3D tensor state: E-fold larger memory for two extra projections','2609.36529'],
         ['STEPQuant','method','Post-training quantization of delta-rule recurrent states: bits set by memory lifetime and key-row impact on output error','2609.38169'],
-        ['KronLSTM','model','xLSTM-family linear attention with a Kronecker delta rule that revises memory along one matrix direction; memory norm stays bounded with no extra normalization','2610.26834'] ]},
+        ['KronLSTM','model','xLSTM-family linear attention with a Kronecker delta rule that revises memory along one matrix direction; memory norm stays bounded with no extra normalization','2610.26834'],
+        ['Dual DeltaNet','model','Extends Kimi Delta Attention with a two-sided delta rule: a value-side read and correction over state addresses complements the usual key-side update','2610.38578'] ]},
       { name:'Recurrent Alternatives', blurb:'RNN-style and retention-based transformer successors.', nodes:[
         ['RetNet','model','Retention with parallel, recurrent, chunkwise forms','2307.08621'],
         ['RWKV-7','model','Receptance weighted key-value, dynamic state','2503.14456'],
@@ -207,7 +210,8 @@ const DATA = {
         ['xLSTM','model','Exponential-gated LSTM revival with matrix memory','2405.04517'],
         ['PRISM','model','Sequence modeling as parallel residual iteration','2602.10796'],
         ['PAR','method','Progress-aligned per-loop targets plus RMS re-anchoring of the recurrent state let looped LMs extrapolate 16x in state tracking','2610.27628'],
-        ['Short-Context Compaction','concept','Frequent compaction keeps frontier agents accurate at 7\u20139K peak context; one action per context still works, pointing to semantic state space models','2611.05306'] ]},
+        ['Short-Context Compaction','concept','Frequent compaction keeps frontier agents accurate at 7\u20139K peak context; one action per context still works, pointing to semantic state space models','2611.05306'],
+        ['Looped CED','method','Recurrent depth for causal encoder-decoders: loop only the encoder block that writes the shared KV, train it to a fixed point, cache only the last round (36.8x smaller cache on a 552B model)','2611.13378'] ]},
       { name:'Hybrid Architectures', blurb:'Interleaving attention with SSM/linear layers to recover recall.', nodes:[
         ['Jamba','model','Interleaved Transformer-Mamba MoE hybrid','2403.19887'],
         ['Nemotron-H','model','Production hybrid Mamba-Transformer family','2504.03624'],
@@ -225,7 +229,8 @@ const DATA = {
         ['DASC','method','Decay-aware compression of the fixed-size recurrent state for hybrid linear-attention serving','2608.30386'],
         ['TreeWY','method','Speculative verification adapted to the recurrent state of Gated DeltaNet hybrids','2608.20961'],
         ['Tail-Replay','method','Token-level prefix caching for hybrids: rebuild the linear-attention state by replaying only a short recent suffix','2608.30310'],
-        ['SketchSSM','method','Writes the full recurrent state but reads from a compact precomputed sketch: ~10x less state traffic per decode step','2609.33051'] ]},
+        ['SketchSSM','method','Writes the full recurrent state but reads from a compact precomputed sketch: ~10x less state traffic per decode step','2609.33051'],
+        ['Hybrid KV Translation','method','Hands a conversation to another model by mapping caches beyond GQA: MLA latents via token-wise linear maps, linear-attention states copied with a closed-form correction or re-synthesized','2611.12062'] ]},
       { name:'Linearization & Analysis', blurb:'Distilling attention LLMs into efficient models; recall benchmarks.', nodes:[
         ['MOHAWK','method','Distilling Transformers into Mamba','2408.10189'],
         ['RADLADS','method','Rapid attention distillation to linear decoders','2505.03005'],
@@ -264,7 +269,9 @@ const DATA = {
         ['STEPQuant','method','Post-training quantization of delta-rule recurrent states: bits set by memory lifetime and key-row impact on output error','2609.38169'],
         ['miniTE','method','Execution-aligned native NVFP4 for reasoning RL: per-token-row scales and packed W4A4 experts keep learner and sampler log-probs in agreement','2610.23928'],
         ['Nemotron 3.5 Super','model','NVFP4 MoE experts with FP8 attention, Mamba, head and KV, recovered by KL-only quantization-aware distillation: 99.6% median score at 4.82 bits','2610.38095'],
-        ['ThinkBit','method','Strictly scalar 2-bit weights (integer codeword x bf16 scale per 128) chosen by a reasoning test, since perplexity and multiple choice miss 10+ point MATH-500 gaps','2610.34886'] ]},
+        ['ThinkBit','method','Strictly scalar 2-bit weights (integer codeword x bf16 scale per 128) chosen by a reasoning test, since perplexity and multiple choice miss 10+ point MATH-500 gaps','2610.34886'],
+        ['OnQ','method','Low-bit reasoning recovery: the quantized student trains on its own rollouts under full-precision teacher supervision with candidate-wise dynamic KL, fixing runs that never terminate','2610.29378'],
+        ['SteerDistill','method','Repairs 4-bit agents: at the first divergent turn the full-precision teacher gives a short hint, the student fixes its own action, and only verified fixes are distilled back without the hint','2611.13410'] ]},
       { name:'Pruning & Sparsity', blurb:'Remove weights, neurons or layers by importance.', nodes:[
         ['SparseGPT','method','One-shot 50% unstructured pruning, no retrain','2301.00774'],
         ['Wanda','method','Prune by magnitude times input activation norm','2306.11695'],
@@ -379,7 +386,9 @@ const DATA = {
         ['PN-Mix','method','Query-aware RoPE-pair mixed precision for the key cache: pairs ranked by query norm × key norm get 3 bits, the rest 1 bit · EMNLP 2026','2610.19605'],
         ['RIFT','method','KV-cache compression for speculative drafters: refresh the selection during decode against "decode staleness" and train for compressibility; a 4B drafter keeps 98% of full-cache acceptance length on 32K inputs','2610.31098'],
         ['Universal Attention','method','Self-pruning Transformer: an expressive composite decay keeps RoPE and softmax yet acts as an adaptive eviction rule; 10x KV compression (25x at 16K length)','2610.09051'],
-        ['Jet-QSparse','method','Training-free NVFP4 KV cache with native FP4 key scoring, then higher-precision value reads from the top blocks only: 1.94x faster decode at 128K for agent workloads','2611.01022'] ]} ]},
+        ['Jet-QSparse','method','Training-free NVFP4 KV cache with native FP4 key scoring, then higher-precision value reads from the top blocks only: 1.94x faster decode at 128K for agent workloads','2611.01022'],
+        ['LoopVQ','method','Sub-1-bit KV cache for looped transformers: one 8-bit index codes the same channels across four loop steps, codebooks tuned to match full-precision outputs (0.5 bit, up to 4.3x throughput)','2611.05304'],
+        ['Looped CED','method','Recurrent depth for causal encoder-decoders: loop only the encoder block that writes the shared KV, train it to a fixed point, cache only the last round (36.8x smaller cache on a 552B model)','2611.13378'] ]} ]},
 
     { key:'world', subs:[
       { name:'World-Model Foundations', blurb:'Single-agent latent-dynamics models that train policies in imagination.', nodes:[
@@ -426,7 +435,8 @@ const DATA = {
         ['Population-Scalable MAWM','method','Decouples world-state evolution from rendering to scale to arbitrary agent counts','2608.08600'],
         ['Dreaming of Others','method','Latent teammate modeling inside a Dreamer-style world model for cooperative MARL','2605.31361'],
         ['MA-JEPA','model','JEPA-style world model for model-based MARL: predicts next observation embeddings, centralized training, decentralized execution','2609.33563'],
-        ['ME-World','model','Multi-agent egocentric world model: jointly denoises every agent\'s ego stream in one token sequence, grounded by a shared environment memory','2610.12299'] ]},
+        ['ME-World','model','Multi-agent egocentric world model: jointly denoises every agent\'s ego stream in one token sequence, grounded by a shared environment memory','2610.12299'],
+        ['Bayesian Offline MAWM','method','Offline model-based MARL that infers latent global states from decentralized histories and refines a posterior world model; multi-agent posterior information loss gauges its reliability','2610.39576'] ]},
       { name:'Generative Game World Models', blurb:'Action-conditioned video/diffusion models as playable simulators.', nodes:[
         ['Genie','model','Generative interactive environments from video','2402.15391'],
         ['GameNGen','model','Diffusion model as a real-time game engine','2408.14837'],
@@ -442,7 +452,8 @@ const DATA = {
         ['MultiWorld','model','Multi-agent multi-view video world model with a global state encoder keeping views consistent','2604.18564'],
         ['Multiplayer RAE World Model','model','5B latent-diffusion world model generating real-time four-player Rocket League matches from per-player actions','2607.05352'],
         ['ConsistWorld','model','Multi-agent AR video world model routing evidence from shared history and peer views for cross-view consistency','2609.22641'],
-        ['Matrix-Game 4.0','model','A light game engine holds rules and state; a 1–2-step causal Wan2.2 5B renderer paints its low-poly proxies at 60 FPS on one RTX 5090','2610.27999'] ]},
+        ['Matrix-Game 4.0','model','A light game engine holds rules and state; a 1–2-step causal Wan2.2 5B renderer paints its low-poly proxies at 60 FPS on one RTX 5090','2610.27999'],
+        ['BirdDreams','model','Driving world model that generates a schematic BEV video jointly with the camera video, so other cars react to the ego path (ADE -35% vs OmniDreams)','2611.14815'] ]},
       { name:'Shared Latent & KV Across Agents', blurb:'LLM MAS sharing latent states / KV-cache instead of text.', nodes:[
         ['LatentMAS','method','Latent collaboration across LLM agents, no text','2511.20639'],
         ['KVCOMM','method','Online cross-context KV-cache communication','2510.12872'],
@@ -472,7 +483,9 @@ const DATA = {
         ['KV Compression Faithfulness','concept','KV cache compression keeps final answers but breaks the reasoning that supports them','2608.01631'],
         ['Closed-Loop Collapse','concept','A compressed VLA policy passes offline evaluation yet fails in closed-loop execution','2609.23048'],
         ['Calibrated Instrument','benchmark','Calibrated LLM judge with a null condition measures how quantization, early exit and speculative decoding change output quality','2609.18005'],
-        ['ThinkBit','method','Strictly scalar 2-bit weights (integer codeword x bf16 scale per 128) chosen by a reasoning test, since perplexity and multiple choice miss 10+ point MATH-500 gaps','2610.34886'] ]},
+        ['ThinkBit','method','Strictly scalar 2-bit weights (integer codeword x bf16 scale per 128) chosen by a reasoning test, since perplexity and multiple choice miss 10+ point MATH-500 gaps','2610.34886'],
+        ['Divergence to Flips','concept','Total variation, not KL, predicts how many arg-max decisions a compressed model flips (ratio ~1.05 over 802 copies of 19 models); KL needs a model-dependent factor','2610.00694'],
+        ['Quantized Coding Agents','concept','4-bit AWQ/GPTQ coding agents keep their solve rate, but how they solve shifts: Qwen-7B one-shot solves drop 17 to 0 while loop-based solves rise 10 to 25 \u00b7 NeurIPS 2026 workshop','2611.02368'] ]},
       { name:'On-policy distillation', blurb:'The student learns the teacher\'s token distribution on its own rollouts, fixing exposure bias.', nodes:[
         ['TeacherGRPO','method','Closes the capacity gap in reasoning distillation by aligning teacher distribution to what the student can learn','2609.33426'],
         ['Allspark','method','Weak-to-strong transfer of reasoning via alternating chain of thought, avoiding large-model rollouts','2609.32913'],
@@ -511,7 +524,11 @@ const DATA = {
         ['AOPD','method','Advantage-based OPD: weights teacher actions by their counterfactual advantage for the student, estimated from ordinary rollouts and terminal rewards via teacher importance weights','2610.31563'],
         ['Bernoulli OPD','method','Sampled reverse-KL OPD starves high-confidence student tokens of gradient; matching teacher and student probabilities of the sampled token restores that signal','2611.02093'],
         ['Cross-Tokenizer OPD Revisited','concept','Strict 1:1 token groups already cover most student tokens; top-16 reverse KL on the shared vocabulary matches full OPD, and span losses on mismatched groups hurt','2610.08448'],
-        ['SPOD','method','Distillation overshoot: in agentic OPD a weaker student first beats its teacher, then regresses; masking teacher supervision on successful student choices keeps the gain','2610.25034'] ]},
+        ['SPOD','method','Distillation overshoot: in agentic OPD a weaker student first beats its teacher, then regresses; masking teacher supervision on successful student choices keeps the gain','2610.25034'],
+        ['OPD Learning Dynamics','concept','OPD as a feedback loop (signal to update, update broadcast over rollouts) explains weak student response despite large disagreement and late degeneration; offline KD can warm-start OPD','2611.08016'],
+        ['OPRD','method','Lifts OPD into hidden-state space: aligns student and teacher layer representations on the same on-policy rollouts, giving deterministic per-layer gradients past the LM-head bottleneck','2606.06021'],
+        ['OPD Mismatch Budget','concept','OPD tolerates substantial rollout-engine mismatch (quantized inference, stale weights, noise) before quality drops; the budget is model- and layer-dependent','2611.11450'],
+        ['SteerDistill','method','Repairs 4-bit agents: at the first divergent turn the full-precision teacher gives a short hint, the student fixes its own action, and only verified fixes are distilled back without the hint','2611.13410'] ]},
       { name:'Distribution-aware compression', blurb:'Compression and draft models trained to match the original model\'s output distribution, not layer reconstruction.', nodes:[
         ['LFQ','method','Logit-aware final-block quantization for generation quality · ICML 2026','2605.29756'],
         ['KVSculpt','method','KV cache compression framed as distillation','2603.27819'],
@@ -525,7 +542,9 @@ const DATA = {
         ['Muse Glimmer 30B','model','Logit-distilled dense 30B agent model (2 KV heads) with a loss-measured mixed 4–6-bit profile near 20 GB that does not lengthen reasoning','2610.24628'],
         ['Nemotron 3.5 Super','model','NVFP4 MoE experts with FP8 attention, Mamba, head and KV, recovered by KL-only quantization-aware distillation: 99.6% median score at 4.82 bits','2610.38095'],
         ['RIFT','method','KV-cache compression for speculative drafters: refresh the selection during decode against "decode staleness" and train for compressibility; a 4B drafter keeps 98% of full-cache acceptance length on 32K inputs','2610.31098'],
-        ['SKIM','method','Pruning + distillation for grammar-constrained agents: down-weights format tokens the grammar enforces and heals on the masked distribution at decision tokens \u00b7 NeurIPS 2026','2611.07558'] ]} ]},
+        ['SKIM','method','Pruning + distillation for grammar-constrained agents: down-weights format tokens the grammar enforces and heals on the masked distribution at decision tokens \u00b7 NeurIPS 2026','2611.07558'],
+        ['OnQ','method','Low-bit reasoning recovery: the quantized student trains on its own rollouts under full-precision teacher supervision with candidate-wise dynamic KL, fixing runs that never terminate','2610.29378'],
+        ['LoopVQ','method','Sub-1-bit KV cache for looped transformers: one 8-bit index codes the same channels across four loop steps, codebooks tuned to match full-precision outputs (0.5 bit, up to 4.3x throughput)','2611.05304'] ]} ]},
     { key:'video', subs:[
       { name:'AR video diffusion & distillation', blurb:'Turning bidirectional video diffusion into fast causal (autoregressive) generators.', nodes:[
         ['Direct Forcing','method','Single-stage recipe for few-step AR text-to-video: merges causal adaptation and distribution matching','2610.30861'],
@@ -567,7 +586,10 @@ const DATA = {
         ['LongLive-Plug','method','Once-for-all distillation: few-step sampling, single-pass CFG and long-context error correction learned as LoRAs on a base model, plugged training-free into 54 downstream models','2609.38154'],
         ['History Forcing','method','On-policy distillation whose target adds the residual between teacher predictions with and without informative history, so scenes that reappear stay consistent','2611.02782'],
         ['Any Forcing','method','One adversarial discriminator covers real-distribution, inter-step and first-frame alignment, so a single AR generator samples at any step count and stays stable at one step (~21\u201325 FPS)','2610.42031'],
-        ['Wave Forcing','method','Chunks read earlier, cleaner chunks before they finish, so denoising stages run as a pipelined wavefront on separate GPUs: 134.8 FPS streaming on 8 H200s','2611.00859'] ]},
+        ['Wave Forcing','method','Chunks read earlier, cleaner chunks before they finish, so denoising stages run as a pipelined wavefront on separate GPUs: 134.8 FPS streaming on 8 H200s','2611.00859'],
+        ['Rolling Forcing','method','Jointly denoises a rolling window of frames at rising noise levels plus an attention sink, curbing error build-up in real-time long streaming \u00b7 ICLR 2026','2509.25161'],
+        ['Trajectory Forcing','method','Conditions each chunk on earlier chunks\' full denoising trajectories, not just their final output; VBench 85.15, above Self Forcing and Causal Forcing \u00b7 NeurIPS 2026','2611.09096'],
+        ['Condition Shifting','method','Few-step streaming distillation without a separate fake-score network: a shifted text condition lets the generator estimate its own distribution\'s velocity (180 s videos)','2611.14033'] ]},
       { name:'Attention & cache efficiency', blurb:'Sparse, linear and cached attention for long streaming video.', nodes:[
         ['Dynamics-Aware Sparse Attention','method','Sparse attention guided by scene dynamics for AR video diffusion','2610.26262'],
         ['CORAL-KV','method','Cross-layer prediction and residual coding to compress AR video KV caches','2610.12514'],
@@ -590,7 +612,8 @@ const DATA = {
         ['GRACE','method','Frozen-encoder latent of a downsampled video plus a learned residual: 8× fewer Wan2.1 tokens, 11–15× faster, same VBench','2610.10524'],
         ['Deep Forcing','method','Training-free long rollout: half the window as RoPE-realigned sink tokens plus attention-participation KV pruning; 5 s-trained models run 60 s+ \u00b7 ICML 2026','2512.05081'],
         ['PreSTP','method','Training-free token pruning for few-step AR video: early clean estimates flag static cross-frame and early-converged tokens to skip, 1.5\u20133.2x faster','2611.07551'],
-        ['Learning-to-Memorize','method','A small trained router scores cached frames against the current chunk and evicts the rest, replacing fixed sliding-window or sink rules \u00b7 NeurIPS 2026','2611.01858'] ]},
+        ['Learning-to-Memorize','method','A small trained router scores cached frames against the current chunk and evicts the rest, replacing fixed sliding-window or sink rules \u00b7 NeurIPS 2026','2611.01858'],
+        ['Ms. Forcing','method','Rolling-window streaming with noise-adaptive granularity: coarser patches for noisier frames (45% fewer window tokens) and multi-scale attention on a static, hardware-friendly graph','2607.20940'] ]},
       { name:'Interactive world models', blurb:'Real-time, controllable, long-horizon world generation.', nodes:[
         ['World-T3','method','Test-time training as persistent memory for real-time video world models','2610.17434'],
         ['WorldPlay2','method','Real-time interactive world model extended in control types and horizon','2609.35560'],
@@ -607,7 +630,11 @@ const DATA = {
         ['Matrix-Game 4.0','model','A light game engine holds rules and state; a 1–2-step causal Wan2.2 5B renderer paints its low-poly proxies at 60 FPS on one RTX 5090','2610.27999'],
         ['StreamEval','benchmark','300 timed sessions test whether streaming video models carry out and keep mid-session requests; visual quality does not predict obedience','2610.28402'],
         ['Hy-Nomas','model','Action-aware causal attention: each action is visible only in its time window, so multi-turn commands play out in order; 4 steps per segment','2610.36729'],
-        ['AEON','model','Unifies video and 3D world models: an adapter turns a frozen video DiT latent straight into renderable 4D Gaussians and cameras \u00b7 NeurIPS 2026','2610.28631'] ]} ]}
+        ['AEON','model','Unifies video and 3D world models: an adapter turns a frozen video DiT latent straight into renderable 4D Gaussians and cameras \u00b7 NeurIPS 2026','2610.28631'],
+        ['L3G-World','model','Latent 3D Gaussian memory that grows with scene extent, not stream length, and renders VAE latents straight into the video DiT for real-time consistent exploration','2610.40614'],
+        ['ABot-World-0','model','Action-conditioned world model distilled from a bidirectional teacher (teacher forcing, ODE distillation, long-rollout alignment) for endless real-time rollout on one desktop GPU','2607.19191'],
+        ['Householder Motion Embedding','method','Motion control by rotating each location\'s noise with two Householder reflections from local flow, so every frame stays exactly i.i.d. Gaussian; 2.7x faster than Go-with-the-Flow \u00b7 NeurIPS 2026','2611.07294'],
+        ['BirdDreams','model','Driving world model that generates a schematic BEV video jointly with the camera video, so other cars react to the ego path (ADE -35% vs OmniDreams)','2611.14815'] ]} ]}
   ],
   links: [
     ['TeacherGRPO','GKD','student-aware teacher distribution for reasoning distillation'],
@@ -1124,7 +1151,34 @@ const DATA = {
     ['Wave Forcing','Self Forcing','pipelined wavefront instead of serialized chunk denoising'],
     ['Learning-to-Memorize','Deep Forcing','learned versus fixed sink and eviction rules for AR video KV'],
     ['Learning-to-Memorize','Self Forcing','learned frame router on Self Forcing caches'],
-    ['AEON','WorldKV','persistent, revisitable world state']
+    ['AEON','WorldKV','persistent, revisitable world state'],
+    ['Rolling Forcing','Self Forcing','joint rolling-window denoising plus attention sink against long-horizon drift'],
+    ['Ms. Forcing','Rolling Forcing','multi-scale patches inside the rolling denoising window'],
+    ['Trajectory Forcing','Causal Forcing','denoising-trajectory context, +1.11 VBench over Causal Forcing'],
+    ['Trajectory Forcing','Self Forcing','history as full trajectories, not only finished chunks'],
+    ['Condition Shifting','Self Forcing','few-step streaming distillation without a fake-score network'],
+    ['L3G-World','WorldKV','3D Gaussian memory that grows with the scene vs KV memory that grows with the stream'],
+    ['L3G-World','AEON','video latents tied to a 3D Gaussian world state'],
+    ['ABot-World-0','Causal-rCM','teacher-forcing then self-rollout distillation for interactive world models'],
+    ['OPRD','Rethinking OPD','hidden-state matching removes token-level OPD gradient variance'],
+    ['OPD Learning Dynamics','Rethinking OPD','mechanistic account of OPD phenomenology'],
+    ['OPD Learning Dynamics','OPD Gains & Collapse','why OPD degenerates through its rollout feedback loop'],
+    ['OPD Mismatch Budget','OnlineQAT','OPD on quantized rollouts'],
+    ['OnQ','OnlineQAT','low-bit recovery by OPD on the quantized model\'s own rollouts'],
+    ['OnQ','Quantization Inflates Reasoning','fixes low-bit reasoning that never terminates'],
+    ['Divergence to Flips','Accuracy is Not All You Need','flip rate tied to total variation'],
+    ['Divergence to Flips','Accuracy is Not Enough','TV vs KL as the fidelity metric for compressed LLMs'],
+    ['Fidelity-Consumability','Internal-State Sharing 2x2','why frozen readers cannot use swapped-in caches'],
+    ['Hybrid KV Translation','Cross-Family KV Transfer','cache translation extended to MLA, linear-attention and sparse-indexer states'],
+    ['Hybrid KV Translation','Kimi Linear','translates Kimi Delta Attention states'],
+    ['Dual DeltaNet','Kimi Linear','extends Kimi Delta Attention with a value-side delta rule'],
+    ['Bayesian Offline MAWM','MA-JEPA','latent world models for multi-agent RL'],
+    ['Quantized Coding Agents','Accuracy is Not All You Need','same score, changed behavior, now inside agent loops'],
+    ['SteerDistill','Quantized Coding Agents','quantized agents go wrong at specific turns'],
+    ['SteerDistill','ActionOPD','distill fixes at the decisive agent turns'],
+    ['LoopVQ','Looped CED','looped LMs whose per-loop KV cache dominates memory'],
+    ['LoopVQ','KIVI','KV quantization pushed below 1 bit by coding loop steps jointly'],
+    ['BirdDreams','ME-World','other agents\' motion generated inside a video world model']
   ]
 };
 
