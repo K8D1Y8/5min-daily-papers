@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · Disen-Forcing</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Video &amp; World Generation · AR Video Diffusion · Anchor Heads</span><span class="t-ko">Video &amp; World Generation · 자기회귀 비디오 확산 · 앵커 헤드</span></span>
+      <span>2026.11.17</span>
+    </div>
+    <h1>Disen-Forcing: Disentangling Semantic Anchoring from Motion for Autoregressive Video Diffusion<br>
+      <span class="glow t-en">— only a fifth of the heads need the first frames to keep a long video on track, so show the first frames to those heads alone</span>
+      <span class="glow t-ko">— 긴 영상을 붙잡아 두는 데 첫 프레임이 필요한 헤드는 5분의 1뿐이니, 첫 프레임은 그 헤드들에게만 보여 준다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge venue">NeurIPS'26</span>
+      <span class="badge lab">🏛 ANU · Sony AI</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Zhengyang Yu</b>, Akio Hayakawa, Masato Ishii, Qingtao Yu, Xuesong Li, Takashi Shibuya, Yuki Mitsufuji, Jing Zhang</span>
+      <span>🏛 Australian National University · Sony AI · CSIRO</span>
+      <span>🗓 2026-11-02</span>
+      <span>📄 <a href="https://arxiv.org/abs/2611.02822">arXiv:2611.02822</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Autoregressive video models drift once they run past their training length. The usual fix, pinning the first frames in the cache, stops drift but freezes motion.</span><span class="t-ko">자기회귀 비디오 모델은 학습 길이를 넘어가면 표류한다. 흔한 해법인 첫 프레임 캐시 고정은 표류를 막지만 움직임을 얼려 버린다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">The first frames are not an LLM-style attention sink. Most heads look at the current frame, and a sparse, stable set of anchor heads carries long-range consistency.</span><span class="t-ko">첫 프레임은 LLM식 어텐션 싱크가 아니다. 대부분의 헤드는 현재 프레임을 보고, 드물지만 안정적인 앵커 헤드 집합이 장거리 일관성을 맡는다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>During distillation, route the first frames only to the top 20% anchor heads, give every other head a local window, and penalize anchor heads for changing the motion.</b></span><span class="t-ko"><b>증류 중에 첫 프레임은 상위 20% 앵커 헤드에게만 보내고, 나머지 헤드에는 가까운 창만 주며, 앵커 헤드가 움직임을 바꾸면 벌점을 준다.</b></span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">On 1-minute videos from Self-Forcing, dynamic degree doubles over the frame sink (35.8 to 74.0), drift is 4.0 against 3.1 for the sink and 12.7 without it, and the VBench total is the best tested.</span><span class="t-ko">Self-Forcing 기반 1분 영상에서 움직임 정도가 프레임 싱크 대비 두 배(35.8에서 74.0)가 된다. 표류는 4.0으로 싱크의 3.1보다 약간 크지만 싱크 없는 12.7보다 훨씬 작고, VBench 총점은 비교 대상 중 가장 높다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">Picture an animation team that pins the <b>character sheet</b> on every desk. The model artists stay on design, but the in-betweeners start copying the sheet's pose, and the scene stops moving. Disen-Forcing gives the sheet <b>only to the few who check the design</b>, and lets the rest watch the last few frames.</p>
+    <p class="t-ko">애니메이션 팀이 모든 책상에 <b>캐릭터 설정화</b>를 붙여 둔다고 해 보자. 디자인 담당은 설정을 잘 지키지만, 중간 동작을 그리는 사람들도 설정화의 자세를 따라 그리기 시작해서 장면이 멈춘다. Disen-Forcing은 설정화를 <b>디자인을 확인하는 몇 사람에게만</b> 주고, 나머지는 직전 몇 프레임만 보게 한다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: route context by head type</span><span class="t-ko">작동 방식은 헤드 종류별로 문맥 나누기</span></h2>
+    <p class="vlead t-en"><b>A frame sink shows the first frames to every head. Disen-Forcing gives anchor heads the first frames and working heads the recent window, with the same cache budget.</b></p>
+    <p class="vlead t-ko"><b>프레임 싱크는 모든 헤드에게 첫 프레임을 보여 준다. Disen-Forcing은 같은 캐시 예산에서 앵커 헤드에게는 첫 프레임을, 작업 헤드에게는 최근 창을 준다.</b></p>
+    <figure class="fig">
+      <a class="zoom" href="fig/2611.02822/disen_context_routing.png" target="_blank"><img src="fig/2611.02822/disen_context_routing.png" alt="Three cache schemes while generating frames 6, 7 and 8. (a) Sliding window attention evicts early frames as the cache rolls. (b) Sinked sliding window keeps frames 0 to 2 pinned and shares that context with all heads. (c) Disentangled context routing keeps frames 0 to 2 but routes them only to the minor anchor heads, while the major working heads attend to the sliding window"></a>
+      <figcaption class="t-en"><b>Figure 5.</b> Sliding window, sinked window, and disentangled routing, generating frames 6 to 8.</figcaption>
+      <figcaption class="t-ko"><b>Figure 5.</b> 슬라이딩 창, 싱크 창, 분리 라우팅으로 프레임 6–8을 생성할 때.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2611.02822</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Find anchor heads once.</span><span class="t-ko">앵커 헤드 찾기.</span></b><span class="t-en">Average each head's attention to the first frame over 1,003 prompts and keep the top 20%. The set barely changes across prompts, timesteps and training stages.</span><span class="t-ko">프롬프트 1,003개에 걸쳐 헤드마다 첫 프레임 어텐션을 평균 내고 상위 20%를 고른다. 이 집합은 프롬프트, 시간 단계, 학습 단계가 바뀌어도 거의 그대로다.</span></li>
+      <li><b><span class="t-en">Route the cache.</span><span class="t-ko">캐시 라우팅.</span></b><span class="t-en">Anchor heads read the first frames plus the current chunk. Working heads read the sliding window plus the current chunk.</span><span class="t-ko">앵커 헤드는 첫 프레임과 현재 청크를 읽는다. 작업 헤드는 슬라이딩 창과 현재 청크를 읽는다.</span></li>
+      <li><b><span class="t-en">Keep motion independent.</span><span class="t-ko">움직임 독립 유지.</span></b><span class="t-en">Run a second pass with anchor heads cut off from the first frames, and penalize any change in the frame-to-frame attention map of layer 26.</span><span class="t-ko">앵커 헤드가 첫 프레임을 못 보게 한 두 번째 패스를 돌리고, 26층의 프레임 간 어텐션 지도가 달라지면 벌점을 준다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key point: motion comes back</span><span class="t-ko">핵심은 움직임이 돌아온다는 것</span></h2>
+    <p class="vlead t-en"><b>On both base models, the frame sink kills motion over a minute of video. Routing restores it.</b></p>
+    <p class="vlead t-ko"><b>두 기반 모델 모두에서 프레임 싱크는 1분짜리 영상의 움직임을 죽인다. 라우팅이 이를 되살린다.</b></p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Dynamic degree on 1-minute videos</span><span class="t-ko">1분 영상의 움직임 정도</span></div>
+      <div class="cs"><span class="t-en">Table 1 · VBench-Long, 200 MovieGenBench prompts · 0–100 · ours highlighted</span><span class="t-ko">Table 1 · VBench-Long, MovieGenBench 프롬프트 200개 · 0–100 · 제안 방법 강조</span></div>
+      <div class="bars">
+        <div class="bar" title="Self-Forcing + Frame Sink: 35.83"><span class="bl">Self-Forcing · sink</span><span class="bt"><span class="bf" style="--w:35.8%"></span></span><span class="bv">35.8</span></div>
+        <div class="bar hl" title="Self-Forcing + Disen-Forcing: 73.95"><span class="bl">Self-Forcing · Disen</span><span class="bt"><span class="bf" style="--w:74%"></span></span><span class="bv">74.0</span></div>
+        <div class="bar" title="Causal-Forcing + Frame Sink: 16.06"><span class="bl">Causal-Forcing · sink</span><span class="bt"><span class="bf" style="--w:16.1%"></span></span><span class="bv">16.1</span></div>
+        <div class="bar hl" title="Causal-Forcing + Disen-Forcing: 69.64"><span class="bl">Causal-Forcing · Disen</span><span class="bt"><span class="bf" style="--w:69.6%"></span></span><span class="bv">69.6</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–100. For Self-Forcing even inside the 5-second training horizon, the sink cuts dynamic degree from 65 to 37, while Disen-Forcing reaches 74.</figcaption>
+      <figcaption class="t-ko">축 0–100. Self-Forcing은 5초 학습 길이 안에서도 싱크를 쓰면 움직임 정도가 65에서 37로 떨어지고, Disen-Forcing은 74까지 올린다.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: a better balance, not a free lunch</span><span class="t-ko">결과는 공짜가 아닌 더 나은 균형</span></h2>
+    <p class="vlead t-en"><b>Drift drops far below the base models, though the sink alone still drifts a little less and scores slightly higher on subject consistency.</b></p>
+    <p class="vlead t-ko"><b>표류는 기반 모델보다 훨씬 줄지만, 싱크만 쓴 경우가 표류는 조금 더 적고 피사체 일관성도 약간 높다.</b></p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1.</b> 1-minute generation (about 1,000 frames). Drift is the imaging-quality gap between first and last segments.</caption>
+        <caption class="t-ko"><b>Table 1.</b> 1분 생성(약 1,000프레임). 표류는 첫 구간과 마지막 구간의 이미지 품질 차이.</caption>
+        <thead><tr><th>Model</th><th>Total ↑</th><th>Dynamic ↑</th><th>Subject ↑</th><th>Drift ↓</th></tr></thead>
+        <tbody>
+          <tr><td>Deep-Forcing</td><td>79.35</td><td>58.90</td><td>96.30</td><td>5.04</td></tr>
+          <tr><td>Self-Forcing</td><td>74.75</td><td>34.70</td><td>96.82</td><td>12.73</td></tr>
+          <tr><td>+ Frame Sink</td><td>76.88</td><td>35.83</td><td>97.79</td><td>3.10</td></tr>
+          <tr><td>+ Disen-Forcing</td><td class="up">82.34</td><td class="up">73.95</td><td>96.39</td><td>4.04</td></tr>
+          <tr><td>Causal-Forcing</td><td>77.71</td><td>64.91</td><td>95.35</td><td>12.96</td></tr>
+          <tr><td>+ Frame Sink</td><td>73.68</td><td>16.06</td><td>98.01</td><td>3.66</td></tr>
+          <tr><td>+ Disen-Forcing</td><td class="up">81.26</td><td class="up">69.64</td><td>95.76</td><td>5.10</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">20%</div><div class="l"><span class="t-en">of heads treated as anchors; masking them causes drift even within 5 s</span><span class="t-ko">앵커로 쓰는 헤드 비율. 가리면 5초 안에서도 표류가 생긴다</span></div></div>
+      <div class="stat"><div class="n">2.1×</div><div class="l"><span class="t-en">dynamic degree over the frame sink, Self-Forcing, 1 minute</span><span class="t-ko">Self-Forcing 1분 영상, 프레임 싱크 대비 움직임 정도</span></div></div>
+      <div class="stat"><div class="n">12.7→4.0</div><div class="l"><span class="t-en">drift of Self-Forcing at 1 minute, without and with Disen-Forcing</span><span class="t-ko">Self-Forcing 1분 영상의 표류, Disen-Forcing 적용 전과 후</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">Before copying an LLM trick into video, check which heads actually use it. Here the "sink" was a job for a few heads, and giving it to all of them taught the student that standing still scores well.</span><span class="t-ko">LLM 기법을 비디오로 옮기기 전에, 실제로 어느 헤드가 그것을 쓰는지 확인하자. 여기서 "싱크"는 몇몇 헤드의 일이었고, 이를 모든 헤드에 주자 학생 모델은 가만히 있는 편이 점수가 잘 나온다고 배웠다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">Tested only on 1.3B Wan2.1 students at 832×480. Consistency and drift metrics favor static clips, so part of the case rests on a learned VideoScore judge, and the regularizer needs an extra forward pass.</span><span class="t-ko">시험은 832×480의 1.3B Wan2.1 학생 모델에서만 했다. 일관성과 표류 지표는 정적인 영상에 유리해서, 근거 일부는 학습된 VideoScore 판정기에 기댄다. 정규화 항은 순전파를 한 번 더 요구한다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2611.02822">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2611.02822">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2611.02822">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2611.02822">🔎 alphaXiv</a>
+      <a href="https://disen-forcing.github.io/">🌐 Project</a>
+    </div>
+    <span class="t-en">Why picked — <b>P2 slot (Video &amp; World Generation) · autoregressive video diffusion, showing frame sinks are not LLM-style attention sinks and fixing the motion they cost · NeurIPS main track · score 6 (priority +3, venue +3), tied with Track4D (2611.15287) and vid2vid-long (2611.17298); none overlaps the last two cards, and Disen-Forcing is the only one with HF interest (▲9)</b> · venue: NeurIPS 2026.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-11-17.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P2 슬롯 (Video &amp; World Generation) · 프레임 싱크가 LLM식 어텐션 싱크가 아님을 보이고, 싱크 때문에 잃던 움직임을 되찾는 자기회귀 비디오 확산 · NeurIPS 메인 트랙 · 점수 6 (우선 주제 +3, 학회 +3). Track4D (2611.15287), vid2vid-long (2611.17298)과 동점이었고, 셋 다 최근 두 카드와 겹치지 않으며 HF 반응이 있는 것은 Disen-Forcing뿐이다(▲9)</b> · venue: NeurIPS 2026.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-11-17.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
