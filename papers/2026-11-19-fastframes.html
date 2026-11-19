@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>5-min paper · FastFrames</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div id="bar"></div>
+<div class="langtoggle">
+  <button class="langbtn" data-l="en">EN</button>
+  <button class="langbtn" data-l="ko">한</button>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="home" href="../index.html"><span class="t-en">← Archive</span><span class="t-ko">← 아카이브</span></a>
+    <div class="kicker" style="margin-top:14px">
+      <span class="chip read">⏱ 5 MIN READ</span>
+      <span class="chip"><span class="t-en">Video &amp; World Generation · Interactive AR Video · Latency Budget</span><span class="t-ko">Video &amp; World Generation · 인터랙티브 AR 비디오 · 지연 예산</span></span>
+      <span>2026.11.19</span>
+    </div>
+    <h1>FastFrames: Video Generation at Interactive Latency<br>
+      <span class="glow t-en">— the denoiser was never the bottleneck: swap out the VAE decoder and the extra cache pass, and a frame arrives in 36 ms</span>
+      <span class="glow t-ko">— 병목은 디노이저가 아니었다. VAE 디코더와 여분의 캐시 패스를 바꾸면 프레임 하나가 36 ms에 나온다</span>
+    </h1>
+    <div class="badges">
+      <span class="badge pre">Preprint</span>
+      <span class="badge lab">🏛 Apple · Vladlen Koltun</span>
+    </div>
+    <div class="meta">
+      <span>👥 <b>Gene Chou</b>, Guandao Yang, Fujun Luan, Lars Mescheder, Wei Dong, Stephan R. Richter, Vladlen Koltun</span>
+      <span>🏛 Apple · Cornell University</span>
+      <span>🗓 2026-11-17</span>
+      <span>📄 <a href="https://arxiv.org/abs/2611.23226">arXiv:2611.23226</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card tldr">
+    <span class="lab">⚡ TL;DR</span>
+    <ul class="tl">
+      <li><span class="k"><span class="t-en">Motivation</span><span class="t-ko">동기</span></span><span><span class="t-en">Interactive video needs a new frame within about 50 ms of an input. Even the fastest few-step autoregressive model takes 272 ms, and FPS hides that wait.</span><span class="t-ko">인터랙티브 영상은 입력 후 약 50 ms 안에 새 프레임이 나와야 한다. 가장 빠른 소수 단계 자기회귀 모델도 272 ms가 걸리고, FPS 지표는 이 기다림을 감춘다.</span></span></li>
+      <li><span class="k"><span class="t-en">Analysis</span><span class="t-ko">분석</span></span><span><span class="t-en">Profiling shows denoising is only 30% of the time. The VAE decoder takes 147 ms, and a full DiT pass just to refresh the KV cache takes another 42.</span><span class="t-ko">프로파일링해 보면 디노이징은 시간의 30%뿐이다. VAE 디코더가 147 ms, KV 캐시를 갱신하려고 도는 DiT 패스 한 번이 다시 42 ms를 쓴다.</span></span></li>
+      <li class="m"><span class="k"><span class="t-en">Method</span><span class="t-ko">방법</span></span><span><span class="t-en"><b>Replace the VAE with a 1 ms ConvNeXt pixel head trained adversarially in pixel space, replace the cache pass with a 2 ms repair network, and tune the system end to end.</b></span><span class="t-ko"><b>VAE를 픽셀 공간에서 적대적으로 학습한 1 ms짜리 ConvNeXt 픽셀 헤드로, 캐시 패스를 2 ms짜리 복구 네트워크로 바꾸고, 시스템 전체를 최적화한다.</b></span></span></li>
+      <li><span class="k"><span class="t-en">Results</span><span class="t-ko">결과</span></span><span><span class="t-en">The 1.3B model runs at 36 ms per frame on one B200 with a VBench total of 84.23 against 84.11 for its 7.6× slower base. The 14B model hits 45 ms on eight GPUs.</span><span class="t-ko">1.3B 모델은 B200 한 장에서 프레임당 36 ms로 돌고, VBench 총점은 7.6배 느린 기반 모델의 84.11보다 높은 84.23이다. 14B 모델은 GPU 여덟 장에서 45 ms다.</span></span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <div class="intuit">
+    <span class="lab"><span class="t-en">💭 Intuition</span><span class="t-ko">💭 직관</span></span>
+    <p class="t-en">A kitchen speeds up its chef and still serves slowly. Timing every step shows the chef cooks fast, but <b>plating takes twice as long as cooking</b>, and someone re-tastes every dish before filing the recipe. FastFrames <b>replaces the plating station and the second taster</b>, then trims the walk between stations.</p>
+    <p class="t-ko">요리사를 빠르게 만들었는데도 음식이 늦게 나오는 주방이 있다. 단계별로 시간을 재 보니 요리는 빠른데 <b>담는 데 요리의 두 배가 걸리고</b>, 누군가 레시피를 기록하기 전에 모든 요리를 다시 맛본다. FastFrames는 <b>담는 곳과 두 번째 시식을 바꾸고</b>, 작업대 사이 동선까지 줄인다.</p>
+  </div>
+
+  <section>
+    <h2><span class="t-en">How it works: attack the accessories</span><span class="t-ko">작동 방식은 부속 단계를 공략하기</span></h2>
+    <p class="vlead t-en"><b>Two of the three stages are not denoising at all. Shrinking them first leaves room for two diffusion steps inside the 50 ms budget.</b></p>
+    <p class="vlead t-ko"><b>세 단계 중 둘은 디노이징이 아니다. 이 둘부터 줄이면 50 ms 예산 안에 확산 두 단계를 넣을 여유가 생긴다.</b></p>
+    <figure class="fig narrow">
+      <a class="zoom" href="fig/2611.23226/fastframes_latency.png" target="_blank"><img src="fig/2611.23226/fastframes_latency.png" alt="Top: baseline pipeline per latent frame with a DiT pass for the KV cache write at 41.6 ms, two DiT diffusion steps at 41.6 ms each, and a VAE decoder at 147 ms, totaling 271.8 ms. Bottom: FastFrames with a trunk and per-layer heads repairing noisy keys and values in 2 ms, two optimized DiT steps at 16.4 ms each, and a ConvNeXt plus linear pixel decoder at 1 ms, totaling 35.8 ms, 7.6 times faster"></a>
+      <figcaption class="t-en"><b>Figure 2.</b> Time to generate one latent frame, Causal Forcing++ versus FastFrames, 1.3B on one B200.</figcaption>
+      <figcaption class="t-ko"><b>Figure 2.</b> 잠재 프레임 하나를 만드는 시간, Causal Forcing++ 대 FastFrames, 1.3B, B200 한 장.</figcaption>
+      <div class="figsrc"><span class="t-en">Source: original figure</span><span class="t-ko">출처: 논문 원본 그림</span> · arXiv:2611.23226</div>
+    </figure>
+    <ol class="steps compact">
+      <li><b><span class="t-en">Drop the VAE.</span><span class="t-ko">VAE 제거.</span></b><span class="t-en">Three causal ConvNeXt blocks run on the low-resolution token grid, then one linear layer unpatchifies to pixels. Pixel-space GAN training with a frozen DINOv3 discriminator restores sharpness.</span><span class="t-ko">인과 ConvNeXt 블록 세 개가 저해상도 토큰 격자에서 돌고, 선형 층 하나가 픽셀로 펼친다. 고정된 DINOv3 판별기로 픽셀 공간 GAN 학습을 해서 선명도를 되살린다.</span></li>
+      <li><b><span class="t-en">Repair the cache cheaply.</span><span class="t-ko">싼 캐시 복구.</span></b><span class="t-en">Instead of rerunning the DiT on the clean latent, a small network predicts residual fixes to the noisy keys and values.</span><span class="t-ko">깨끗한 잠재 벡터로 DiT를 다시 돌리는 대신, 작은 네트워크가 노이즈 섞인 키와 값에 대한 잔차 보정을 예측한다.</span></li>
+      <li><b><span class="t-en">Tune the system.</span><span class="t-ko">시스템 최적화.</span></b><span class="t-en">Persistent cache buffers, fused QKV, split-KV attention and CUDA graphs cut a DiT pass from 41.6 to 16.4 ms. Context parallelism splits it across eight GPUs.</span><span class="t-ko">고정 캐시 버퍼, QKV 융합, KV 분할 어텐션, CUDA 그래프로 DiT 패스를 41.6 ms에서 16.4 ms로 줄인다. 컨텍스트 병렬화로 GPU 여덟 장에 나눈다.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Key point: the only model under 50 ms</span><span class="t-ko">핵심은 50 ms 아래로 내려온 유일한 모델</span></h2>
+    <p class="vlead t-en"><b>Every 1.3B autoregressive baseline needs a quarter second or more per frame. FastFrames fits inside the interactive threshold on a single GPU.</b></p>
+    <p class="vlead t-ko"><b>1.3B 자기회귀 기준선은 모두 프레임당 0.25초 이상이 걸린다. FastFrames는 GPU 한 장으로 인터랙티브 기준선 안에 들어온다.</b></p>
+    <figure class="chart">
+      <div class="ct"><span class="t-en">Steady-state latency per response, 1.3B models, 480p</span><span class="t-ko">정상 상태 응답당 지연, 1.3B 모델, 480p</span></div>
+      <div class="cs"><span class="t-en">Table 1 · B200 · full KV cache · ms, lower is better · ours highlighted</span><span class="t-ko">Table 1 · B200 · 캐시 가득 찬 상태 · ms, 낮을수록 좋음 · 제안 방법 강조</span></div>
+      <div class="bars">
+        <div class="bar" title="Self-Forcing: 717 ms"><span class="bl">Self-Forcing</span><span class="bt"><span class="bf" style="--w:89.6%"></span></span><span class="bv">717</span></div>
+        <div class="bar" title="CausVid: 662 ms"><span class="bl">CausVid</span><span class="bt"><span class="bf" style="--w:82.8%"></span></span><span class="bv">662</span></div>
+        <div class="bar" title="Causal Forcing++: 272 ms"><span class="bl">Causal Forcing++</span><span class="bt"><span class="bf" style="--w:34%"></span></span><span class="bv">272</span></div>
+        <div class="bar hl" title="FastFrames-S, 1 GPU: 36 ms"><span class="bl">FastFrames-S · 1 GPU</span><span class="bt"><span class="bf" style="--w:4.5%"></span></span><span class="bv">36</span></div>
+        <div class="bar hl" title="FastFrames-S, 8 GPUs: 14 ms"><span class="bl">FastFrames-S · 8 GPU</span><span class="bt"><span class="bf" style="--w:1.8%"></span></span><span class="bv">14</span></div>
+      </div>
+      <figcaption class="t-en">Axis 0–800 ms. Human delay detection starts around 50 to 60 ms. Self-Forcing's own figure averages cheaper early frames, so it is remeasured here with a full cache.</figcaption>
+      <figcaption class="t-ko">축 0–800 ms. 사람이 지연을 알아채기 시작하는 지점은 약 50–60 ms다. Self-Forcing이 직접 보고한 값은 값싼 초반 프레임까지 평균한 것이라, 여기서는 캐시가 가득 찬 상태로 다시 쟀다.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="t-en">Results: speed without a quality tax</span><span class="t-ko">결과는 품질 손실 없는 속도</span></h2>
+    <p class="vlead t-en"><b>At both sizes, FastFrames matches or slightly beats the VBench score of a base that shares its DiT backbone, at a fraction of the latency.</b></p>
+    <p class="vlead t-ko"><b>두 크기 모두에서 FastFrames는 같은 DiT 기반의 모델과 VBench 점수가 같거나 약간 높고, 지연은 훨씬 짧다.</b></p>
+    <div class="tablewrap">
+      <table class="ptable">
+        <caption class="t-en"><b>Table 1.</b> End-to-end latency on B200 and VBench, about 480p.</caption>
+        <caption class="t-ko"><b>Table 1.</b> B200에서의 전체 지연과 VBench, 약 480p.</caption>
+        <thead><tr><th>Model</th><th>Size</th><th>Latency (ms)</th><th>VBench total</th></tr></thead>
+        <tbody>
+          <tr><td>Wan2.1 (bidirectional)</td><td>1.3B</td><td>30,444</td><td>83.80</td></tr>
+          <tr><td>Causal Forcing++</td><td>1.3B</td><td>272</td><td>84.11</td></tr>
+          <tr><td>FastFrames-S</td><td>1.3B</td><td class="up">36</td><td class="up">84.23</td></tr>
+          <tr><td>Krea-Realtime</td><td>14.3B</td><td>1,675</td><td>84.42</td></tr>
+          <tr><td>FastFrames-L, 8 GPUs</td><td>14.3B</td><td class="up">45</td><td class="up">84.44</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats three">
+      <div class="stat"><div class="n">147×</div><div class="l"><span class="t-en">faster pixel decoding (147 ms to 1 ms) with similar parameter count</span><span class="t-ko">비슷한 파라미터 수로 얻은 픽셀 디코딩 가속 (147 ms에서 1 ms)</span></div></div>
+      <div class="stat"><div class="n">28</div><div class="l"><span class="t-en">responses per second for the 1.3B model on one B200</span><span class="t-ko">B200 한 장에서 1.3B 모델의 초당 응답 수</span></div></div>
+      <div class="stat"><div class="n">22×</div><div class="l"><span class="t-en">lower latency for the RealWonder physics model, 1,141 to 51 ms</span><span class="t-ko">RealWonder 물리 모델의 지연 감소, 1,141 ms에서 51 ms</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="verdict">
+      <div class="v take"><span class="ic">💡</span><p><span class="t-en">Measure latency per response, not frames per second, and profile before you distill further. Once sampling is down to two steps, the decoder and cache bookkeeping are where the time goes.</span><span class="t-ko">초당 프레임이 아니라 응답당 지연을 재고, 증류를 더 하기 전에 먼저 프로파일링하자. 샘플링이 두 단계까지 줄면 시간은 디코더와 캐시 관리에서 나간다.</span></p></div>
+      <div class="v warn"><span class="ic">⚠️</span><p><span class="t-en">All numbers are 480p on B200 GPUs, and 720p is much slower. The pixel head must be retrained per model, the 14B result needs eight GPUs, and camera- or physics-conditioned models reach about 51 ms only on eight GPUs.</span><span class="t-ko">모든 수치는 B200 GPU에서 잰 480p 결과이고, 720p는 훨씬 느리다. 픽셀 헤드는 모델마다 다시 학습해야 하고, 14B 결과에는 GPU 여덟 장이 필요하며, 카메라나 물리 조건을 거는 모델은 GPU 여덟 장을 써야 약 51 ms에 이른다.</span></p></div>
+    </div>
+  </section>
+
+  <section class="rating" data-arxiv="2611.23226">
+    <div class="ratehead"><span class="t-en">Your take — rate this paper</span><span class="t-ko">내 평가 — 이 논문 점수</span></div>
+    <div class="rate-row">
+      <button class="rate" data-v="1"><span class="ic">🥱</span><span class="lab"><span class="t-en">Not interested</span><span class="t-ko">관심 없음</span></span></button>
+      <button class="rate" data-v="2"><span class="ic">😐</span><span class="lab"><span class="t-en">Neutral</span><span class="t-ko">보통</span></span></button>
+      <button class="rate" data-v="3"><span class="ic">👀</span><span class="lab"><span class="t-en">Interested</span><span class="t-ko">관심 있음</span></span></button>
+      <button class="rate" data-v="4"><span class="ic">⭐</span><span class="lab"><span class="t-en">Must read</span><span class="t-ko">꼭 다시 읽기</span></span></button>
+    </div>
+    <div class="rate-note"><span class="t-en">Saved to this device ✓</span><span class="t-ko">이 기기에 저장됨 ✓</span></div>
+  </section>
+
+  <footer>
+    <div class="src">
+      <a href="https://arxiv.org/abs/2611.23226">📄 arXiv abstract</a>
+      <a href="https://arxiv.org/pdf/2611.23226">📥 PDF</a>
+      <a href="https://www.alphaxiv.org/overview/2611.23226">🔎 alphaXiv</a>
+      <a href="https://apple-aiml-research.github.io/ml-fastframes/">🌐 Project</a>
+    </div>
+    <span class="t-en">Why picked — <b>P2 slot (Video &amp; World Generation) · autoregressive video diffusion at interactive latency · preprint · score 6 (priority +3, listed lab Apple +3), tied with AgentWorld (2611.22880, NeurIPS'26), vid2vid-long (2611.17298, ECCV'26) and Track4D (2611.15287, NeurIPS'26); AgentWorld plans over agent tokens without generating futures and Track4D uses video diffusion for 3D tracking, so both sit outside P2's generation focus; FastFrames and vid2vid-long are both streaming video like the last P2 card, so the axis rule did not separate them, and FastFrames has the most interest (▲26 HF, ★52 GitHub)</b>.<br>Auto-generated <b>5-min paper summary</b> · noindex · 2026-11-19.</span>
+    <span class="t-ko">오늘의 선정 사유 — <b>P2 슬롯 (Video &amp; World Generation) · 인터랙티브 수준 지연의 자기회귀 비디오 확산 · 프리프린트 · 점수 6 (우선 주제 +3, 목록 연구소 Apple +3). AgentWorld (2611.22880, NeurIPS'26), vid2vid-long (2611.17298, ECCV'26), Track4D (2611.15287, NeurIPS'26)와 동점이었다. AgentWorld는 미래를 생성하지 않고 에이전트 토큰으로 계획만 하고, Track4D는 비디오 확산을 3D 추적에 쓰는 연구라 둘 다 P2의 생성 초점에서 벗어난다. FastFrames와 vid2vid-long은 둘 다 직전 P2 카드처럼 스트리밍 영상이라 축 규칙으로 가를 수 없었고, 관심도가 가장 높은 FastFrames를 골랐다(HF ▲26, GitHub ★52)</b>.<br>매일 아침 자동 생성되는 <b>5분 논문 요약</b> · noindex · 2026-11-19.</span>
+  </footer>
+</main>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>
